@@ -61,12 +61,12 @@ interface Lead {
   estado: string;
   resumenIA?: string;
   datosFaltantes?: string[];
-  notas?: { id: string; contenido: string }[];
+  notas?: { id: string; contenido: string; nombreAgente: string; creadoEn: string }[];
 }
 
 export default function InboxPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string>("conv-lucia");
+  const [activeConvId, setActiveConvId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   
@@ -119,6 +119,14 @@ export default function InboxPage() {
         // Sort by ultimoMensajeEn descending
         const sorted = data.sort((a: any, b: any) => new Date(b.ultimoMensajeEn).getTime() - new Date(a.ultimoMensajeEn).getTime());
         setConversations(sorted);
+        
+        // Auto select first conversation if none is active
+        setActiveConvId(prev => {
+          if (sorted.length > 0 && !prev) {
+            return sorted[0].id;
+          }
+          return prev;
+        });
       }
     } catch (err) {
       console.error(err);
@@ -269,13 +277,7 @@ export default function InboxPage() {
 
   // Filter conversation list based on search query
   const filteredConversations = conversations.filter(c => {
-    const leadName = c.id === "conv-lucia" 
-      ? "Lucía Mendoza" 
-      : c.id === "conv-roberto" 
-        ? "Roberto Salas" 
-        : c.id === "conv-carla" 
-          ? "Carla Gómez" 
-          : (c.lead?.nombreCompleto || c.telefono);
+    const leadName = c.lead?.nombreCompleto || c.telefono;
     return leadName.toLowerCase().includes(searchQuery.toLowerCase()) || c.telefono.includes(searchQuery);
   });
 
@@ -314,13 +316,7 @@ export default function InboxPage() {
             <p className="p-4 text-xs text-slate-400 text-center animate-pulse">Cargando chats...</p>
           ) : filteredConversations.map((conv) => {
             const isActive = conv.id === activeConvId;
-            const leadName = conv.id === "conv-lucia" 
-              ? "Lucía Mendoza" 
-              : conv.id === "conv-roberto" 
-                ? "Roberto Salas" 
-                : conv.id === "conv-carla" 
-                  ? "Carla Gómez" 
-                  : (conv.lead?.nombreCompleto || conv.telefono);
+            const leadName = conv.lead?.nombreCompleto || conv.telefono;
             const lastMsg = messages.filter(m => m.idConversacion === conv.id).pop()?.contenido || "Mensaje recibido...";
             
             return (
@@ -610,9 +606,18 @@ export default function InboxPage() {
               <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5">
                 <MessageSquare className="w-3.5 h-3.5" /> Notas del Agente
               </span>
-              <p className="text-xs text-slate-600 leading-relaxed italic">
-                "Busca flexibilidad de horario por trabajo remoto. Interesada en programa bilingüe."
-              </p>
+              {activeLead.notas && activeLead.notas.length > 0 ? (
+                <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                  {activeLead.notas.map(n => (
+                    <div key={n.id} className="text-[10px] text-slate-600 leading-relaxed border-b border-slate-100 pb-1.5 last:border-0 last:pb-0">
+                      <p className="italic">"{n.contenido}"</p>
+                      <span className="text-[8px] text-slate-400 block mt-0.5">— {n.nombreAgente}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">No hay notas registradas para este prospecto.</p>
+              )}
             </div>
 
             {/* Quick action buttons */}
@@ -673,14 +678,16 @@ export default function InboxPage() {
           <div className="flex flex-col gap-1.5">
             <button 
               onClick={() => handleSimulateClient("Suena bien. ¿Qué incluye el programa?")}
-              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between"
+              disabled={!activeConvId}
+              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between disabled:opacity-50"
             >
               <span>Preguntar: ¿Qué incluye?</span>
               <ArrowRight className="w-3 h-3 text-amber-500" />
             </button>
             <button 
               onClick={() => handleSimulateClient("¿Cuál es el costo bilingüe y las ubicaciones?")}
-              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between"
+              disabled={!activeConvId}
+              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between disabled:opacity-50"
             >
               <span>Preguntar: Costos y Cobertura</span>
               <ArrowRight className="w-3 h-3 text-amber-500" />
@@ -690,14 +697,15 @@ export default function InboxPage() {
           <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
             <input 
               type="text" 
-              placeholder="Escribe como cliente..."
+              placeholder={activeConvId ? "Escribe como cliente..." : "Selecciona un chat..."}
               value={clientSimInput}
               onChange={(e) => setClientSimInput(e.target.value)}
-              className="flex-1 bg-transparent border-0 outline-none text-[10px] text-slate-700 py-1"
+              disabled={!activeConvId}
+              className="flex-1 bg-transparent border-0 outline-none text-[10px] text-slate-700 py-1 disabled:opacity-50"
             />
             <button 
               onClick={() => handleSimulateClient()}
-              disabled={!clientSimInput.trim()}
+              disabled={!activeConvId || !clientSimInput.trim()}
               className="bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 p-1 rounded-lg transition-all"
             >
               <Send className="w-3 h-3" />

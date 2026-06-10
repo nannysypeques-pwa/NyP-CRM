@@ -85,6 +85,8 @@ export interface Lead {
   notas?: NotaLead[];
   seguimientos?: Seguimiento[];
   cotizaciones?: Cotizacion[];
+  creadoEn: string;
+  actualizadoEn: string;
 }
 
 export interface Mensaje {
@@ -156,7 +158,9 @@ class BaseDeDatos {
         fechaVencimiento: f.fechaVencimiento.toISOString(), 
         completadoEn: f.completadoEn?.toISOString() || undefined 
       })) || [],
-      cotizaciones: l.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || []
+      cotizaciones: l.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
+      creadoEn: l.creadoEn.toISOString(),
+      actualizadoEn: l.actualizadoEn.toISOString()
     })) as unknown as Lead[];
   }
 
@@ -179,13 +183,15 @@ class BaseDeDatos {
       siguienteSeguimientoEn: lead.siguienteSeguimientoEn?.toISOString() || undefined,
       datosFaltantes: lead.datosFaltantes ? JSON.parse(lead.datosFaltantes) : [],
       hijos: lead.hijos || [],
-      notas: lead.notas.map(n => ({ ...n, creadoEn: n.creadoEn.toISOString() })) || [], // Fix typo map notes/notas
+      notas: lead.notas.map(n => ({ ...n, creadoEn: n.creadoEn.toISOString() })) || [],
       seguimientos: lead.seguimientos.map(f => ({ 
         ...f, 
         fechaVencimiento: f.fechaVencimiento.toISOString(), 
         completadoEn: f.completadoEn?.toISOString() || undefined 
       })) || [],
-      cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || []
+      cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
+      creadoEn: lead.creadoEn.toISOString(),
+      actualizadoEn: lead.actualizadoEn.toISOString()
     } as unknown as Lead;
   }
 
@@ -221,7 +227,9 @@ class BaseDeDatos {
       hijos: lead.hijos || [],
       notas: [],
       seguimientos: [],
-      cotizaciones: []
+      cotizaciones: [],
+      creadoEn: lead.creadoEn.toISOString(),
+      actualizadoEn: lead.actualizadoEn.toISOString()
     } as unknown as Lead;
   }
 
@@ -254,7 +262,9 @@ class BaseDeDatos {
         fechaVencimiento: f.fechaVencimiento.toISOString(), 
         completadoEn: f.completadoEn?.toISOString() || undefined 
       })) || [],
-      cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || []
+      cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
+      creadoEn: lead.creadoEn.toISOString(),
+      actualizadoEn: lead.actualizadoEn.toISOString()
     } as unknown as Lead;
   }
 
