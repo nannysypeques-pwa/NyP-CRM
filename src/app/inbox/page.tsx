@@ -608,7 +608,7 @@ export default function InboxPage() {
                 <FileText className="w-4 h-4 text-sky-200" /> Generar Cotización
               </Link>
               
-              {activeLead.status !== "GANADO" ? (
+              {activeLead.estado !== "GANADO" ? (
                 <button
                   onClick={handleCloseWon}
                   className="w-full bg-white hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 border-2 border-emerald-500 hover:border-emerald-600 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5"
