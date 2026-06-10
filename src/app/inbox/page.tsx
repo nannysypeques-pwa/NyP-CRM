@@ -43,6 +43,9 @@ interface Conversation {
   estado: string;
   iaActiva: boolean;
   ultimoMensajeEn: string;
+  lead?: {
+    nombreCompleto: string;
+  };
 }
 
 interface Lead {
@@ -79,11 +82,12 @@ export default function InboxPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Poll messages every 1.5 seconds for real-time simulation
+  // Poll messages and conversations every 1.5 seconds for real-time updates
   useEffect(() => {
     fetchConversations();
     
     const interval = setInterval(() => {
+      fetchConversations();
       if (activeConvId) {
         fetchMessages(activeConvId);
       }
@@ -265,7 +269,13 @@ export default function InboxPage() {
 
   // Filter conversation list based on search query
   const filteredConversations = conversations.filter(c => {
-    const leadName = c.id === "conv-lucia" ? "Lucía Mendoza" : c.id === "conv-roberto" ? "Roberto Salas" : "Carla Gómez";
+    const leadName = c.id === "conv-lucia" 
+      ? "Lucía Mendoza" 
+      : c.id === "conv-roberto" 
+        ? "Roberto Salas" 
+        : c.id === "conv-carla" 
+          ? "Carla Gómez" 
+          : (c.lead?.nombreCompleto || c.telefono);
     return leadName.toLowerCase().includes(searchQuery.toLowerCase()) || c.telefono.includes(searchQuery);
   });
 
@@ -304,7 +314,13 @@ export default function InboxPage() {
             <p className="p-4 text-xs text-slate-400 text-center animate-pulse">Cargando chats...</p>
           ) : filteredConversations.map((conv) => {
             const isActive = conv.id === activeConvId;
-            const leadName = conv.id === "conv-lucia" ? "Lucía Mendoza" : conv.id === "conv-roberto" ? "Roberto Salas" : "Carla Gómez";
+            const leadName = conv.id === "conv-lucia" 
+              ? "Lucía Mendoza" 
+              : conv.id === "conv-roberto" 
+                ? "Roberto Salas" 
+                : conv.id === "conv-carla" 
+                  ? "Carla Gómez" 
+                  : (conv.lead?.nombreCompleto || conv.telefono);
             const lastMsg = messages.filter(m => m.idConversacion === conv.id).pop()?.contenido || "Mensaje recibido...";
             
             return (

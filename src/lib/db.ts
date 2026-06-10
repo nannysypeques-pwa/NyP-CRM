@@ -266,6 +266,13 @@ class BaseDeDatos {
 
   async getConversations(): Promise<Conversacion[]> {
     const conversations = await prisma.conversacion.findMany({
+      include: {
+        lead: {
+          select: {
+            nombreCompleto: true
+          }
+        }
+      },
       orderBy: {
         ultimoMensajeEn: 'desc'
       }
