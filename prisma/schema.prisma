@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Usuario {
+  id             String         @id @default(uuid())
+  nombre         String
+  email          String         @unique
+  contrasenaHash String
+  rol            String         // "SUPERADMIN" | "DIRECCION" | "VENTAS" | "OPERACION"
+  estado         String         // "ACTIVE" | "INACTIVE"
+  urlAvatar      String?
+  leads          Lead[]         @relation("UsuarioAsignado")
+  conversaciones Conversacion[] @relation("UsuarioAsignadoConv")
+  creadoEn       DateTime       @default(now())
+  actualizadoEn  DateTime       @updatedAt
+}
+
+model Lead {
+  id                     String         @id @default(uuid())
+  nombreCompleto         String
+  telefono               String         @unique
+  email                  String?
+  ciudad                 String         // e.g., "Ciudad de México", "Madrid"
+  zona                   String         // e.g., "Polanco", "Centro"
+  origen                 String         // e.g., "Instagram", "WhatsApp Directo", "FB Ads"
+  interesServicio        String         // e.g., "Cuidado Premium Medio Tiempo", "FIXA SEMANAL"
+  edadHijo               Int?           // Edad principal del niño
+  cantidadHijos          Int            @default(1)
+  diasSolicitados        String?        // e.g., "Lunes a Viernes"
+  horaInicioSolicitada   String?        // e.g., "09:00"
+  horaFinSolicitada      String?        // e.g., "15:00"
+  fechaInicioDeseada     String?
+  nivelUrgencia          String         @default("MEDIA") // "BAJA" | "MEDIA" | "ALTA"
+  estado                 String         @default("NUEVO") // "NUEVO" | "CONTACTADO" | "COTIZADO" | "GANADO" | "PERDIDO"
+  idUsuarioAsignado      String?
+  usuarioAsignado        Usuario?       @relation("UsuarioAsignado", fields: [idUsuarioAsignado], references: [id])
+  ultimoContactoEn       DateTime       @default(now())
+  siguienteSeguimientoEn DateTime?
+  motivoPerdida          String?
+  resumenIA              String?
+  datosFaltantes         String?        // JSON string de datos faltantes detectados por la IA
+  notas                  NotaLead[]
+  cotizaciones           Cotizacion[]
+  seguimientos           Seguimiento[]
+  hijos                  Hijo[]
+  conversacion           Conversacion?
+  creadoEn               DateTime       @default(now())
+  actualizadoEn          DateTime       @updatedAt
+}
+
+model Hijo {
+  id              String   @id @default(uuid())
+  idLead          String?
+  lead            Lead?    @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  idCliente       String?
+  cliente         Cliente? @relation(fields: [idCliente], references: [id], onDelete: Cascade)
+  nombre          String
+  textoEdad       String   // e.g., "3 años y 4 meses"
+  fechaNacimiento String?
+  necesidades     String?  // e.g., "Apoyo en control de esfínteres"
+  instrucciones   String?  // e.g., "Alérgico a las nueces. Muy sensible a ruidos fuertes."
+  creadoEn        DateTime @default(now())
+  actualizadoEn   DateTime @updatedAt
+}
+
+model Cliente {
+  id             String   @id @default(uuid())
+  nombreCompleto String
+  telefono       String   @unique
+  email          String?
+  ciudad         String
+  zona           String
+  estado         String   @default("ACTIVO") // "ACTIVO" | "INACTIVO"
+  origen         String
+  hijos          Hijo[]
+  creadoEn       DateTime @default(now())
+  actualizadoEn  DateTime @updatedAt
+}
+
+model Conversacion {
+  id                String    @id @default(uuid())
+  idLead            String?   @unique
+  lead              Lead?     @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  telefono          String    @unique
+  estado            String    @default("ABIERTA") // "NUEVA" | "ABIERTA" | "IA_ACTIVA" | "CERRADA"
+  idUsuarioAsignado String?
+  usuarioAsignado   Usuario?  @relation("UsuarioAsignadoConv", fields: [idUsuarioAsignado], references: [id])
+  iaActiva          Boolean   @default(true)
+  mensajes          Mensaje[]
+  ultimoMensajeEn   DateTime  @default(now())
+  creadoEn          DateTime  @default(now())
+  actualizadoEn     DateTime  @updatedAt
+}
+
+model Mensaje {
+  id                String       @id @default(uuid())
+  idConversacion    String
+  conversacion      Conversacion @relation(fields: [idConversacion], references: [id], onDelete: Cascade)
+  direccion         String       // "INBOUND" (de cliente) | "OUTBOUND" (de agente/IA)
+  tipoRemitente     String       // "CLIENT" | "AGENT" | "IA"
+  idRemitente       String?      // ID del usuario si es agente
+  idMensajeWhatsapp String?      // ID de Meta
+  contenido         String
+  urlMultimedia     String?
+  estado            String       @default("DELIVERED") // "SENT" | "DELIVERED" | "READ" | "FAILED"
+  creadoEn          DateTime     @default(now())
+}
+
+model NotaLead {
+  id           String   @id @default(uuid())
+  idLead       String
+  lead         Lead     @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  contenido    String
+  nombreAgente String
+  creadoEn     DateTime @default(now())
+}
+
+model Seguimiento {
+  id                String    @id @default(uuid())
+  idLead            String
+  lead              Lead      @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  idUsuarioAsignado String?
+  titulo            String
+  descripcion       String?
+  fechaVencimiento  DateTime
+  estado            String    @default("PENDIENTE") // "PENDIENTE" | "COMPLETADO" | "VENCIDO"
+  completadoEn      DateTime?
+  creadoEn          DateTime  @default(now())
+  actualizadoEn     DateTime  @updatedAt
+}
+
+model Cotizacion {
+  id            String   @id @default(uuid())
+  idLead        String
+  lead          Lead     @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  tipoServicio  String
+  ciudad        String
+  dias          String
+  horaInicio    String
+  horaFin       String
+  horasPorDia   Int
+  cantidadHijos Int
+  subtotal      Float
+  descuento     Float    @default(0)
+  total         Float
+  estado        String   @default("BORRADOR") // "BORRADOR" | "ENVIADA" | "ACEPTADA" | "RECHAZADA"
+  validoHasta   DateTime
+  notas         String?
+  creadoPor     String
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model RespuestaRapida {
+  id            String   @id @default(uuid())
+  titulo        String
+  categoria     String   // e.g., "Precios", "Horarios", "Ubicación"
+  contenido     String
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model DocumentoConocimiento {
+  id            String   @id @default(uuid())
+  titulo        String
+  categoria     String   // e.g., "Precios", "Servicios", "Políticas"
+  contenido     String
+  estado        String   @default("ACTIVO") // "ACTIVO" | "INACTIVO"
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
