@@ -31,8 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body className="flex h-screen bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
+    <html lang="es" className="h-full overflow-hidden">
+      <body className="flex h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
         <ScrollReset />
         {/* Sidebar */}
         <aside className="w-64 bg-[#e8f4fd] border-r border-[#d4e6f4] flex flex-col justify-between flex-shrink-0">
