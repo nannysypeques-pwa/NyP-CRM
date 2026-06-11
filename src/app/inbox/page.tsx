@@ -72,13 +72,11 @@ export default function InboxPage() {
   
   // Inputs
   const [chatInput, setChatInput] = useState("");
-  const [clientSimInput, setClientSimInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Loading & interactive UI states
   const [loadingChats, setLoadingChats] = useState(true);
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
-  const [showSimPanel, setShowSimPanel] = useState(true); // Default open to guide user
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -203,31 +201,7 @@ export default function InboxPage() {
     }
   };
 
-  // Simulate client message (INBOUND)
-  const handleSimulateClient = async (textToSend?: string) => {
-    const text = textToSend || clientSimInput;
-    if (!text.trim()) return;
-    
-    setClientSimInput("");
 
-    try {
-      const res = await fetch(`/api/conversations/${activeConvId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          direccion: "INBOUND",
-          tipoRemitente: "CLIENT",
-          contenido: text
-        }),
-      });
-      if (res.ok) {
-        fetchMessages(activeConvId);
-        fetchConversations();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   // Close lead as GANADO
   const handleCloseWon = async () => {
@@ -656,75 +630,6 @@ export default function InboxPage() {
           <p className="text-xs text-slate-400 text-center py-8">Selecciona un chat para ver su ficha comercial.</p>
         )}
       </div>
-
-      {/* FLOATING CLIENT SIDE SIMULATOR PANEL */}
-      {showSimPanel && (
-        <div className="absolute bottom-6 left-6 z-40 bg-white/95 backdrop-blur-md rounded-3xl border border-amber-300 shadow-2xl p-4 w-72 space-y-3 transition-all duration-300">
-          <div className="flex items-center justify-between border-b border-amber-100 pb-2">
-            <span className="text-[10px] uppercase font-bold text-amber-700 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> SIMULADOR DE CLIENTE (TEST)
-            </span>
-            <button 
-              onClick={() => setShowSimPanel(false)}
-              className="text-slate-400 hover:text-slate-600 text-xs"
-            >
-              Cerrar
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-500 leading-snug">
-            Simula mensajes entrantes desde el celular del cliente. Si la IA está activa, verás su respuesta automática en 1 segundo.
-          </p>
-          
-          <div className="flex flex-col gap-1.5">
-            <button 
-              onClick={() => handleSimulateClient("Suena bien. ¿Qué incluye el programa?")}
-              disabled={!activeConvId}
-              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between disabled:opacity-50"
-            >
-              <span>Preguntar: ¿Qué incluye?</span>
-              <ArrowRight className="w-3 h-3 text-amber-500" />
-            </button>
-            <button 
-              onClick={() => handleSimulateClient("¿Cuál es el costo bilingüe y las ubicaciones?")}
-              disabled={!activeConvId}
-              className="text-left text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200 font-semibold flex items-center justify-between disabled:opacity-50"
-            >
-              <span>Preguntar: Costos y Cobertura</span>
-              <ArrowRight className="w-3 h-3 text-amber-500" />
-            </button>
-          </div>
-
-          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
-            <input 
-              type="text" 
-              placeholder={activeConvId ? "Escribe como cliente..." : "Selecciona un chat..."}
-              value={clientSimInput}
-              onChange={(e) => setClientSimInput(e.target.value)}
-              disabled={!activeConvId}
-              className="flex-1 bg-transparent border-0 outline-none text-[10px] text-slate-700 py-1 disabled:opacity-50"
-            />
-            <button 
-              onClick={() => handleSimulateClient()}
-              disabled={!activeConvId || !clientSimInput.trim()}
-              className="bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 p-1 rounded-lg transition-all"
-            >
-              <Send className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Button to reopen simulator if closed */}
-      {!showSimPanel && (
-        <button
-          onClick={() => setShowSimPanel(true)}
-          className="absolute bottom-6 left-6 z-40 bg-amber-500 text-white rounded-full p-3 shadow-lg hover:bg-amber-600 transition-all"
-          title="Abrir simulador"
-        >
-          <Sparkles className="w-5 h-5" />
-        </button>
-      )}
-
     </div>
   );
 }
