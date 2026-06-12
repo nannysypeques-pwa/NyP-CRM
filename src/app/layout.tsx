@@ -3,6 +3,10 @@ import "./globals.css";
 import Link from "next/link";
 import SidebarLink from "@/components/SidebarLink";
 import ScrollReset from "@/components/ScrollReset";
+import { cookies } from "next/headers";
+import { decryptSession } from "@/lib/session";
+import CitySelector from "@/components/CitySelector";
+import LogoutButton from "@/components/LogoutButton";
 import { 
   LayoutDashboard, 
   Users, 
@@ -16,9 +20,9 @@ import {
   Bell,
   History,
   HeartHandshake,
-  Kanban
+  Kanban,
+  Building
 } from "lucide-react";
-
 
 export const metadata: Metadata = {
   title: "NyP CRM - Premium Care CRM",
@@ -30,10 +34,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 1. Session verification
+  const sessionCookie = cookies().get("session")?.value;
+  const user = sessionCookie ? decryptSession(sessionCookie) : null;
+
+  // If not logged in, render basic layout for login screen
+  if (!user) {
+    return (
+      <html lang="es" className="h-full overflow-hidden">
+        <body className="flex h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
+          <main className="flex-1 overflow-hidden relative">
+            {children}
+          </main>
+        </body>
+      </html>
+    );
+  }
+
+  // Determine active city filter
+  const activeCity = cookies().get("activeCity")?.value || "Todas";
+  const userRole = user.rol;
+  const isVendedor = userRole === "VENDEDOR";
+
   return (
     <html lang="es" className="h-full overflow-hidden">
       <body className="flex h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
         <ScrollReset />
+        
         {/* Sidebar */}
         <aside className="w-64 bg-[#e8f4fd] border-r border-[#d4e6f4] flex flex-col justify-between flex-shrink-0">
           <div>
@@ -46,6 +73,26 @@ export default function RootLayout({
                 <h1 className="font-extrabold text-[#026692] text-xl tracking-tight leading-none">NyP CRM</h1>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-[#5caad0] block mt-0.5">Premium Care CRM</span>
               </div>
+            </div>
+
+            {/* City Selector or Assigned Indicator */}
+            <div className="px-4 mb-4">
+              {!isVendedor ? (
+                <CitySelector activeCity={activeCity} />
+              ) : (
+                <div className="flex items-center space-x-2.5 bg-white/70 px-3.5 py-2.5 rounded-xl border border-[#d4e6f4] shadow-sm">
+                  <Building className="w-4 h-4 text-[#026692] flex-shrink-0" />
+                  <div>
+                    <span className="text-[9px] font-bold text-[#5caad0] uppercase tracking-wider block leading-none">Ciudad Asignada</span>
+                    <span className="text-xs font-extrabold text-[#026692] uppercase block mt-1">{user.ciudad || "No asignada"}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Discrete dividing line */}
+            <div className="px-4">
+              <hr className="border-[#d4e6f4]" />
             </div>
 
             {/* Main Menu Links */}
@@ -63,22 +110,25 @@ export default function RootLayout({
           {/* Bottom Settings / Profile */}
           <div className="p-4 border-t border-[#d4e6f4] space-y-4">
             <nav className="space-y-1">
-              <SidebarLink href="/settings" icon={<Settings className="w-5 h-5" />} label="Configuración" />
+              {/* Only show configuration/settings to Gerente and Coordinador */}
+              {!isVendedor && (
+                <SidebarLink href="/settings" icon={<Settings className="w-5 h-5" />} label="Configuración" />
+              )}
               <SidebarLink href="/support" icon={<HelpCircle className="w-5 h-5" />} label="Soporte" />
             </nav>
 
             {/* Profile widget */}
             <div className="flex items-center space-x-3 p-2 bg-white/50 rounded-xl border border-white/20">
               <img 
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150" 
-                alt="Laura Méndez" 
+                src={user.urlAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} 
+                alt={user.nombre} 
                 className="w-10 h-10 rounded-full object-cover border border-[#b2d4e7]"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-800 truncate">Laura Méndez</p>
-                <p className="text-[10px] text-[#5caad0] font-bold uppercase truncate">Agente Senior</p>
+                <p className="text-xs font-semibold text-slate-800 truncate">{user.nombre}</p>
+                <p className="text-[9px] text-[#5caad0] font-bold uppercase truncate">{user.rol}</p>
               </div>
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full ring-4 ring-[#e8f4fd]" title="En línea"></span>
+              <LogoutButton />
             </div>
           </div>
         </aside>
@@ -88,15 +138,17 @@ export default function RootLayout({
           {/* Top Header */}
           <header className="h-16 bg-white border-b border-[#e2edf6] flex items-center justify-between px-8 flex-shrink-0">
             {/* Global Search Bar */}
-            <div className="relative w-80">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Search className="w-4 h-4" />
-              </span>
-              <input 
-                type="text" 
-                placeholder="Buscar prospectos o chats..."
-                className="w-full bg-[#f0f7fc] border-0 rounded-full pl-9 pr-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
-              />
+            <div className="flex items-center space-x-4">
+              <div className="relative w-64">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Search className="w-4 h-4" />
+                </span>
+                <input 
+                  type="text" 
+                  placeholder="Buscar prospectos..."
+                  className="w-full bg-[#f0f7fc] border-0 rounded-full pl-9 pr-4 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+                />
+              </div>
             </div>
 
             {/* Header Right Actions */}
@@ -112,12 +164,12 @@ export default function RootLayout({
               
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-xs font-bold text-slate-700">Laura Méndez</p>
-                  <p className="text-[10px] text-slate-400">Agente de Ventas</p>
+                  <p className="text-xs font-bold text-slate-700">{user.nombre}</p>
+                  <p className="text-[10px] text-slate-400 capitalize">{user.rol.toLowerCase()}</p>
                 </div>
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150" 
-                  alt="Laura Méndez" 
+                  src={user.urlAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} 
+                  alt={user.nombre} 
                   className="w-8 h-8 rounded-full object-cover border border-slate-200"
                 />
               </div>

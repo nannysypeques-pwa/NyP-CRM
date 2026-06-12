@@ -16,9 +16,10 @@ model Usuario {
   nombre         String
   email          String         @unique
   contrasenaHash String
-  rol            String         // "SUPERADMIN" | "DIRECCION" | "VENTAS" | "OPERACION"
+  rol            String         // "GERENTE" | "COORDINADOR" | "VENDEDOR"
   estado         String         // "ACTIVE" | "INACTIVE"
   urlAvatar      String?
+  ciudad         String?        // Puebla, CDMX, Querétaro, Xalapa
   leads          Lead[]         @relation("UsuarioAsignado")
   conversaciones Conversacion[] @relation("UsuarioAsignadoConv")
   creadoEn       DateTime       @default(now())
@@ -56,6 +57,7 @@ model Lead {
   conversacion           Conversacion?
   creadoEn               DateTime       @default(now())
   actualizadoEn          DateTime       @updatedAt
+  deleted                Boolean        @default(false)
 }
 
 model Hijo {
@@ -85,6 +87,7 @@ model Cliente {
   hijos          Hijo[]
   creadoEn       DateTime @default(now())
   actualizadoEn  DateTime @updatedAt
+  deleted        Boolean  @default(false)
 }
 
 model Conversacion {
@@ -100,6 +103,7 @@ model Conversacion {
   ultimoMensajeEn   DateTime  @default(now())
   creadoEn          DateTime  @default(now())
   actualizadoEn     DateTime  @updatedAt
+  deleted           Boolean   @default(false)
 }
 
 model Mensaje {
@@ -159,6 +163,7 @@ model Cotizacion {
   creadoPor     String
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
+  deleted       Boolean  @default(false)
 }
 
 model RespuestaRapida {

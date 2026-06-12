@@ -1,6 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText } from "@/lib/openai";
+import { createHmac, timingSafeEqual } from "crypto";
+
+function validateSignature(payload: string, signatureHeader: string | null): boolean {
+  const secret = process.env.META_APP_SECRET;
+  if (!secret || secret === "mock-app-secret") {
+    console.warn("META_APP_SECRET not configured or mock. Skipping signature validation.");
+    return true;
+  }
+  if (!signatureHeader) {
+    return false;
+  }
+
+  const parts = signatureHeader.split("=");
+  if (parts.length !== 2 || parts[0] !== "sha256") {
+    return false;
+  }
+
+  const expectedSignature = parts[1];
+  const computedSignature = createHmac("sha256", secret).update(payload).digest("hex");
+
+  const expectedBuffer = Buffer.from(expectedSignature, "hex");
+  const computedBuffer = Buffer.from(computedSignature, "hex");
+
+  if (expectedBuffer.length !== computedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, computedBuffer);
+}
 
 // Helper to normalize phone numbers
 function normalizePhone(phone: string): string {
@@ -71,7 +100,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-hub-signature-256");
+
+    if (!validateSignature(rawBody, signature)) {
+      console.error("Invalid signature on WhatsApp webhook payload.");
+      return new NextResponse("Unauthorized Signature", { status: 401 });
+    }
+
+    const body = JSON.parse(rawBody);
     console.log("Webhook received body:", JSON.stringify(body, null, 2));
 
     const entry = body.entry?.[0];
@@ -100,6 +137,18 @@ export async function POST(req: NextRequest) {
 
     // Get or create conversation in db
     const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
+
+    // Auto-detect city and update lead
+    if (conv.idLead) {
+      const detectedCity = detectCityFromText(content);
+      if (detectedCity) {
+        const lead = await db.getLeadById(conv.idLead);
+        if (lead && (lead.ciudad === "Por definir" || !lead.ciudad)) {
+          console.log(`Detected city "${detectedCity}" from WhatsApp message, updating Lead ${conv.idLead}`);
+          await db.updateLead(conv.idLead, { ciudad: detectedCity });
+        }
+      }
+    }
 
     // Guardar mensaje original (INBOUND)
     const newMsg = await db.addMessage({

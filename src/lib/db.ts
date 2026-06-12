@@ -1,4 +1,39 @@
 import prisma from "./prisma";
+import { cookies } from "next/headers";
+
+function getRequestFilter() {
+  try {
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get("session")?.value;
+    if (!sessionCookie) return null;
+
+    // Decrypt the session safely using Node crypto to avoid circular imports
+    const [ivHex, tagHex, encryptedHex] = sessionCookie.split(".");
+    if (!ivHex || !tagHex || !encryptedHex) return null;
+
+    const crypto = require("crypto");
+    const SESSION_SECRET = process.env.SESSION_SECRET || "nyp-crm-production-session-secret-32-chars-long";
+    const key = Buffer.from(SESSION_SECRET.padEnd(32).slice(0, 32));
+    const iv = Buffer.from(ivHex, "hex");
+    const tag = Buffer.from(tagHex, "hex");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(tag);
+
+    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+
+    const user = JSON.parse(decrypted);
+    const activeCity = cookieStore.get("activeCity")?.value || "Todas";
+
+    return {
+      rol: user.rol,
+      ciudad: user.ciudad, // assigned city
+      selectedCity: activeCity
+    };
+  } catch (e) {
+    return null;
+  }
+}
 
 // Definición de Interfaces en Español
 export interface Usuario {
@@ -134,7 +169,42 @@ class BaseDeDatos {
   }
 
   async getLeads(): Promise<Lead[]> {
+    const filter = getRequestFilter();
+    let whereClause: any = { deleted: false };
+
+    if (filter) {
+      let cityTarget: any = null;
+      if (filter.rol === "VENDEDOR") {
+        cityTarget = filter.ciudad || "Puebla";
+      } else {
+        const city = filter.selectedCity;
+        if (city && city.toUpperCase() !== "TODAS" && city.toUpperCase() !== "TODAS LAS CIUDADES") {
+          cityTarget = city;
+        }
+      }
+
+      if (cityTarget) {
+        let cityCondition: any;
+        if (cityTarget.toUpperCase() === "PUEBLA" || cityTarget.toUpperCase() === "ATLIXCO") {
+          cityCondition = { in: ["Puebla", "Atlixco", "puebla", "atlixco", "PUEBLA", "ATLIXCO"] };
+        } else if (cityTarget.toUpperCase() === "CDMX") {
+          cityCondition = { in: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "cdmx", "CIUDAD DE MEXICO", "CIUDAD DE MÉXICO"] };
+        } else if (cityTarget.toUpperCase() === "QUERETARO" || cityTarget.toUpperCase() === "QUERÉTARO") {
+          cityCondition = { in: ["Querétaro", "Queretaro", "querétaro", "queretaro", "QUERÉTARO", "QUERETARO"] };
+        } else {
+          cityCondition = { mode: "insensitive", equals: cityTarget };
+        }
+
+        whereClause.OR = [
+          { ciudad: cityCondition },
+          { ciudad: "Por definir" },
+          { ciudad: "" }
+        ];
+      }
+    }
+
     const leads = await prisma.lead.findMany({
+      where: whereClause,
       include: {
         hijos: true,
         notas: { orderBy: { creadoEn: 'desc' } },
@@ -153,10 +223,10 @@ class BaseDeDatos {
       datosFaltantes: l.datosFaltantes ? JSON.parse(l.datosFaltantes) : [],
       hijos: l.hijos || [],
       notas: l.notas.map(n => ({ ...n, creadoEn: n.creadoEn.toISOString() })) || [],
-      seguimientos: l.seguimientos.map(f => ({ 
-        ...f, 
-        fechaVencimiento: f.fechaVencimiento.toISOString(), 
-        completadoEn: f.completadoEn?.toISOString() || undefined 
+      seguimientos: l.seguimientos.map(f => ({
+        ...f,
+        fechaVencimiento: f.fechaVencimiento.toISOString(),
+        completadoEn: f.completadoEn?.toISOString() || undefined
       })) || [],
       cotizaciones: l.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
       creadoEn: l.creadoEn.toISOString(),
@@ -165,8 +235,33 @@ class BaseDeDatos {
   }
 
   async getLeadById(id: string): Promise<Lead | undefined> {
-    const lead = await prisma.lead.findUnique({
-      where: { id },
+    const filter = getRequestFilter();
+    let whereClause: any = { id, deleted: false };
+
+    if (filter) {
+      if (filter.rol === "VENDEDOR") {
+        const city = filter.ciudad || "Puebla";
+        let cityCondition: any;
+        if (city.toUpperCase() === "PUEBLA" || city.toUpperCase() === "ATLIXCO") {
+          cityCondition = { in: ["Puebla", "Atlixco", "puebla", "atlixco", "PUEBLA", "ATLIXCO"] };
+        } else if (city.toUpperCase() === "CDMX") {
+          cityCondition = { in: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "cdmx", "CIUDAD DE MEXICO", "CIUDAD DE MÉXICO"] };
+        } else if (city.toUpperCase() === "QUERETARO" || city.toUpperCase() === "QUERÉTARO") {
+          cityCondition = { in: ["Querétaro", "Queretaro", "querétaro", "queretaro", "QUERÉTARO", "QUERETARO"] };
+        } else {
+          cityCondition = { mode: "insensitive", equals: city };
+        }
+
+        whereClause.OR = [
+          { ciudad: cityCondition },
+          { ciudad: "Por definir" },
+          { ciudad: "" }
+        ];
+      }
+    }
+
+    const lead = await prisma.lead.findFirst({
+      where: whereClause,
       include: {
         hijos: true,
         notas: { orderBy: { creadoEn: 'desc' } },
@@ -184,10 +279,10 @@ class BaseDeDatos {
       datosFaltantes: lead.datosFaltantes ? JSON.parse(lead.datosFaltantes) : [],
       hijos: lead.hijos || [],
       notas: lead.notas.map(n => ({ ...n, creadoEn: n.creadoEn.toISOString() })) || [],
-      seguimientos: lead.seguimientos.map(f => ({ 
-        ...f, 
-        fechaVencimiento: f.fechaVencimiento.toISOString(), 
-        completadoEn: f.completadoEn?.toISOString() || undefined 
+      seguimientos: lead.seguimientos.map(f => ({
+        ...f,
+        fechaVencimiento: f.fechaVencimiento.toISOString(),
+        completadoEn: f.completadoEn?.toISOString() || undefined
       })) || [],
       cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
       creadoEn: lead.creadoEn.toISOString(),
@@ -197,7 +292,7 @@ class BaseDeDatos {
 
   async createLead(leadData: Omit<Lead, 'id' | 'creadoEn' | 'actualizadoEn' | 'ultimoContactoEn' | 'seguimientos' | 'notas' | 'cotizaciones'>): Promise<Lead> {
     const { hijos, datosFaltantes, ...rest } = leadData;
-    
+
     const lead = await prisma.lead.create({
       data: {
         ...rest,
@@ -257,10 +352,10 @@ class BaseDeDatos {
       datosFaltantes: lead.datosFaltantes ? JSON.parse(lead.datosFaltantes) : [],
       hijos: lead.hijos || [],
       notas: lead.notas.map(n => ({ ...n, creadoEn: n.creadoEn.toISOString() })) || [],
-      seguimientos: lead.seguimientos.map(f => ({ 
-        ...f, 
-        fechaVencimiento: f.fechaVencimiento.toISOString(), 
-        completadoEn: f.completadoEn?.toISOString() || undefined 
+      seguimientos: lead.seguimientos.map(f => ({
+        ...f,
+        fechaVencimiento: f.fechaVencimiento.toISOString(),
+        completadoEn: f.completadoEn?.toISOString() || undefined
       })) || [],
       cotizaciones: lead.cotizaciones.map(q => ({ ...q, validoHasta: q.validoHasta.toISOString() })) || [],
       creadoEn: lead.creadoEn.toISOString(),
@@ -269,13 +364,51 @@ class BaseDeDatos {
   }
 
   async deleteLead(id: string): Promise<void> {
-    await prisma.lead.delete({
-      where: { id }
+    await prisma.lead.update({
+      where: { id },
+      data: { deleted: true }
     });
   }
 
   async getConversations(): Promise<Conversacion[]> {
+    const filter = getRequestFilter();
+    let whereClause: any = { deleted: false };
+
+    if (filter) {
+      let cityTarget: any = null;
+      if (filter.rol === "VENDEDOR") {
+        cityTarget = filter.ciudad || "Puebla";
+      } else {
+        const city = filter.selectedCity;
+        if (city && city.toUpperCase() !== "TODAS" && city.toUpperCase() !== "TODAS LAS CIUDADES") {
+          cityTarget = city;
+        }
+      }
+
+      if (cityTarget) {
+        let cityCondition: any;
+        if (cityTarget.toUpperCase() === "PUEBLA" || cityTarget.toUpperCase() === "ATLIXCO") {
+          cityCondition = { in: ["Puebla", "Atlixco", "puebla", "atlixco", "PUEBLA", "ATLIXCO"] };
+        } else if (cityTarget.toUpperCase() === "CDMX") {
+          cityCondition = { in: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "cdmx", "CIUDAD DE MEXICO", "CIUDAD DE MÉXICO"] };
+        } else if (cityTarget.toUpperCase() === "QUERETARO" || cityTarget.toUpperCase() === "QUERÉTARO") {
+          cityCondition = { in: ["Querétaro", "Queretaro", "querétaro", "queretaro", "QUERÉTARO", "QUERETARO"] };
+        } else {
+          cityCondition = { mode: "insensitive", equals: cityTarget };
+        }
+
+        whereClause.lead = {
+          OR: [
+            { ciudad: cityCondition },
+            { ciudad: "Por definir" },
+            { ciudad: "" }
+          ]
+        };
+      }
+    }
+
     const conversations = await prisma.conversacion.findMany({
+      where: whereClause,
       include: {
         lead: {
           select: {
@@ -294,8 +427,33 @@ class BaseDeDatos {
   }
 
   async getConversationById(id: string): Promise<Conversacion | undefined> {
-    const conv = await prisma.conversacion.findUnique({
-      where: { id }
+    const filter = getRequestFilter();
+    let whereClause: any = { id, deleted: false };
+
+    if (filter && filter.rol === "VENDEDOR") {
+      const city = filter.ciudad || "Puebla";
+      let cityCondition: any;
+      if (city.toUpperCase() === "PUEBLA" || city.toUpperCase() === "ATLIXCO") {
+        cityCondition = { in: ["Puebla", "Atlixco", "puebla", "atlixco", "PUEBLA", "ATLIXCO"] };
+      } else if (city.toUpperCase() === "CDMX") {
+        cityCondition = { in: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "cdmx", "CIUDAD DE MEXICO", "CIUDAD DE MÉXICO"] };
+      } else if (city.toUpperCase() === "QUERETARO" || city.toUpperCase() === "QUERÉTARO") {
+        cityCondition = { in: ["Querétaro", "Queretaro", "querétaro", "queretaro", "QUERÉTARO", "QUERETARO"] };
+      } else {
+        cityCondition = { mode: "insensitive", equals: city };
+      }
+
+      whereClause.lead = {
+        OR: [
+          { ciudad: cityCondition },
+          { ciudad: "Por definir" },
+          { ciudad: "" }
+        ]
+      };
+    }
+
+    const conv = await prisma.conversacion.findFirst({
+      where: whereClause
     });
     if (!conv) return undefined;
     return {
@@ -305,8 +463,33 @@ class BaseDeDatos {
   }
 
   async getConversationByPhone(phone: string): Promise<Conversacion | undefined> {
-    const conv = await prisma.conversacion.findUnique({
-      where: { telefono: phone }
+    const filter = getRequestFilter();
+    let whereClause: any = { telefono: phone, deleted: false };
+
+    if (filter && filter.rol === "VENDEDOR") {
+      const city = filter.ciudad || "Puebla";
+      let cityCondition: any;
+      if (city.toUpperCase() === "PUEBLA" || city.toUpperCase() === "ATLIXCO") {
+        cityCondition = { in: ["Puebla", "Atlixco", "puebla", "atlixco", "PUEBLA", "ATLIXCO"] };
+      } else if (city.toUpperCase() === "CDMX") {
+        cityCondition = { in: ["CDMX", "Ciudad de México", "Ciudad de Mexico", "cdmx", "CIUDAD DE MEXICO", "CIUDAD DE MÉXICO"] };
+      } else if (city.toUpperCase() === "QUERETARO" || city.toUpperCase() === "QUERÉTARO") {
+        cityCondition = { in: ["Querétaro", "Queretaro", "querétaro", "queretaro", "QUERÉTARO", "QUERETARO"] };
+      } else {
+        cityCondition = { mode: "insensitive", equals: city };
+      }
+
+      whereClause.lead = {
+        OR: [
+          { ciudad: cityCondition },
+          { ciudad: "Por definir" },
+          { ciudad: "" }
+        ]
+      };
+    }
+
+    const conv = await prisma.conversacion.findFirst({
+      where: whereClause
     });
     if (!conv) return undefined;
     return {
@@ -322,7 +505,9 @@ class BaseDeDatos {
       ? "52" + cleanIncoming.slice(3)
       : cleanIncoming;
 
-    const conversations = await prisma.conversacion.findMany();
+    const conversations = await prisma.conversacion.findMany({
+      where: { deleted: false }
+    });
     const matchedConv = conversations.find(c => {
       const cleanC = normalize(c.telefono);
       const cleanCMex = (cleanC.startsWith("521") && cleanC.length === 13)
@@ -338,7 +523,9 @@ class BaseDeDatos {
       } as unknown as Conversacion;
     }
 
-    const leads = await prisma.lead.findMany();
+    const leads = await prisma.lead.findMany({
+      where: { deleted: false }
+    });
     const matchedLead = leads.find(l => {
       const cleanL = normalize(l.telefono);
       const cleanLMex = (cleanL.startsWith("521") && cleanL.length === 13)

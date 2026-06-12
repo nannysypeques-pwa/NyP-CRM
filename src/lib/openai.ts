@@ -46,6 +46,16 @@ function getFallbackResponse(userInput: string): string {
   return "Entiendo perfectamente. He guardado esta información en tu perfil. ¿Hay algún otro requerimiento específico que deba saber sobre el cuidado de tu peque para sugerirte el mejor servicio?";
 }
 
+export function detectCityFromText(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (lower.includes("puebla")) return "Puebla";
+  if (lower.includes("atlixco")) return "Atlixco";
+  if (lower.includes("xalapa") || lower.includes("jalapa")) return "Xalapa";
+  if (lower.includes("queretaro") || lower.includes("querétaro") || lower.includes("qro")) return "Querétaro";
+  if (lower.includes("cdmx") || lower.includes("ciudad de mexico") || lower.includes("ciudad de méxico") || lower.includes("df") || lower.includes("distrito federal")) return "CDMX";
+  return null;
+}
+
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -56,12 +66,26 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
   }
 
   try {
+    // Fetch lead details for dynamic context
+    const conv = await db.getConversationById(idConversacion);
+    const lead = conv?.idLead ? await db.getLeadById(conv.idLead) : null;
+    const leadCity = lead?.ciudad || "Por definir";
+
+    const dynamicPrompt = `${SYSTEM_PROMPT}
+
+[CONTEXTO DEL LEAD ACTUAL]
+- Nombre: ${lead?.nombreCompleto || "Prospecto"}
+- Ciudad solicitada: ${leadCity}
+
+INSTRUCCIÓN CRÍTICA DE NEGOCIO:
+Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio. Esto es obligatorio para calificar al cliente.`;
+
     // Fetch last 10 messages from the conversation history to give full context
     const chatHistory = await db.getMessagesByConversationId(idConversacion);
     const recentMessages = chatHistory.slice(-10);
 
     const formattedMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: dynamicPrompt },
       ...recentMessages.map((m) => ({
         role: m.direccion === "INBOUND" ? "user" : "assistant",
         content: m.contenido,

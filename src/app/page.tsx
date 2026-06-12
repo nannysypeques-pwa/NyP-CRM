@@ -25,8 +25,33 @@ interface ActivityItem {
 }
 
 export default async function Dashboard() {
-  const leads = await db.getLeads();
-  const conversations = await db.getConversations();
+  // Cargar todos los datos en paralelo para reducir drásticamente la latencia de red con Supabase
+  const [leads, conversations, recentLeads, recentMessages, recentQuotes] = await Promise.all([
+    db.getLeads(),
+    db.getConversations(),
+    prisma.lead.findMany({
+      orderBy: { creadoEn: 'desc' },
+      take: 5
+    }),
+    prisma.mensaje.findMany({
+      include: {
+        conversacion: {
+          include: {
+            lead: true
+          }
+        }
+      },
+      orderBy: { creadoEn: 'desc' },
+      take: 5
+    }),
+    prisma.cotizacion.findMany({
+      include: {
+        lead: true
+      },
+      orderBy: { creadoEn: 'desc' },
+      take: 5
+    })
+  ]);
 
   // Calculate stats based on db
   const totalLeads = leads.length;
@@ -42,36 +67,9 @@ export default async function Dashboard() {
 
   const conversionRate = totalLeads > 0 ? ((wonLeadsCount / totalLeads) * 100).toFixed(1) + '%' : '0.0%';
 
-  // Funnel percentages
   const contactedPercent = totalLeads > 0 ? Math.round((contactedLeadsCount / totalLeads) * 100) : 0;
   const quotedPercent = totalLeads > 0 ? Math.round((quotedLeadsCount / totalLeads) * 100) : 0;
   const wonPercent = totalLeads > 0 ? Math.round((wonLeadsCount / totalLeads) * 100) : 0;
-
-  // Fetch real activities from DB
-  const recentLeads = await prisma.lead.findMany({
-    orderBy: { creadoEn: 'desc' },
-    take: 5
-  });
-
-  const recentMessages = await prisma.mensaje.findMany({
-    include: {
-      conversacion: {
-        include: {
-          lead: true
-        }
-      }
-    },
-    orderBy: { creadoEn: 'desc' },
-    take: 5
-  });
-
-  const recentQuotes = await prisma.cotizacion.findMany({
-    include: {
-      lead: true
-    },
-    orderBy: { creadoEn: 'desc' },
-    take: 5
-  });
 
   const activities: ActivityItem[] = [];
 
