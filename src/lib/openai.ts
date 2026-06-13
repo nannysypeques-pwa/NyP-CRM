@@ -59,10 +59,9 @@ export function detectCityFromText(text: string): string | null {
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
-  // If using the default development key, use the local fallback engine
+  // If using the default development key or no key, skip automatic response by throwing an error
   if (!apiKey || apiKey === "sk-mock-key-for-development") {
-    console.log("Using local mock AI engine response.");
-    return getFallbackResponse(lastMessageContent);
+    throw new Error("OpenAI API Key is not configured or is set to development mock key. Skipping automatic response.");
   }
 
   try {
@@ -113,8 +112,7 @@ Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("OpenAI API call failed, falling back. Error:", errorData);
-      return getFallbackResponse(lastMessageContent);
+      throw new Error(`OpenAI API call failed (likely credit limit or quota): ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
@@ -124,9 +122,9 @@ Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente
       return reply.trim();
     }
     
-    return getFallbackResponse(lastMessageContent);
+    throw new Error("OpenAI returned an empty response text.");
   } catch (err) {
-    console.error("Error communicating with OpenAI, falling back:", err);
-    return getFallbackResponse(lastMessageContent);
+    console.error("Error communicating with OpenAI:", err);
+    throw err;
   }
 }
