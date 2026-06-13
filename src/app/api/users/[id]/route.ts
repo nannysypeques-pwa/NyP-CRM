@@ -33,7 +33,7 @@ export async function PATCH(
 
     // Evitar que el gerente se desactive a sí mismo o se quite el rol
     if (params.id === gerente.userId) {
-      if (estado === "INACTIVE" || rol !== "GERENTE") {
+      if (estado === "INACTIVE" || (rol !== undefined && rol !== "GERENTE")) {
         return NextResponse.json({ error: "No puedes desactivar tu propia cuenta de gerente ni cambiar tu propio rol." }, { status: 400 });
       }
     }
