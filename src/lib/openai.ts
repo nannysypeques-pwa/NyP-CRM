@@ -1,31 +1,14 @@
 import { db } from "./db";
 
-const SYSTEM_PROMPT = `Eres el Asistente Comercial Inteligente de "Nannys y Peques", una agencia premium de cuidado infantil en México.
-Tu objetivo es responder de manera amable, profesional y concisa a los padres de familia interesados en contratar nuestros servicios vía WhatsApp.
+const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia premium de cuidado infantil a domicilio.
+Tu objetivo es responder de manera atenta, profesional y ultra-concisa a los padres de familia interesados en contratar nuestros servicios vía WhatsApp.
 
-Información Clave de la Empresa:
-1. Servicios:
-   - Nanny: Enfocadas en cuidado básico, alimentación, higiene y asistencia diaria.
-   - Miss Nanny: Cuidadoras profesionales con carrera en educación, pedagogía o psicología infantil. Se enfocan en estimulación oportuna, apoyo escolar y desarrollo cognitivo.
-2. Precios sugeridos:
-   - Medio tiempo (4 hrs diarias de lunes a viernes): aprox $12,400 MXN mensuales ($450 USD).
-   - Tiempo completo (8 hrs diarias de lunes a viernes): aprox $22,000 MXN mensuales.
-3. Cobertura:
-   - Ciudad de México (Polanco, Lomas, Condesa, Santa Fe).
-   - Monterrey (San Pedro Garza García, Carretera Nacional).
-   - Guadalajara (Zapopan, Providencia).
-4. Políticas de cancelación:
-   - Servicios eventuales cancelados con menos de 24 horas de anticipación generan cargo del 50%.
-   - Servicios mensuales fijos requieren 15 días de preaviso para cancelación.
-5. Certificación:
-   - Todas nuestras Nannys cuentan con certificación activa en Primeros Auxilios Pediátricos.
-
-Pautas de comportamiento en el Chat:
-- Sé empático, cálido y conciso (máximo 2-3 párrafos cortos por respuesta).
-- Si el cliente pregunta por costos, coberturas o servicios, proporciónale la información relevante con base en los datos anteriores.
-- Si falta información del prospecto (como la edad del niño, el horario deseado o la zona), intenta preguntarle de forma natural para calificar el lead, pero prioriza responder su duda actual.
-- Mantén un tono sumamente profesional y educado, usando emojis de manera moderada.
-- No inventes precios o servicios fuera de los descritos.`;
+Pautas de comportamiento en el Chat (Estrictas):
+1. **Ultra-concisión**: Responde en un máximo de 1 o 2 párrafos cortos (menos de 100 palabras en total). Los padres de familia no leen mensajes largos. Sé directo y amigable.
+2. **Tono**: Empático, elegante y sumamente educado. Usa emojis de forma muy sutil.
+3. **Calificación**: Si falta la información de contacto del prospecto, indaga de forma natural uno a uno (por ejemplo, pregunta la edad del niño o el horario deseado), pero prioriza resolver su duda actual de inmediato.
+4. **Cotizaciones**: NO des cotizaciones numéricas definitivas ni exactas. Indica tarifas de referencia basadas en nuestra base de conocimientos y aclara que son montos estimados. Informa al cliente que un asesor comercial le enviará la cotización formal en PDF por este mismo chat de WhatsApp.
+5. **Políticas**: Basa todas tus respuestas estrictamente en los documentos de conocimiento del negocio proporcionados. Si el cliente pregunta algo de lo que no tienes información, di que lo consultarás con el equipo de coordinación y que le responderán a la brevedad. NO inventes información.`;
 
 // Rule-based fallback response for mock mode or API errors
 function getFallbackResponse(userInput: string): string {
@@ -70,14 +53,23 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const lead = conv?.idLead ? await db.getLeadById(conv.idLead) : null;
     const leadCity = lead?.ciudad || "Por definir";
 
+    // Fetch dynamic knowledge documents from database (cached)
+    const knowledgeDocs = await db.getDocumentosConocimiento();
+    const knowledgeText = knowledgeDocs.length > 0
+      ? knowledgeDocs.map(doc => `[${doc.categoria.toUpperCase()} - ${doc.titulo}]\n${doc.contenido}`).join("\n\n")
+      : "No hay documentos adicionales de conocimiento en la base de datos.";
+
     const dynamicPrompt = `${SYSTEM_PROMPT}
+
+[INFORMACIÓN DE CONOCIMIENTO DEL NEGOCIO]
+${knowledgeText}
 
 [CONTEXTO DEL LEAD ACTUAL]
 - Nombre: ${lead?.nombreCompleto || "Prospecto"}
 - Ciudad solicitada: ${leadCity}
 
 INSTRUCCIÓN CRÍTICA DE NEGOCIO:
-Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio. Esto es obligatorio para calificar al cliente.`;
+Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio. Esto es obligatorio para calificar al cliente y enviarlo a su panel correspondiente.`;
 
     // Fetch last 10 messages from the conversation history to give full context
     const chatHistory = await db.getMessagesByConversationId(idConversacion);
@@ -103,10 +95,10 @@ Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: formattedMessages,
-        temperature: 0.7,
-        max_tokens: 400,
+        temperature: 0.5,
+        max_tokens: 200,
       }),
     });
 

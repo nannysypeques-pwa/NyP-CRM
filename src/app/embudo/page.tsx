@@ -472,23 +472,10 @@ export default function KanbanPage() {
       if (!matchesSearch) return false;
 
       // 1. PENDIENTE (NUEVO): Todos los que escribieron pero aún no sabemos de qué ciudad son
-      // (aparecen en cualquier vista de ciudad para ser calificados) O aquellos que ya tienen
-      // ciudad asignada y coinciden con la ciudad activa seleccionada en el filtro.
+      // Se muestran todos los que no tienen ciudad definida ("Por definir" o vacía), sin importar la ciudad seleccionada.
       if (status === "NUEVO") {
         const isPendiente = l.ciudad === "Por definir" || l.ciudad === "" || !l.ciudad;
-        if (isPendiente) {
-          return l.estado === "NUEVO";
-        }
-        
-        const normSelected = selectedCity.toUpperCase();
-        const normLead = l.ciudad.toUpperCase();
-
-        const matchesCity = normSelected === "TODAS" || 
-          normLead === normSelected ||
-          (normSelected === "QUERÉTARO" && normLead === "QUERETARO") ||
-          (normSelected === "QUERETARO" && normLead === "QUERÉTARO");
-
-        return l.estado === "NUEVO" && matchesCity;
+        return l.estado === "NUEVO" && isPendiente;
       }
 
       // Para el resto de estados, deben tener una ciudad asignada y coincidir con el filtro

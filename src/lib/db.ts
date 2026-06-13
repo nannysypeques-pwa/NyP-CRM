@@ -666,7 +666,7 @@ class BaseDeDatos {
         });
       },
       ["documentos-conocimiento"],
-      { revalidate: 600, tags: ["documentos-conocimiento"] }
+      { revalidate: 1800, tags: ["documentos-conocimiento"] }
     );
     const docs = await fetchDocs();
     return docs as unknown as DocumentoConocimiento[];

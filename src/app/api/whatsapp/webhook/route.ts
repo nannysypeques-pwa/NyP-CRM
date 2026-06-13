@@ -147,10 +147,11 @@ export async function POST(req: NextRequest) {
       const detectedCity = detectCityFromText(content);
       if (detectedCity) {
         const lead = await db.getLeadById(conv.idLead);
-        if (lead && (lead.ciudad === "Por definir" || !lead.ciudad)) {
-          console.log(`Detected city "${detectedCity}" from WhatsApp message, updating Lead ${conv.idLead}`);
-          await db.updateLead(conv.idLead, { ciudad: detectedCity });
-        }
+          console.log(`Detected city "${detectedCity}" from WhatsApp message, updating Lead ${conv.idLead} to CONTACTADO`);
+          await db.updateLead(conv.idLead, { 
+            ciudad: detectedCity,
+            estado: "CONTACTADO"
+          });
       }
     }
 
