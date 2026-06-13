@@ -1,6 +1,16 @@
 import prisma from "./prisma";
 import { cookies } from "next/headers";
 
+let cacheFn: any = <T extends (...args: any[]) => any>(fn: T, keys: string[], options: any) => fn;
+try {
+  const { unstable_cache } = require("next/cache");
+  if (typeof unstable_cache === "function") {
+    cacheFn = unstable_cache;
+  }
+} catch (e) {
+  // Ignorar errores en scripts fuera del servidor Next.js
+}
+
 function getRequestFilter() {
   try {
     const cookieStore = cookies();
@@ -12,7 +22,12 @@ function getRequestFilter() {
     if (!ivHex || !tagHex || !encryptedHex) return null;
 
     const crypto = require("crypto");
-    const SESSION_SECRET = process.env.SESSION_SECRET || "nyp-crm-production-session-secret-32-chars-long";
+    const secret = process.env.SESSION_SECRET;
+    if (!secret && process.env.NODE_ENV === "production") {
+      console.error("CRITICAL SECURITY ERROR: SESSION_SECRET is not configured in production!");
+      return null;
+    }
+    const SESSION_SECRET = secret || "nyp-crm-development-only-session-secret-key-32";
     const key = Buffer.from(SESSION_SECRET.padEnd(32).slice(0, 32));
     const iv = Buffer.from(ivHex, "hex");
     const tag = Buffer.from(tagHex, "hex");
@@ -630,16 +645,30 @@ class BaseDeDatos {
   }
 
   async getRespuestasRapidas(): Promise<RespuestaRapida[]> {
-    const replies = await prisma.respuestaRapida.findMany({
-      where: { activo: true }
-    });
+    const fetchRespuestas = cacheFn(
+      async () => {
+        return prisma.respuestaRapida.findMany({
+          where: { activo: true }
+        });
+      },
+      ["respuestas-rapidas"],
+      { revalidate: 300, tags: ["respuestas-rapidas"] }
+    );
+    const replies = await fetchRespuestas();
     return replies as unknown as RespuestaRapida[];
   }
 
   async getDocumentosConocimiento(): Promise<DocumentoConocimiento[]> {
-    const docs = await prisma.documentoConocimiento.findMany({
-      where: { estado: 'ACTIVO' }
-    });
+    const fetchDocs = cacheFn(
+      async () => {
+        return prisma.documentoConocimiento.findMany({
+          where: { estado: 'ACTIVO' }
+        });
+      },
+      ["documentos-conocimiento"],
+      { revalidate: 600, tags: ["documentos-conocimiento"] }
+    );
+    const docs = await fetchDocs();
     return docs as unknown as DocumentoConocimiento[];
   }
 

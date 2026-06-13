@@ -61,6 +61,19 @@ export function middleware(request: NextRequest) {
       });
     }
 
+    // Responder a solicitudes OPTIONS (preflight CORS)
+    if (request.method === "OPTIONS" && origin && allowedOrigins.includes(origin)) {
+      return new NextResponse(null, {
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Max-Age": "86400"
+        }
+      });
+    }
+
     // Rate Limiting Checks (window is 60 seconds)
     const ip = request.headers.get("x-forwarded-for") || request.ip || "127.0.0.1";
     const now = Date.now();
@@ -96,8 +109,53 @@ export function middleware(request: NextRequest) {
       }
     }
   }
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", path);
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    }
+  });
 
-  return NextResponse.next();
+  // 1. Cabeceras de Seguridad Estándar (OWASP Secure Headers)
+  response.headers.set("X-Frame-Options", "SAMEORIGIN");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+
+  // HSTS (Strict-Transport-Security) obligatorio en producción (no afecta desarrollo)
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+
+  // Content Security Policy (CSP) robusta y compatible con Next.js
+  const cspHeader = `
+    default-src 'self';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' blob: data: https://images.unsplash.com https://randomuser.me;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+    frame-ancestors 'self';
+  `.replace(/\s{2,}/g, " ").trim();
+  response.headers.set("Content-Security-Policy", cspHeader);
+  
+  // 2. Agregar cabeceras CORS a las respuestas de la API si el origen es válido
+  const origin = request.headers.get("origin");
+  const allowedOrigins = [
+    "https://nyp-crm.vercel.app",
+    "https://nannysypeques.com",
+    "http://localhost:3000",
+    "http://localhost:3005"
+  ];
+  
+  if (path.startsWith("/api") && origin && allowedOrigins.includes(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+    response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+
+  return response;
 }
 
 // Config to apply middleware to all paths except Next.js internals and public assets

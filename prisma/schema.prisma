@@ -58,6 +58,12 @@ model Lead {
   creadoEn               DateTime       @default(now())
   actualizadoEn          DateTime       @updatedAt
   deleted                Boolean        @default(false)
+
+  @@index([ciudad])
+  @@index([estado])
+  @@index([deleted])
+  @@index([idUsuarioAsignado])
+  @@index([ultimoContactoEn])
 }
 
 model Hijo {
@@ -104,6 +110,9 @@ model Conversacion {
   creadoEn          DateTime  @default(now())
   actualizadoEn     DateTime  @updatedAt
   deleted           Boolean   @default(false)
+
+  @@index([deleted, ultimoMensajeEn])
+  @@index([estado])
 }
 
 model Mensaje {
@@ -118,6 +127,8 @@ model Mensaje {
   urlMultimedia     String?
   estado            String       @default("DELIVERED") // "SENT" | "DELIVERED" | "READ" | "FAILED"
   creadoEn          DateTime     @default(now())
+
+  @@index([idConversacion, creadoEn])
 }
 
 model NotaLead {
@@ -141,6 +152,9 @@ model Seguimiento {
   completadoEn      DateTime?
   creadoEn          DateTime  @default(now())
   actualizadoEn     DateTime  @updatedAt
+
+  @@index([idLead])
+  @@index([estado, fechaVencimiento])
 }
 
 model Cotizacion {
@@ -164,6 +178,8 @@ model Cotizacion {
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   deleted       Boolean  @default(false)
+
+  @@index([idLead])
 }
 
 model RespuestaRapida {

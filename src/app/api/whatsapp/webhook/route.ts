@@ -6,7 +6,11 @@ import { createHmac, timingSafeEqual } from "crypto";
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
   const secret = process.env.META_APP_SECRET;
   if (!secret || secret === "mock-app-secret") {
-    console.warn("META_APP_SECRET not configured or mock. Skipping signature validation.");
+    if (process.env.NODE_ENV === "production") {
+      console.error("CRITICAL SECURITY ERROR: META_APP_SECRET environment variable is NOT configured in production! Signature validation required.");
+      return false;
+    }
+    console.warn("META_APP_SECRET not configured or mock. Skipping signature validation in development.");
     return true;
   }
   if (!signatureHeader) {
@@ -158,41 +162,53 @@ export async function POST(req: NextRequest) {
       contenido: content
     });
 
-    // Si la IA está activada en la conversación, generamos una respuesta simulada o real
+    // Si la IA está activada en la conversación, generamos la respuesta en segundo plano de forma no bloqueante
     if (conv.iaActiva) {
-      const lowerText = content.toLowerCase();
-      const aiResponseText = await generateAIResponse(conv.id, content);
+      const processAI = (async () => {
+        try {
+          const lowerText = content.toLowerCase();
+          const aiResponseText = await generateAIResponse(conv.id, content);
 
-      // Guardar mensaje de IA en la DB
-      await db.addMessage({
-        idConversacion: conv.id,
-        direccion: "OUTBOUND",
-        tipoRemitente: "IA",
-        contenido: aiResponseText
-      });
-
-      // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
-      await sendWhatsAppMessage(rawPhone, aiResponseText);
-
-      // Actualizar datos de lead si aplica
-      if (conv.idLead) {
-        const lead = await db.getLeadById(conv.idLead);
-        if (lead) {
-          let updatedMissing = [...(lead.datosFaltantes || [])];
-          let updatedAiSummary = lead.resumenIA;
-
-          if (lowerText.includes("viernes") || lowerText.includes("horario")) {
-            updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("horario"));
-          }
-          if (lowerText.includes("hijo") || lowerText.includes("edad") || lowerText.includes("niño")) {
-            updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
-          }
-
-          await db.updateLead(conv.idLead, {
-            datosFaltantes: updatedMissing,
-            resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles vía WhatsApp." : "Cliente interesado en servicios de cuidado infantil."
+          // Guardar mensaje de IA en la DB
+          await db.addMessage({
+            idConversacion: conv.id,
+            direccion: "OUTBOUND",
+            tipoRemitente: "IA",
+            contenido: aiResponseText
           });
+
+          // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
+          await sendWhatsAppMessage(rawPhone, aiResponseText);
+
+          // Actualizar datos de lead si aplica
+          if (conv.idLead) {
+            const lead = await db.getLeadById(conv.idLead);
+            if (lead) {
+              let updatedMissing = [...(lead.datosFaltantes || [])];
+              let updatedAiSummary = lead.resumenIA;
+
+              if (lowerText.includes("viernes") || lowerText.includes("horario")) {
+                updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("horario"));
+              }
+              if (lowerText.includes("hijo") || lowerText.includes("edad") || lowerText.includes("niño")) {
+                updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
+              }
+
+              await db.updateLead(conv.idLead, {
+                datosFaltantes: updatedMissing,
+                resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles vía WhatsApp." : "Cliente interesado en servicios de cuidado infantil."
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Error en procesamiento asíncrono del webhook:", error);
         }
+      })();
+
+      // Registrar promesa de fondo en entornos compatibles para evitar el freeze
+      const ctx = req as any;
+      if (ctx.waitUntil) {
+        ctx.waitUntil(processAI);
       }
     }
 

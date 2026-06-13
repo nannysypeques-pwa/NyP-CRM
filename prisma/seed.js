@@ -24,13 +24,19 @@ async function main() {
 
   console.log('Base de datos limpiada con éxito.');
 
-  // 1. Crear Usuarios base con Roles y Ciudades asignadas
+  // 1. Obtener contraseñas seguras desde variables de entorno (con fallbacks solo para desarrollo local)
+  const gerentePassword = process.env.SEED_GERENTE_PASSWORD || "gerardo123";
+  const coordinadorPassword = process.env.SEED_COORDINADOR_PASSWORD || "ana123";
+  const vendedorLauraPassword = process.env.SEED_VENDEDOR_LAURA_PASSWORD || "laura123";
+  const vendedorCarlosPassword = process.env.SEED_VENDEDOR_CARLOS_PASSWORD || "carlos123";
+
+  // Crear Usuarios base con Roles y Ciudades asignadas
   const gerenteGerardo = await prisma.usuario.create({
     data: {
       id: 'gerente-gerardo',
       nombre: 'Gerardo Pineda',
       email: 'gerardo@nannysypeques.com',
-      contrasenaHash: hashPassword('gerardo123'),
+      contrasenaHash: hashPassword(gerentePassword),
       rol: 'GERENTE',
       estado: 'ACTIVE',
       urlAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
@@ -42,7 +48,7 @@ async function main() {
       id: 'coordinador-ana',
       nombre: 'Ana Beltrán',
       email: 'ana@nannysypeques.com',
-      contrasenaHash: hashPassword('ana123'),
+      contrasenaHash: hashPassword(coordinadorPassword),
       rol: 'COORDINADOR',
       estado: 'ACTIVE',
       urlAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150',
@@ -54,7 +60,7 @@ async function main() {
       id: 'vendedor-laura',
       nombre: 'Laura Méndez',
       email: 'laura@nannysypeques.com',
-      contrasenaHash: hashPassword('laura123'),
+      contrasenaHash: hashPassword(vendedorLauraPassword),
       rol: 'VENDEDOR',
       ciudad: 'Puebla',
       estado: 'ACTIVE',
@@ -67,7 +73,7 @@ async function main() {
       id: 'vendedor-carlos',
       nombre: 'Carlos Ruiz',
       email: 'carlos@nannysypeques.com',
-      contrasenaHash: hashPassword('carlos123'),
+      contrasenaHash: hashPassword(vendedorCarlosPassword),
       rol: 'VENDEDOR',
       ciudad: 'CDMX',
       estado: 'ACTIVE',

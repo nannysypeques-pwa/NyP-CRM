@@ -1,8 +1,18 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
-// Fallback session key (must be 32 bytes)
-const SESSION_SECRET = process.env.SESSION_SECRET || "nyp-crm-production-session-secret-32-chars-long";
+function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: SESSION_SECRET environment variable is NOT configured in production!");
+    }
+    return "nyp-crm-development-only-session-secret-key-32";
+  }
+  return secret;
+}
+
+const SESSION_SECRET = getSessionSecret();
 
 export interface SessionData {
   userId: string;

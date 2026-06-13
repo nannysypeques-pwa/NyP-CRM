@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   Plus, 
   Search, 
@@ -122,14 +123,15 @@ interface Conversation {
 }
 
 export default function KanbanPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Scopes & Filters
-  const [selectedCity, setSelectedCity] = useState("Ciudad de México");
+  const [selectedCity, setSelectedCity] = useState("TODAS");
   const [searchTerm, setSearchTerm] = useState("");
-  const agentCity = "Ciudad de México"; // Mock active user role city
+  const agentCity = "Multiciudad"; // Scope dinámico del CRM
 
   // Drag states
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -167,9 +169,24 @@ export default function KanbanPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Initial load
+  // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
     fetchLeadsAndConversations();
+    
+    // Obtener la cookie activeCity para sincronizar la UI del Kanban con el menú lateral
+    const activeCityCookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("activeCity="))
+      ?.split("=")[1];
+
+    if (activeCityCookie) {
+      const decoded = decodeURIComponent(activeCityCookie);
+      // Mapear Querétaro sin tilde al valor con tilde para coincidencia visual
+      const finalCity = decoded === "Queretaro" ? "Querétaro" : decoded;
+      setSelectedCity(finalCity === "Todas" ? "TODAS" : finalCity);
+    } else {
+      setSelectedCity("TODAS");
+    }
   }, []);
 
   // Poll chat messages in Drawer if open
@@ -206,11 +223,16 @@ export default function KanbanPage() {
 
   const fetchLeadsAndConversations = async () => {
     try {
-      const leadsRes = await fetch("/api/leads");
-      const convsRes = await fetch("/api/conversations");
+      const [leadsRes, convsRes] = await Promise.all([
+        fetch("/api/leads"),
+        fetch("/api/conversations")
+      ]);
+      
       if (leadsRes.ok && convsRes.ok) {
-        const leadsData = await leadsRes.json();
-        const convsData = await convsRes.json();
+        const [leadsData, convsData] = await Promise.all([
+          leadsRes.json(),
+          convsRes.json()
+        ]);
         setLeads(leadsData);
         setConversations(convsData);
       }
@@ -435,12 +457,40 @@ export default function KanbanPage() {
     }
   };
 
-  // Scoped lists of filtered leads
+  const handleCityChange = (val: string) => {
+    setSelectedCity(val);
+    // Guardar la cookie activeCity y sincronizar el menú lateral
+    const cookieVal = val === "TODAS" ? "Todas" : (val === "Querétaro" ? "Queretaro" : val);
+    document.cookie = `activeCity=${cookieVal}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
+    router.refresh();
+  };
+
+  // Scoped lists of filtered leads according to business rules
   const getLeadsByStatus = (status: string) => {
     return leads.filter(l => {
-      const matchesCity = selectedCity === "TODAS" || l.ciudad === selectedCity;
       const matchesSearch = l.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || l.telefono.includes(searchTerm);
-      return l.estado === status && matchesCity && matchesSearch;
+      if (!matchesSearch) return false;
+
+      // 1. PENDIENTE (NUEVO): Todos los que escribieron pero aún no sabemos de qué ciudad son
+      // Se muestran todos los que no tienen ciudad definida ("Por definir" o vacía), sin importar la ciudad seleccionada.
+      if (status === "NUEVO") {
+        const isPendiente = l.ciudad === "Por definir" || l.ciudad === "" || !l.ciudad;
+        return l.estado === "NUEVO" && isPendiente;
+      }
+
+      // Para el resto de estados, deben tener una ciudad asignada y coincidir con el filtro
+      const hasCity = l.ciudad && l.ciudad !== "Por definir" && l.ciudad !== "";
+      if (!hasCity) return false;
+
+      const normSelected = selectedCity.toUpperCase();
+      const normLead = l.ciudad.toUpperCase();
+
+      const matchesCity = normSelected === "TODAS" || 
+        normLead === normSelected ||
+        (normSelected === "QUERÉTARO" && normLead === "QUERETARO") ||
+        (normSelected === "QUERETARO" && normLead === "QUERÉTARO");
+
+      return l.estado === status && matchesCity;
     });
   };
 
@@ -467,16 +517,14 @@ export default function KanbanPage() {
           <div className="h-5 w-px bg-slate-200"></div>
           <select
             value={selectedCity}
-            onChange={(e) => setSelectedCity(e.target.value)}
+            onChange={(e) => handleCityChange(e.target.value)}
             className="border-0 bg-transparent text-sm font-extrabold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer"
           >
             <option value="TODAS">Ver Todas las Ciudades</option>
-            <option value="Ciudad de México">Ciudad de México</option>
-            <option value="Monterrey">Monterrey</option>
-            <option value="Guadalajara">Guadalajara</option>
-            <option value="Madrid">Madrid</option>
-            <option value="Barcelona">Barcelona</option>
-            <option value="Valencia">Valencia</option>
+            <option value="CDMX">CDMX</option>
+            <option value="Puebla">Puebla</option>
+            <option value="Querétaro">Querétaro</option>
+            <option value="Xalapa">Xalapa</option>
           </select>
         </div>
       </div>
