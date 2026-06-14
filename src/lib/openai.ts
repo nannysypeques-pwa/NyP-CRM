@@ -566,7 +566,8 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const leadCity = lead?.ciudad || "Por definir";
 
     // Fetch dynamic knowledge documents from database (cached)
-    const knowledgeDocs = await db.getDocumentosConocimiento();
+    const rawKnowledgeDocs = await db.getDocumentosConocimiento();
+    const knowledgeDocs = filtrarYOptimizarConocimiento(rawKnowledgeDocs, leadCity, lastMessageContent);
     const knowledgeText = knowledgeDocs.length > 0
       ? knowledgeDocs.map(doc => `[${doc.categoria.toUpperCase()} - ${doc.titulo}]\n${doc.contenido}`).join("\n\n")
       : "No hay documentos adicionales de conocimiento en la base de datos.";
@@ -864,4 +865,68 @@ function parseJSONRobust(text: string): any {
     }
     throw new Error("No JSON object found in the text: " + text);
   }
+}
+
+function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage: string): any[] {
+  const lowerMessage = lastMessage.toLowerCase();
+  const esCandidata = lowerMessage.includes("trabajo") || 
+                      lowerMessage.includes("vacante") || 
+                      lowerMessage.includes("empleo") || 
+                      lowerMessage.includes("postular") || 
+                      lowerMessage.includes("reclutamiento") || 
+                      lowerMessage.includes("candidata");
+
+  return docs.map(doc => {
+    // 1. Filtrar el documento de Reclutamiento de Nannies si no es una candidata
+    if (doc.titulo.toLowerCase().includes("interesadas en trabajar como nanny") && !esCandidata) {
+      return null;
+    }
+
+    // 2. Optimizar el documento de Precios y Tarifas según la ciudad del lead
+    if (doc.titulo.toLowerCase().includes("precios, tarifas y condiciones")) {
+      let contenidoOptimizado = doc.contenido;
+      
+      const ciudadNormalizada = ciudad.toLowerCase().trim();
+      const esPuebla = ciudadNormalizada.includes("puebla") || ciudadNormalizada.includes("atlixco");
+      const esXalapa = ciudadNormalizada.includes("xalapa");
+      const esQueretaro = ciudadNormalizada.includes("querétaro") || ciudadNormalizada.includes("queretaro");
+      const esCdmx = ciudadNormalizada.includes("cdmx") || ciudadNormalizada.includes("ciudad de méxico") || ciudadNormalizada.includes("ciudad de mexico");
+
+      // Si la ciudad es por definir, no inyectamos ningún tabulador detallado (ya que no puede cotizar)
+      if (ciudad === "Por definir" || ciudad === "") {
+        const partes = contenidoOptimizado.split("==================================================");
+        const intro = partes[0] || "";
+        const condiciones = partes.find((p: string) => p.includes("CONDICIONES ECONÓMICAS")) || "";
+        const restricciones = partes.find((p: string) => p.includes("RESTRICCIONES")) || "";
+        contenidoOptimizado = `${intro}\n\nNota: Los tabuladores detallados se omitieron porque la ciudad no está definida en el perfil del cliente.\n\n==================================================\n${condiciones}\n\n==================================================\n${restricciones}`;
+      } else {
+        const partes = contenidoOptimizado.split("==================================================");
+        const intro = partes[0] || "";
+        
+        let tabuladorCiudad = "";
+        if (esPuebla) {
+          tabuladorCiudad = partes.find((p: string) => p.includes("TABULADOR PUEBLA")) || "";
+        } else if (esXalapa) {
+          tabuladorCiudad = partes.find((p: string) => p.includes("TABULADOR XALAPA")) || "";
+        } else if (esQueretaro) {
+          tabuladorCiudad = partes.find((p: string) => p.includes("TABULADOR QUERÉTARO")) || "";
+        } else if (esCdmx) {
+          tabuladorCiudad = partes.find((p: string) => p.includes("TABULADOR CDMX")) || "";
+        }
+
+        const horasExtra = partes.find((p: string) => p.includes("TARIFAS DOCUMENTADAS DE HORAS EXTRA")) || "";
+        const condiciones = partes.find((p: string) => p.includes("CONDICIONES ECONÓMICAS")) || "";
+        const restricciones = partes.find((p: string) => p.includes("RESTRICCIONES")) || "";
+
+        contenidoOptimizado = `${intro}\n\n==================================================\n${tabuladorCiudad}\n\n==================================================\n${horasExtra}\n\n==================================================\n${condiciones}\n\n==================================================\n${restricciones}`;
+      }
+
+      return {
+        ...doc,
+        contenido: contenidoOptimizado
+      };
+    }
+
+    return doc;
+  }).filter(Boolean);
 }
