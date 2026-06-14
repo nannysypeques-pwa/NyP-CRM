@@ -117,16 +117,7 @@ export default function RootLayout({
               )}
             </nav>
 
-            {/* Línea divisoria adicional */}
-            <hr className="border-[#d4e6f4]" />
 
-            {/* Enlaces de Configuración y Soporte (ahora scrollables) */}
-            <nav className="space-y-1">
-              {!isVendedor && (
-                <SidebarLink href="/settings" icon={<Settings className="w-5 h-5" />} label="Configuración" />
-              )}
-              <SidebarLink href="/support" icon={<HelpCircle className="w-5 h-5" />} label="Soporte" />
-            </nav>
           </div>
 
           {/* Pie del Sidebar (Solo Perfil y Logout) - Fijo abajo */}
