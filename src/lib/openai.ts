@@ -716,3 +716,75 @@ INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL:
     throw err;
   }
 }
+
+export async function extractLeadInfo(messageContent: string, historyText: string): Promise<any> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error("OPENAI_API_KEY is not defined. Skipping lead info extraction.");
+    return null;
+  }
+
+  const extractionSystemPrompt = `Eres un asistente de extracción de datos de CRM para "Nannys y Peques".
+Tu trabajo es analizar el último mensaje enviado por el cliente (y el contexto reciente de la conversación si es necesario) para extraer datos clave del lead de manera extremadamente precisa.
+
+Debes devolver obligatoriamente un único objeto JSON válido con los siguientes campos opcionales (solo inclúyelos si el cliente los proporcionó de forma clara y explícita, no supongas nada):
+- nombreCompleto: Nombre del cliente (tutor/padre/madre).
+- ciudad: Ciudad del servicio. Solo puede ser una de estas: "Puebla", "CDMX", "Atlixco", "Querétaro" o "Xalapa".
+- zona: Zona, colonia o fraccionamiento (ej: "Angelópolis", "Lomas de Angelópolis", "Sonata").
+- interesServicio: Tipo de servicio solicitado. Intenta normalizarlo a: "Fijo", "Por horas" o "Eventual" (o el término específico usado).
+- edadHijo: Edad del hijo (número entero). Si menciona que tiene 4 años, extrae 4.
+- cantidadHijos: Cantidad de hijos a cuidar (número entero).
+- diasSolicitados: Días de la semana requeridos (ej: "Lunes a Viernes").
+- horaInicioSolicitada: Hora de inicio del servicio (ej: "09:00").
+- horaFinSolicitada: Hora de fin del servicio (ej: "18:00").
+- nuevoHijo: Si el cliente menciona el nombre y la edad de su peque (ej: "Mateo tiene 4 años" o "mi hijo Mateo de 4 años"), crea un objeto con:
+  * nombre: Nombre del niño (ej: "Mateo").
+  * textoEdad: Edad del niño de forma descriptiva (ej: "4 años" o "3 años y 2 meses").
+  * necesidades: Alguna especificación, alergia o condición médica mencionada (opcional).
+
+Reglas críticas de extracción:
+1. No asumas ni inventes datos. Extrae solo lo que el cliente afirme o confirme en el mensaje.
+2. Si el mensaje no contiene ningún dato nuevo para extraer, devuelve un objeto vacío: {}.
+3. Devuelve ÚNICAMENTE un objeto JSON válido, sin delimitadores como \`\`\`json ni comentarios ni texto extra.`;
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: extractionSystemPrompt },
+          { role: "user", content: `Historial reciente:\n${historyText}\n\nÚltimo mensaje del cliente:\n"${messageContent}"` }
+        ],
+        temperature: 0.0,
+        max_tokens: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("OpenAI API call for extraction failed:", await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    let reply = data.choices?.[0]?.message?.content?.trim();
+    if (!reply) return null;
+
+    // Remover bloques de markdown si la IA los incluye
+    if (reply.startsWith("```json")) {
+      reply = reply.replace(/^```json/, "").replace(/```$/, "").trim();
+    } else if (reply.startsWith("```")) {
+      reply = reply.replace(/^```/, "").replace(/```$/, "").trim();
+    }
+
+    const extracted = JSON.parse(reply);
+    return extracted;
+  } catch (err) {
+    console.error("Error in extractLeadInfo:", err);
+    return null;
+  }
+}

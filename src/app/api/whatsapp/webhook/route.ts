@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, detectCityFromText } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, extractLeadInfo } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
@@ -174,6 +174,58 @@ export async function POST(req: NextRequest) {
       tipoRemitente: "CLIENT",
       contenido: content
     });
+
+    // Extraer y guardar información del Lead en la base de datos si aplica
+    if (conv.idLead) {
+      try {
+        const chatHistoryForExtraction = await db.getMessagesByConversationId(conv.id);
+        const recentHistoryText = chatHistoryForExtraction.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
+        
+        const extractedData = await extractLeadInfo(content, recentHistoryText);
+        if (extractedData) {
+          const updates: any = {};
+          
+          if (extractedData.nombreCompleto && extractedData.nombreCompleto !== "Gerardo Pineda") {
+            updates.nombreCompleto = extractedData.nombreCompleto;
+          }
+          if (extractedData.ciudad) updates.ciudad = extractedData.ciudad;
+          if (extractedData.zona) updates.zona = extractedData.zona;
+          if (extractedData.interesServicio) updates.interesServicio = extractedData.interesServicio;
+          if (extractedData.edadHijo !== undefined && extractedData.edadHijo !== null) {
+            updates.edadHijo = Number(extractedData.edadHijo);
+          }
+          if (extractedData.cantidadHijos !== undefined && extractedData.cantidadHijos !== null) {
+            updates.cantidadHijos = Number(extractedData.cantidadHijos);
+          }
+          if (extractedData.diasSolicitados) updates.diasSolicitados = extractedData.diasSolicitados;
+          if (extractedData.horaInicioSolicitada) updates.horaInicioSolicitada = extractedData.horaInicioSolicitada;
+          if (extractedData.horaFinSolicitada) updates.horaFinSolicitada = extractedData.horaFinSolicitada;
+
+          if (Object.keys(updates).length > 0) {
+            console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, updates);
+            await db.updateLead(conv.idLead, updates);
+          }
+
+          if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre) {
+            const currentLead = await db.getLeadById(conv.idLead);
+            const existeHijo = currentLead?.hijos?.some(
+              h => h.nombre.toLowerCase().trim() === extractedData.nuevoHijo.nombre.toLowerCase().trim()
+            );
+            if (!existeHijo) {
+              console.log(`[EXTRACTOR IA] Creando nuevo hijo para Lead ${conv.idLead}:`, extractedData.nuevoHijo);
+              await db.crearHijo({
+                idLead: conv.idLead,
+                nombre: extractedData.nuevoHijo.nombre,
+                textoEdad: extractedData.nuevoHijo.textoEdad,
+                necesidades: extractedData.nuevoHijo.necesidades || ""
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error al extraer información del Lead:", err);
+      }
+    }
 
     // Si la IA está activada en la conversación, generamos la respuesta de forma síncrona en el request
     if (conv.iaActiva) {

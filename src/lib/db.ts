@@ -773,6 +773,19 @@ class BaseDeDatos {
       }
     });
   }
+
+  async crearHijo(hijoData: { idLead: string; nombre: string; textoEdad: string; necesidades?: string; instrucciones?: string }): Promise<Hijo> {
+    const hijo = await prisma.hijo.create({
+      data: {
+        idLead: hijoData.idLead,
+        nombre: hijoData.nombre,
+        textoEdad: hijoData.textoEdad,
+        necesidades: hijoData.necesidades,
+        instrucciones: hijoData.instrucciones
+      }
+    });
+    return hijo as unknown as Hijo;
+  }
 }
 
 export const db = new BaseDeDatos();
