@@ -544,7 +544,7 @@ export default function KanbanPage() {
       </div>
 
       {/* Kanban Board Grid */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6 min-h-0 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-6 min-h-0 overflow-hidden">
         
         {/* COLUMN 1: PENDIENTES */}
         <div 
@@ -640,7 +640,54 @@ export default function KanbanPage() {
           </div>
         </div>
 
-        {/* COLUMN 3: EN COTIZACIÓN */}
+        {/* COLUMN 3: ATENCIÓN HUMANA */}
+        <div 
+          onDragOver={(e) => handleDragOver(e, "ATENCION_HUMANA")}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, "ATENCION_HUMANA")}
+          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+            activeDropCol === "ATENCION_HUMANA" ? "bg-indigo-50 border-2 border-dashed border-indigo-500/40" : "bg-[#faf9fe] border border-[#ebe7f5]"
+          }`}
+        >
+          <div className="flex justify-between items-center mb-4 flex-shrink-0">
+            <h3 className="font-extrabold text-indigo-700 text-sm uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Atención Humana
+            </h3>
+            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+              {getLeadsByStatus("ATENCION_HUMANA").length}
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
+            {getLeadsByStatus("ATENCION_HUMANA").map((lead) => (
+              <div 
+                key={lead.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, lead.id)}
+                onClick={() => handleCardClick(lead)}
+                className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing hover:border-indigo-500/30 transition-all space-y-3 group"
+              >
+                <div className="flex justify-between items-start">
+                  <h4 className="font-bold text-slate-800 text-sm group-hover:text-indigo-700 transition-colors">{lead.nombreCompleto}</h4>
+                  <span className="text-[10px] text-slate-400 font-semibold">{lead.ciudad.split(' ')[0]}</span>
+                </div>
+                
+                <p className="text-xs text-slate-500 font-medium line-clamp-2 leading-relaxed">
+                  {lead.resumenIA || "Requiere intervención manual o resolución de dudas complejas."}
+                </p>
+
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded flex items-center gap-0.5 border border-indigo-100">
+                    <User className="w-3.5 h-3.5" /> SOPORTE MANUAL
+                  </span>
+                  <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md text-[10px]">{lead.telefono}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COLUMN 4: EN COTIZACIÓN */}
         <div 
           onDragOver={(e) => handleDragOver(e, "COTIZADO")}
           onDragLeave={handleDragLeave}
@@ -1023,6 +1070,24 @@ export default function KanbanPage() {
                   </button>
 
                   {/* Close Won trigger */}
+                  {selectedLead.estado !== "ATENCION_HUMANA" && selectedLead.estado !== "GANADO" && (
+                    <button 
+                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "ATENCION_HUMANA")}
+                      className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <UserCheck className="w-4 h-4 text-indigo-500" /> Derivar a Atención Humana
+                    </button>
+                  )}
+
+                  {selectedLead.estado === "ATENCION_HUMANA" && (
+                    <button 
+                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
+                      className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <Bot className="w-4 h-4 text-amber-500" /> Devolver a Conversación (IA)
+                    </button>
+                  )}
+
                   {selectedLead.estado !== "GANADO" ? (
                     <button 
                       onClick={() => handleUpdateLeadStatus(selectedLead.id, "GANADO")}
