@@ -10,9 +10,11 @@ import {
   MessageSquare, 
   AlertCircle, 
   CheckCircle,
-  FileText
+  FileText,
+  User as UserIcon
 } from "lucide-react";
 import Link from "next/link";
+import DashboardDateFilter from "@/components/DashboardDateFilter";
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,90 @@ interface ActivityItem {
   timestamp: Date;
 }
 
-export default async function Dashboard() {
+function getDateRange(range?: string, startStr?: string, endStr?: string) {
+  const now = new Date();
+  
+  if (!range || range.toUpperCase() === "TODOS") {
+    return { startDate: new Date(0), endDate: new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000) };
+  }
+
+  let startDate = new Date();
+  let endDate = new Date();
+
+  switch (range.toUpperCase()) {
+    case "HOY": {
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "AYER": {
+      const yesterday = new Date();
+      yesterday.setDate(now.getDate() - 1);
+      startDate = new Date(yesterday);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(yesterday);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "ESTA_SEMANA": {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      startDate.setDate(diff);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "LA_SEMANA_PASADA": {
+      const day = now.getDay();
+      const diffLunes = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+      startDate.setDate(diffLunes);
+      startDate.setHours(0, 0, 0, 0);
+      
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "ESTE_MES": {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "EL_MES_PASADO": {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      break;
+    }
+    case "PERSONALIZADO": {
+      if (startStr) {
+        startDate = new Date(startStr);
+        startDate.setHours(0, 0, 0, 0);
+      } else {
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (endStr) {
+        endDate = new Date(endStr);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate.setHours(23, 59, 59, 999);
+      }
+      break;
+    }
+    default: {
+      startDate = new Date(0);
+      endDate = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000);
+      break;
+    }
+  }
+
+  return { startDate, endDate };
+}
+
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: { range?: string; start?: string; end?: string };
+}) {
   // Cargar todos los datos en paralelo para reducir drásticamente la latencia de red con Supabase
   const [leads, conversations, recentLeads, recentMessages, recentQuotes] = await Promise.all([
     db.getLeads(),
@@ -53,23 +138,38 @@ export default async function Dashboard() {
     })
   ]);
 
-  // Calculate stats based on db
-  const totalLeads = leads.length;
-  const activeConversations = conversations.filter(c => c.estado !== "CERRADA").length;
-  const pendingFollowups = leads.reduce((acc, lead) => {
+  const { startDate, endDate } = getDateRange(searchParams.range, searchParams.start, searchParams.end);
+
+  // Filtrar datos por el período seleccionado
+  const filteredLeads = leads.filter(l => {
+    const d = new Date(l.creadoEn);
+    return d >= startDate && d <= endDate;
+  });
+
+  const filteredConversations = conversations.filter(c => {
+    const d = new Date(c.ultimoMensajeEn);
+    return d >= startDate && d <= endDate;
+  });
+
+  // Calculate stats based on filtered data
+  const totalLeads = filteredLeads.length;
+  const activeConversations = filteredConversations.filter(c => c.estado !== "CERRADA").length;
+  const pendingFollowups = filteredLeads.reduce((acc, lead) => {
     return acc + (lead.seguimientos?.filter(f => f.estado === "PENDIENTE").length || 0);
   }, 0);
   
-  const wonLeadsCount = leads.filter(l => l.estado === "GANADO").length;
-  const contactedLeadsCount = leads.filter(l => l.estado === "CONTACTADO").length;
-  const quotedLeadsCount = leads.filter(l => l.estado === "COTIZADO").length;
-  const newLeadsCount = leads.filter(l => l.estado === "NUEVO").length;
+  const wonLeadsCount = filteredLeads.filter(l => l.estado === "GANADO").length;
+  const contactedLeadsCount = filteredLeads.filter(l => l.estado === "CONTACTADO").length;
+  const quotedLeadsCount = filteredLeads.filter(l => l.estado === "COTIZADO").length;
+  const newLeadsCount = filteredLeads.filter(l => l.estado === "NUEVO").length;
+  const humanAttentionLeadsCount = filteredLeads.filter(l => l.estado === "ATENCION_HUMANA").length;
 
   const conversionRate = totalLeads > 0 ? ((wonLeadsCount / totalLeads) * 100).toFixed(1) + '%' : '0.0%';
 
   const contactedPercent = totalLeads > 0 ? Math.round((contactedLeadsCount / totalLeads) * 100) : 0;
   const quotedPercent = totalLeads > 0 ? Math.round((quotedLeadsCount / totalLeads) * 100) : 0;
   const wonPercent = totalLeads > 0 ? Math.round((wonLeadsCount / totalLeads) * 100) : 0;
+  const humanAttentionPercent = totalLeads > 0 ? Math.round((humanAttentionLeadsCount / totalLeads) * 100) : 0;
 
   const activities: ActivityItem[] = [];
 
@@ -112,10 +212,13 @@ export default async function Dashboard() {
 
   return (
     <div className="p-8 space-y-8 h-full overflow-y-auto custom-scrollbar">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-[#026692]">Panel de Control</h1>
-        <p className="text-slate-500 text-sm mt-1">Bienvenido a NyP CRM. Aquí tienes el rendimiento comercial de hoy.</p>
+      {/* Page Title & Date Filter */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-[#026692]">Panel de Control</h1>
+          <p className="text-slate-500 text-sm mt-1">Bienvenido a NyP CRM. Visualiza el rendimiento comercial del período.</p>
+        </div>
+        <DashboardDateFilter />
       </div>
 
       {/* Stats Cards Grid */}
@@ -235,6 +338,18 @@ export default async function Dashboard() {
                 <div className="w-full bg-[#f0f7fc] h-9 rounded-xl overflow-hidden relative flex items-center px-4">
                   <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-xl transition-all" style={{ width: `${wonPercent}%` }}></div>
                   <span className="relative text-xs font-bold text-slate-700 z-10">{wonPercent}% conversión final</span>
+                </div>
+              </div>
+
+              {/* Step 5: Atención Humana */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-bold text-slate-500">
+                  <span>ATENCIÓN HUMANA</span>
+                  <span>{humanAttentionLeadsCount}</span>
+                </div>
+                <div className="w-full bg-[#f4f3ff] h-9 rounded-xl overflow-hidden relative flex items-center px-4">
+                  <div className="absolute inset-y-0 left-0 bg-indigo-500 rounded-xl transition-all" style={{ width: `${humanAttentionPercent}%` }}></div>
+                  <span className="relative text-xs font-bold text-indigo-700 z-10">{humanAttentionPercent}% atención humana</span>
                 </div>
               </div>
             </div>

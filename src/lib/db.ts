@@ -124,7 +124,7 @@ export interface Lead {
   horaFinSolicitada?: string;
   fechaInicioDeseada?: string;
   nivelUrgencia: 'BAJA' | 'MEDIA' | 'ALTA';
-  estado: 'NUEVO' | 'CONTACTADO' | 'COTIZADO' | 'GANADO' | 'PERDIDO';
+  estado: 'NUEVO' | 'CONTACTADO' | 'COTIZADO' | 'GANADO' | 'PERDIDO' | 'ATENCION_HUMANA';
   idUsuarioAsignado?: string;
   ultimoContactoEn: string;
   siguienteSeguimientoEn?: string;
