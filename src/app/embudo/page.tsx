@@ -513,6 +513,18 @@ export default function KanbanPage() {
         (normSelected === "QUERÉTARO" && normLead === "QUERETARO") ||
         (normSelected === "QUERETARO" && normLead === "QUERÉTARO");
 
+      if (status === "COTIZADO") {
+        const hasQuotes = l.cotizaciones && l.cotizaciones.length > 0;
+        const isActuallyCotizado = l.estado === "COTIZADO" || (hasQuotes && l.estado !== "GANADO" && l.estado !== "PERDIDO");
+        return isActuallyCotizado && matchesCity;
+      }
+
+      if (status === "CONTACTADO") {
+        const hasQuotes = l.cotizaciones && l.cotizaciones.length > 0;
+        const isActuallyContactado = l.estado === "CONTACTADO" && !hasQuotes;
+        return isActuallyContactado && matchesCity;
+      }
+
       return l.estado === status && matchesCity;
     });
   };

@@ -289,7 +289,19 @@ export async function POST(req: NextRequest) {
               updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
             }
 
+            // Detectar si la respuesta de la IA contiene una cotización o tarifa
+            const lowerAiResponse = aiResponseText.toLowerCase();
+            const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
+                                        lowerAiResponse.includes("cotización") || 
+                                        /\$\d+/.test(aiResponseText);
+            
+            let nuevoEstado = lead.estado;
+            if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO") {
+              nuevoEstado = "COTIZADO";
+            }
+
             await db.updateLead(conv.idLead, {
+              estado: nuevoEstado,
               datosFaltantes: updatedMissing,
               resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles vía WhatsApp." : "Cliente interesado en servicios de cuidado infantil."
             });
