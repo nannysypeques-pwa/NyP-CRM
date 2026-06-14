@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse } from "@/lib/openai";
+import { generateAIResponse, extractLeadInfo } from "@/lib/openai";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -81,6 +81,77 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // generamos una respuesta inteligente con OpenAI.
     if (direccion === "INBOUND" && conv?.iaActiva) {
       const lowerText = contenido.toLowerCase();
+
+      // Extraer y guardar información del Lead en la base de datos si aplica
+      if (conv.idLead) {
+        try {
+          const chatHistoryForExtraction = await db.getMessagesByConversationId(conv.id);
+          const recentHistoryText = chatHistoryForExtraction.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
+          
+          const extractedData = await extractLeadInfo(contenido, recentHistoryText);
+          if (extractedData) {
+            const updates: any = {};
+            
+            if (extractedData.nombreCompleto && extractedData.nombreCompleto !== "Gerardo Pineda") {
+              updates.nombreCompleto = extractedData.nombreCompleto;
+            }
+            if (extractedData.ciudad) updates.ciudad = extractedData.ciudad;
+            if (extractedData.zona) updates.zona = extractedData.zona;
+            if (extractedData.interesServicio) updates.interesServicio = extractedData.interesServicio;
+            if (extractedData.edadHijo !== undefined && extractedData.edadHijo !== null) {
+              updates.edadHijo = Number(extractedData.edadHijo);
+            }
+            if (extractedData.cantidadHijos !== undefined && extractedData.cantidadHijos !== null) {
+              updates.cantidadHijos = Number(extractedData.cantidadHijos);
+            }
+            if (extractedData.diasSolicitados) updates.diasSolicitados = extractedData.diasSolicitados;
+            if (extractedData.horaInicioSolicitada) updates.horaInicioSolicitada = extractedData.horaInicioSolicitada;
+            if (extractedData.horaFinSolicitada) updates.horaFinSolicitada = extractedData.horaFinSolicitada;
+            if (extractedData.fechaInicioDeseada) updates.fechaInicioDeseada = extractedData.fechaInicioDeseada;
+            if (extractedData.linkUbicacion) updates.linkUbicacion = extractedData.linkUbicacion;
+            if (extractedData.razonContratacion) updates.razonContratacion = extractedData.razonContratacion;
+            if (extractedData.mascotas) updates.mascotas = extractedData.mascotas;
+            if (extractedData.indicacionesIngreso) updates.indicacionesIngreso = extractedData.indicacionesIngreso;
+
+            if (Object.keys(updates).length > 0) {
+              console.log(`[EXTRACTOR IA - CRM] Actualizando Lead ${conv.idLead} con:`, updates);
+              await db.updateLead(conv.idLead, updates);
+              
+              const fieldsText = Object.entries(updates)
+                .map(([k, v]) => `${k} = "${v}"`)
+                .join(", ");
+              await db.addNota(conv.idLead, `[Extractor IA] Datos calificados (chat CRM): ${fieldsText}`, "Asistente IA");
+            }
+
+            if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre) {
+              const currentLead = await db.getLeadById(conv.idLead);
+              const existeHijo = currentLead?.hijos?.some(
+                h => h.nombre.toLowerCase().trim() === extractedData.nuevoHijo.nombre.toLowerCase().trim()
+              );
+              if (!existeHijo) {
+                console.log(`[EXTRACTOR IA - CRM] Creando nuevo hijo para Lead ${conv.idLead}:`, extractedData.nuevoHijo);
+                await db.crearHijo({
+                  idLead: conv.idLead,
+                  nombre: extractedData.nuevoHijo.nombre,
+                  textoEdad: extractedData.nuevoHijo.textoEdad,
+                  alergias: extractedData.nuevoHijo.alergias || "",
+                  condicionMedica: extractedData.nuevoHijo.condicionMedica || "",
+                  estadoSalud: extractedData.nuevoHijo.estadoSalud || "",
+                  preferencias: extractedData.nuevoHijo.preferencias || "",
+                  indicacionesNanny: extractedData.nuevoHijo.indicacionesNanny || "",
+                  necesidades: extractedData.nuevoHijo.necesidades || ""
+                });
+
+                const hijoNota = `[Extractor IA] Peque calificado (chat CRM): ${extractedData.nuevoHijo.nombre} (${extractedData.nuevoHijo.textoEdad || "edad no especificada"})${extractedData.nuevoHijo.alergias ? `, Alergias: ${extractedData.nuevoHijo.alergias}` : ""}${extractedData.nuevoHijo.condicionMedica ? `, Condición: ${extractedData.nuevoHijo.condicionMedica}` : ""}`;
+                await db.addNota(conv.idLead, hijoNota, "Asistente IA");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error al extraer información del Lead en chat CRM:", err);
+        }
+      }
+
       const aiResponseText = await generateAIResponse(params.id, contenido);
 
       // Guardar el mensaje generado por la IA en la base de datos
@@ -91,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         contenido: aiResponseText
       });
       
-      // Actualizar los datos faltantes o intención si procede (Simulación de Extracción por IA)
+      // Actualizar datos faltantes y resumen de IA al final
       if (conv.idLead) {
         const lead = await db.getLeadById(conv.idLead);
         if (lead) {

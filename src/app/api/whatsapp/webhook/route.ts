@@ -209,6 +209,12 @@ export async function POST(req: NextRequest) {
           if (Object.keys(updates).length > 0) {
             console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, updates);
             await db.updateLead(conv.idLead, updates);
+            
+            // Agregar una nota de seguimiento interna en el Lead para auditar los datos extraídos
+            const fieldsText = Object.entries(updates)
+              .map(([k, v]) => `${k} = "${v}"`)
+              .join(", ");
+            await db.addNota(conv.idLead, `[Extractor IA] Datos calificados: ${fieldsText}`, "Asistente IA");
           }
 
           if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre) {
@@ -229,6 +235,10 @@ export async function POST(req: NextRequest) {
                 indicacionesNanny: extractedData.nuevoHijo.indicacionesNanny || "",
                 necesidades: extractedData.nuevoHijo.necesidades || ""
               });
+
+              // Agregar nota de seguimiento para el peque calificado
+              const hijoNota = `[Extractor IA] Peque calificado: ${extractedData.nuevoHijo.nombre} (${extractedData.nuevoHijo.textoEdad || "edad no especificada"})${extractedData.nuevoHijo.alergias ? `, Alergias: ${extractedData.nuevoHijo.alergias}` : ""}${extractedData.nuevoHijo.condicionMedica ? `, Condición: ${extractedData.nuevoHijo.condicionMedica}` : ""}`;
+              await db.addNota(conv.idLead, hijoNota, "Asistente IA");
             }
           }
         }
