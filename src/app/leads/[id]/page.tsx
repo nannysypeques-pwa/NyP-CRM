@@ -462,7 +462,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                       <div>
                         <span className="text-xs font-bold text-slate-400 uppercase block">Razón de Contratación</span>
                         <span className="font-semibold text-slate-700 block mt-0.5 italic">
-                          {lead.razonContratacion ? `"${lead.razonContratacion}"` : "No especificada"}
+                          {lead.razonContratacion ? `"${lead.razonContratacion}"` : "No especificada aún"}
                         </span>
                       </div>
                     </div>
@@ -491,7 +491,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                       <div>
                         <span className="text-xs font-bold text-slate-400 uppercase block">Mascotas en el Hogar</span>
                         <span className="font-semibold text-slate-700 block mt-0.5">
-                          {lead.mascotas || "Ninguna registrada"}
+                          {lead.mascotas || "No especificadas aún"}
                         </span>
                       </div>
                     </div>
@@ -519,7 +519,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                     <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-1">
                       <span className="text-xs font-bold text-amber-700 uppercase block">Indicaciones de Ingreso al Hogar</span>
                       <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                        {lead.indicacionesIngreso || "No se han registrado indicaciones o claves de ingreso para este hogar."}
+                        {lead.indicacionesIngreso || "No especificadas aún"}
                       </p>
                     </div>
                   </div>
@@ -549,21 +549,21 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                             <div className="bg-[#fff1f5] p-4 rounded-2xl border border-[#ffe1e8] space-y-1">
                               <span className="text-[10px] font-bold text-rose-600 uppercase block tracking-wider">Alergias</span>
                               <p className="text-xs text-rose-800 font-bold">
-                                {child.alergias || "Ninguna registrada"}
+                                {child.alergias || "No especificadas aún"}
                               </p>
                             </div>
 
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
                               <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Condición Médica</span>
                               <p className="text-xs text-slate-700 font-semibold">
-                                {child.condicionMedica || "Sin condiciones especiales"}
+                                {child.condicionMedica || "No especificada aún"}
                               </p>
                             </div>
 
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
                               <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Estado de Salud Actual</span>
                               <p className="text-xs text-slate-700 font-semibold">
-                                {child.estadoSalud || "Bueno / No especificado"}
+                                {child.estadoSalud || "No especificado aún"}
                               </p>
                             </div>
                           </div>
@@ -580,7 +580,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                             <div className="bg-[#fcf8e3] p-4 rounded-2xl border border-[#faf2cc] space-y-1">
                               <span className="text-[10px] font-bold text-[#8a6d3b] uppercase block tracking-wider">Indicaciones Especiales para Nanny</span>
                               <p className="text-xs text-[#8a6d3b] font-bold leading-relaxed">
-                                {child.indicacionesNanny || child.instrucciones || "Sin indicaciones específicas"}
+                                {child.indicacionesNanny || child.instrucciones || "No especificadas aún"}
                               </p>
                             </div>
 
