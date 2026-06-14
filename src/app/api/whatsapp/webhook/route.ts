@@ -175,53 +175,45 @@ export async function POST(req: NextRequest) {
       contenido: content
     });
 
-    // Si la IA está activada en la conversación, generamos la respuesta en segundo plano de forma no bloqueante
+    // Si la IA está activada en la conversación, generamos la respuesta de forma síncrona en el request
     if (conv.iaActiva) {
-      const processAI = (async () => {
-        try {
-          const lowerText = content.toLowerCase();
-          const aiResponseText = await generateAIResponse(conv.id, content);
+      try {
+        const lowerText = content.toLowerCase();
+        const aiResponseText = await generateAIResponse(conv.id, content);
 
-          // Guardar mensaje de IA en la DB
-          await db.addMessage({
-            idConversacion: conv.id,
-            direccion: "OUTBOUND",
-            tipoRemitente: "IA",
-            contenido: aiResponseText
-          });
+        // Guardar mensaje de IA en la DB
+        await db.addMessage({
+          idConversacion: conv.id,
+          direccion: "OUTBOUND",
+          tipoRemitente: "IA",
+          contenido: aiResponseText
+        });
 
-          // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
-          await sendWhatsAppMessage(rawPhone, aiResponseText);
+        // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
+        await sendWhatsAppMessage(rawPhone, aiResponseText);
 
-          // Actualizar datos de lead si aplica
-          if (conv.idLead) {
-            const lead = await db.getLeadById(conv.idLead);
-            if (lead) {
-              let updatedMissing = [...(lead.datosFaltantes || [])];
-              let updatedAiSummary = lead.resumenIA;
+        // Actualizar datos de lead si aplica
+        if (conv.idLead) {
+          const lead = await db.getLeadById(conv.idLead);
+          if (lead) {
+            let updatedMissing = [...(lead.datosFaltantes || [])];
+            let updatedAiSummary = lead.resumenIA;
 
-              if (lowerText.includes("viernes") || lowerText.includes("horario")) {
-                updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("horario"));
-              }
-              if (lowerText.includes("hijo") || lowerText.includes("edad") || lowerText.includes("niño")) {
-                updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
-              }
-
-              await db.updateLead(conv.idLead, {
-                datosFaltantes: updatedMissing,
-                resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles vía WhatsApp." : "Cliente interesado en servicios de cuidado infantil."
-              });
+            if (lowerText.includes("viernes") || lowerText.includes("horario")) {
+              updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("horario"));
             }
-          }
-        } catch (error) {
-          console.error("Error en procesamiento asíncrono del webhook:", error);
-        }
-      })();
+            if (lowerText.includes("hijo") || lowerText.includes("edad") || lowerText.includes("niño")) {
+              updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
+            }
 
-      // Registrar promesa de fondo en entornos compatibles para evitar el freeze
-      const ctx = req as any;
-      if (ctx.waitUntil) {
-        ctx.waitUntil(processAI);
+            await db.updateLead(conv.idLead, {
+              datosFaltantes: updatedMissing,
+              resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles vía WhatsApp." : "Cliente interesado en servicios de cuidado infantil."
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error al procesar respuesta de la IA en el webhook:", error);
       }
     }
 

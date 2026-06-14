@@ -604,12 +604,14 @@ ${leadHijos}
 ${leadNotes}
 
 INSTRUCCIÓN CRÍTICA DE NEGOCIO PARA PERSONALIZACIÓN Y EVITAR REPETICIÓN:
-1. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenas noches...").
-2. **NO vuelvas a preguntar** por ningún dato que ya esté registrado y tenga un valor diferente de "No registrado", "No definida", "No especificado", "No registrado/a" o "Por definir".
-3. Si la Ciudad Solicitada ya está definida y es diferente de "Por definir" (ej. "Puebla"), **NO preguntes en qué ciudad requiere el servicio**. Utiliza esa información para confirmar de forma natural o dar continuidad al diálogo (ej. "Como requiere el servicio para Puebla...").
-4. Si ya tenemos registrados los nombres o edades de los peques, **refiérete a ellos por su nombre** o confirma de forma amable y fluida (ej. "Para brindarle el perfil ideal para su peque [Nombre] de [Edad]...").
-5. Las respuestas sugeridas/base del final del prompt del sistema son exclusivamente guías de referencia de tono y contenido. **No las uses de manera literal o rígida**. Redacta el mensaje adaptándolo dinámicamente a la información que ya poseemos del cliente para que la conversación sea 100% natural, fluida, profesional y empática.
-6. Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio.`;
+1. **El CONTEXTO DEL LEAD ACTUAL es la verdad absoluta**: Si un campo (como Ciudad Solicitada, Zona, etc.) tiene un valor válido (es decir, diferente de "No registrado", "No definida", "No especificado", "No registrado/a" o "Por definir"), considéralo como un dato ya resuelto. NUNCA vuelvas a pedir o preguntar ese dato.
+2. **Prioriza la base de datos sobre el historial del chat**: Si el historial de chat muestra que tu último mensaje fue pedir la ciudad u otro dato y el cliente no respondió directamente (ej. respondió solo "Hola Nannys"), pero en el CONTEXTO DEL LEAD ACTUAL dicho dato ya está registrado (ej. Ciudad Solicitada es "Puebla"), NO repitas la pregunta. Da por resuelto el dato y pasa de forma fluida a la siguiente pregunta del proceso comercial (ej. tipo de servicio o edades de sus peques).
+3. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenas noches...").
+4. **NO vuelvas a preguntar** por ningún dato que ya esté registrado y tenga un valor diferente de "No registrado", "No definida", "No especificado", "No registrado/a" o "Por definir".
+5. Si la Ciudad Solicitada ya está definida y es diferente de "Por definir" (ej. "Puebla"), **NO preguntes en qué ciudad requiere el servicio**. Utiliza esa información para confirmar de forma natural o dar continuidad al diálogo (ej. "Como requiere el servicio para Puebla...").
+6. Si ya tenemos registrados los nombres o edades de los peques, **refiérete a ellos por su nombre** o confirma de forma amable y fluida (ej. "Para brindarle el perfil ideal para su peque [Nombre] de [Edad]...").
+7. Las respuestas sugeridas/base del final del prompt del sistema son exclusivamente guías de referencia de tono y contenido. **No las uses de manera literal o rígida**. Redacta el mensaje adaptándolo dinámicamente a la información que ya poseemos del cliente para que la conversación sea 100% natural, fluida, profesional y empática.
+8. Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio.`;
 
     // Fetch last 10 messages from the conversation history to give full context
     const chatHistory = await db.getMessagesByConversationId(idConversacion);
