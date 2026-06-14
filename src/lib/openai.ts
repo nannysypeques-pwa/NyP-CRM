@@ -688,12 +688,12 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) le resolverá exactamente su problema y le dará tranquilidad. Inmediatamente después, proporciona el costo exacto (ej. para Puebla, de lunes a viernes, de 3 a 6pm, la tarifa de 3 horas es de $1,610 al mes).`;
     }
 
-    const dynamicPrompt = `${SYSTEM_PROMPT}
+    const systemInstructionPrompt = `${SYSTEM_PROMPT}
 
 [INFORMACIÓN DE CONOCIMIENTO DEL NEGOCIO]
-${knowledgeText}
+${knowledgeText}`;
 
-[CONTEXTO DEL LEAD ACTUAL (BASE DE DATOS DEL CRM)]
+    const leadContextPrompt = `[CONTEXTO DEL LEAD ACTUAL (BASE DE DATOS DEL CRM)]
 El CRM es la fuente de verdad absoluta. Confía plenamente en la información de abajo, incluso si el chat reciente parece ignorarla o si tu última pregunta fue pedir un dato y el cliente no la contestó de forma directa en el texto.
 
 [DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]
@@ -723,7 +723,8 @@ ${reglaPrecotizacionDinamica}
     const recentMessages = chatHistory.slice(-10);
 
     const formattedMessages = [
-      { role: "system", content: dynamicPrompt },
+      { role: "system", content: systemInstructionPrompt },
+      { role: "system", content: leadContextPrompt },
       ...recentMessages.map((m) => ({
         role: m.direccion === "INBOUND" ? "user" : "assistant",
         content: m.contenido,
