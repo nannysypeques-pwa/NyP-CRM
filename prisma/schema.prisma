@@ -201,3 +201,13 @@ model DocumentoConocimiento {
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 }
+
+model Incidente {
+  id         String    @id @default(uuid())
+  servicio   String    // "OPENAI" | "WHATSAPP"
+  mensaje    String    // Descripción del error
+  detalles   String?   // JSON u otros detalles técnicos
+  resuelto   Boolean   @default(false)
+  creadoEn   DateTime  @default(now())
+  resueltoEn DateTime?
+}

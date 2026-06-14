@@ -732,6 +732,47 @@ class BaseDeDatos {
       validoHasta: quote.validoHasta.toISOString()
     } as unknown as Cotizacion;
   }
+
+  async crearIncidente(servicio: 'OPENAI' | 'WHATSAPP', mensaje: string, detalles?: string): Promise<any> {
+    const unaHoraAtras = new Date(Date.now() - 60 * 60 * 1000);
+    const existente = await prisma.incidente.findFirst({
+      where: {
+        servicio,
+        mensaje,
+        resuelto: false,
+        creadoEn: { gte: unaHoraAtras }
+      }
+    });
+
+    if (existente) {
+      return existente;
+    }
+
+    return prisma.incidente.create({
+      data: {
+        servicio,
+        mensaje,
+        detalles
+      }
+    });
+  }
+
+  async getIncidentesActivos(): Promise<any[]> {
+    return prisma.incidente.findMany({
+      where: { resuelto: false },
+      orderBy: { creadoEn: 'desc' }
+    });
+  }
+
+  async resolverIncidente(id: string): Promise<any> {
+    return prisma.incidente.update({
+      where: { id },
+      data: {
+        resuelto: true,
+        resueltoEn: new Date()
+      }
+    });
+  }
 }
 
 export const db = new BaseDeDatos();

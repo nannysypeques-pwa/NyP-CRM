@@ -543,24 +543,6 @@ Siempre que tengas duda, no inventes. Consulta o escala.
 
 Responde como una asesora profesional, no como un robot.`;
 
-// Rule-based fallback response for mock mode or API errors
-function getFallbackResponse(userInput: string): string {
-  const lowerText = userInput.toLowerCase();
-  
-  if (lowerText.includes("incluye") || lowerText.includes("programa")) {
-    return "Nuestro programa de Cuidado Premium incluye: 1) Actividades de estimulación oportuna adaptadas a la edad del peque, 2) Bitácora digital de alimentación y sueño, 3) Reportes de progreso semanales y 4) Acompañamiento por una cuidadora profesional con background en pedagogía/psicología. ¿Te gustaría agendar una llamada de 10 minutos para platicarlo?";
-  } else if (lowerText.includes("precio") || lowerText.includes("costo") || lowerText.includes("tarifa") || lowerText.includes("cuánto")) {
-    return "Para el Cuidado Premium de Medio Tiempo (4 horas diarias de Lunes a Viernes) el costo mensual aproximado es de $12,400 MXN ($450 USD). La tarifa para tiempo completo (8 horas) es de $22,000 MXN. ¿Qué horario te acomodaría mejor?";
-  } else if (lowerText.includes("horario") || lowerText.includes("días") || lowerText.includes("hora")) {
-    return "Brindamos servicio en horarios muy flexibles. El turno matutino sugerido es de 9:00 AM a 1:00 PM y el vespertino de 2:00 PM a 6:00 PM. Sin embargo, nos adaptamos a la agenda de tu familia. ¿Prefieres matutino o vespertino?";
-  } else if (lowerText.includes("ubicación") || lowerText.includes("dónde") || lowerText.includes("dirección")) {
-    return "Contamos con cobertura completa de cuidadoras en Ciudad de México (Polanco, Lomas, Condesa, Santa Fe), Monterrey (San Pedro, Carretera Nacional) y Guadalajara (Zapopan, Providencia). ¿En qué zona te encuentras?";
-  } else if (lowerText.includes("gracias") || lowerText.includes("ok") || lowerText.includes("enterado")) {
-    return "¡Con mucho gusto! Estoy aquí para resolver cualquier duda. Si deseas concretar una cotización formal, solo dime y la preparamos de inmediato.";
-  }
-  
-  return "Entiendo perfectamente. He guardado esta información en tu perfil. ¿Hay algún otro requerimiento específico que deba saber sobre el cuidado de tu peque para sugerirte el mejor servicio?";
-}
 
 export function detectCityFromText(text: string): string | null {
   const lower = text.toLowerCase();
@@ -648,8 +630,14 @@ Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente
     }
     
     throw new Error("OpenAI returned an empty response text.");
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error communicating with OpenAI:", err);
+    // Registrar incidente en la base de datos de forma asíncrona
+    db.crearIncidente(
+      "OPENAI",
+      err?.message || "Error desconocido al llamar a la API de OpenAI",
+      err instanceof Error ? err.stack : JSON.stringify(err)
+    ).catch(dbErr => console.error("Error al registrar incidente de OpenAI en DB:", dbErr));
     throw err;
   }
 }

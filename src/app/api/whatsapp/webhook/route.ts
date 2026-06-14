@@ -77,11 +77,23 @@ async function sendWhatsAppMessage(to: string, text: string) {
     const data = await response.json();
     if (!response.ok) {
       console.error("Error sending WhatsApp message:", data);
+      // Registrar incidente en la base de datos
+      await db.crearIncidente(
+        "WHATSAPP",
+        `Falla al enviar mensaje de WhatsApp. API de Meta retornó status ${response.status}`,
+        JSON.stringify(data)
+      ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
     } else {
       console.log("WhatsApp message sent successfully:", data);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Network error sending WhatsApp message:", error);
+    // Registrar incidente en la base de datos ante error de red
+    await db.crearIncidente(
+      "WHATSAPP",
+      `Error de red al intentar conectar con la API de WhatsApp de Meta`,
+      error instanceof Error ? error.stack : JSON.stringify(error)
+    ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
   }
 }
 

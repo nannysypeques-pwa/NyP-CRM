@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { decryptSession } from "@/lib/session";
 import CitySelector from "@/components/CitySelector";
 import LogoutButton from "@/components/LogoutButton";
+import AlertsBanner from "@/components/AlertsBanner";
 import { 
   LayoutDashboard, 
   Users, 
@@ -188,6 +189,8 @@ export default function RootLayout({
               </div>
             </div>
           </header>
+
+          <AlertsBanner />
 
           {/* Children View */}
           <main className="flex-1 overflow-hidden relative">
