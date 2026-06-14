@@ -575,9 +575,63 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       ? knowledgeDocs.map(doc => `[${doc.categoria.toUpperCase()} - ${doc.titulo}]\n${doc.contenido}`).join("\n\n")
       : "No hay documentos adicionales de conocimiento en la base de datos.";
 
-    const leadHijos = lead?.hijos && lead.hijos.length > 0
-      ? lead.hijos.map(h => `- Peque: ${h.nombre}, Edad: ${h.textoEdad}${h.necesidades ? `, Necesidades: ${h.necesidades}` : ""}`).join("\n")
-      : "No registrados";
+    const datosConocidos: string[] = [];
+    const datosFaltantes: string[] = [];
+
+    // Validar nombre
+    if (lead?.nombreCompleto && lead.nombreCompleto !== "Prospecto" && lead.nombreCompleto !== "No registrado") {
+      datosConocidos.push(`- Nombre del Tutor/Cliente: "${lead.nombreCompleto}" (YA REGISTRADO. Salúdalo amigablemente por su nombre en tu mensaje, ej: "Hola ${lead.nombreCompleto}...").`);
+    } else {
+      datosFaltantes.push(`Nombre completo del tutor (preguntar amablemente si no lo menciona).`);
+    }
+
+    // Validar ciudad
+    if (leadCity && leadCity !== "Por definir" && leadCity !== "No definida" && leadCity !== "") {
+      datosConocidos.push(`- Ciudad de Cobertura: "${leadCity}" (YA REGISTRADA. Está PROHIBIDO preguntar en qué ciudad requiere el servicio. No insistas con esta pregunta bajo ninguna circunstancia. Justifícalo o acéptalo de forma natural, ej: "Como nos escribe desde ${leadCity}..." o "Para brindarle el servicio en ${leadCity}...").`);
+    } else {
+      datosFaltantes.push(`Ciudad donde requiere el servicio (debe ser CDMX, Puebla, Atlixco, Querétaro o Xalapa).`);
+    }
+
+    // Validar servicio
+    if (lead?.interesServicio && lead.interesServicio !== "Por definir" && lead.interesServicio !== "No definido" && lead.interesServicio !== "") {
+      datosConocidos.push(`- Tipo de Servicio de Interés: "${lead.interesServicio}" (YA REGISTRADO. No lo vuelvas a preguntar. Ej: Fijo/Mensual, Por Horas, Eventual).`);
+    } else {
+      datosFaltantes.push(`Tipo de servicio (¿busca apoyo fijo/mensual, por horas o para un evento específico?).`);
+    }
+
+    // Validar edad/hijos
+    if (lead?.edadHijo !== undefined && lead?.edadHijo !== null) {
+      datosConocidos.push(`- Edad del Peque: "${lead.edadHijo} años" (YA REGISTRADA. No la preguntes de nuevo. Úsala para confirmar, ej: "Para el cuidado de su peque de ${lead.edadHijo} años...").`);
+    } else if (lead?.hijos && lead.hijos.length > 0) {
+      const hijosStr = lead.hijos.map(h => `${h.nombre} (${h.textoEdad})`).join(", ");
+      datosConocidos.push(`- Hijos Registrados: "${hijosStr}" (YA REGISTRADO. Dirígete a ellos por sus nombres en la conversación).`);
+    } else {
+      datosFaltantes.push(`Nombres y edades de sus peques (dato clave para calificar el perfil ideal).`);
+    }
+
+    // Validar zona
+    if (lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "") {
+      datosConocidos.push(`- Zona o Colonia: "${lead.zona}" (YA REGISTRADA. No vuelvas a preguntar la zona).`);
+    } else {
+      datosFaltantes.push(`Zona o colonia del servicio (para calcular cobertura y traslados de la nanny).`);
+    }
+
+    // Validar días solicitados
+    if (lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "") {
+      datosConocidos.push(`- Días Requeridos: "${lead.diasSolicitados}" (YA REGISTRADOS. No preguntar).`);
+    } else {
+      datosFaltantes.push(`Qué días de la semana busca el servicio.`);
+    }
+
+    // Validar horario
+    if (lead?.horaInicioSolicitada && lead.horaFinSolicitada) {
+      datosConocidos.push(`- Horario Requerido: "${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}" (YA REGISTRADO. No preguntar).`);
+    } else {
+      datosFaltantes.push(`Horario de entrada y salida estimado para el servicio.`);
+    }
+
+    const datosConocidosText = datosConocidos.length > 0 ? datosConocidos.join("\n") : "- Ninguno hasta el momento.";
+    const datosFaltantesText = datosFaltantes.length > 0 ? datosFaltantes.map((f, idx) => `${idx + 1}. ${f}`).join("\n") : "- Ninguno. Todos los datos comerciales clave ya fueron recopilados.";
 
     const leadNotes = lead?.notas && lead.notas.length > 0
       ? lead.notas.map(n => `- ${n.nombreAgente}: ${n.contenido}`).join("\n")
@@ -588,30 +642,24 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
 [INFORMACIÓN DE CONOCIMIENTO DEL NEGOCIO]
 ${knowledgeText}
 
-[CONTEXTO DEL LEAD ACTUAL (INFORMACIÓN REGISTRADA EN EL CRM)]
-- Nombre del Cliente: ${lead?.nombreCompleto || "No registrado"}
-- Teléfono: ${lead?.telefono || "No registrado"}
-- Ciudad Solicitada: ${leadCity}
-- Zona/Colonia: ${lead?.zona || "No registrada"}
-- Servicio de Interés: ${lead?.interesServicio || "No definido"}
-- Edad del Peque (General): ${lead?.edadHijo !== undefined && lead?.edadHijo !== null ? `${lead.edadHijo} años` : "No registrada"}
-- Cantidad de Hijos: ${lead?.cantidadHijos || 1}
-- Días Solicitados: ${lead?.diasSolicitados || "No especificados"}
-- Horario del Servicio: ${lead?.horaInicioSolicitada && lead?.horaFinSolicitada ? `${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}` : "No especificado"}
-- Hijos Registrados en el CRM:
-${leadHijos}
+[CONTEXTO DEL LEAD ACTUAL (BASE DE DATOS DEL CRM)]
+El CRM es la fuente de verdad absoluta. Confía plenamente en la información de abajo, incluso si el chat reciente parece ignorarla o si tu última pregunta fue pedir un dato y el cliente no la contestó de forma directa en el texto.
+
+[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]
+${datosConocidosText}
+
+[DATOS FALTANTES - DEBES PREGUNTAR ESTOS DATOS (UNO A LA VEZ)]
+${datosFaltantesText}
+
 - Notas de Seguimiento Internas:
 ${leadNotes}
 
-INSTRUCCIÓN CRÍTICA DE NEGOCIO PARA PERSONALIZACIÓN Y EVITAR REPETICIÓN:
-1. **El CONTEXTO DEL LEAD ACTUAL es la verdad absoluta**: Si un campo (como Ciudad Solicitada, Zona, etc.) tiene un valor válido (es decir, diferente de "No registrado", "No definida", "No especificado", "No registrado/a" o "Por definir"), considéralo como un dato ya resuelto. NUNCA vuelvas a pedir o preguntar ese dato.
-2. **Prioriza la base de datos sobre el historial del chat**: Si el historial de chat muestra que tu último mensaje fue pedir la ciudad u otro dato y el cliente no respondió directamente (ej. respondió solo "Hola Nannys"), pero en el CONTEXTO DEL LEAD ACTUAL dicho dato ya está registrado (ej. Ciudad Solicitada es "Puebla"), NO repitas la pregunta. Da por resuelto el dato y pasa de forma fluida a la siguiente pregunta del proceso comercial (ej. tipo de servicio o edades de sus peques).
-3. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenas noches...").
-4. **NO vuelvas a preguntar** por ningún dato que ya esté registrado y tenga un valor diferente de "No registrado", "No definida", "No especificado", "No registrado/a" o "Por definir".
-5. Si la Ciudad Solicitada ya está definida y es diferente de "Por definir" (ej. "Puebla"), **NO preguntes en qué ciudad requiere el servicio**. Utiliza esa información para confirmar de forma natural o dar continuidad al diálogo (ej. "Como requiere el servicio para Puebla...").
-6. Si ya tenemos registrados los nombres o edades de los peques, **refiérete a ellos por su nombre** o confirma de forma amable y fluida (ej. "Para brindarle el perfil ideal para su peque [Nombre] de [Edad]...").
-7. Las respuestas sugeridas/base del final del prompt del sistema son exclusivamente guías de referencia de tono y contenido. **No las uses de manera literal o rígida**. Redacta el mensaje adaptándolo dinámicamente a la información que ya poseemos del cliente para que la conversación sea 100% natural, fluida, profesional y empática.
-8. Si la ciudad solicitada es "Por definir", DEBES preguntar amablemente al cliente al inicio o en el transcurso de tu mensaje en cuál de nuestras ciudades de cobertura (CDMX, Puebla, Atlixco, Querétaro o Xalapa) requiere el servicio.`;
+INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL:
+1. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenos días...").
+2. **PROHIBICIÓN ESTRICTA DE PREGUNTAS REPETITIVAS**: Está terminantemente prohibido formular preguntas sobre campos que ya aparecen arriba en la sección "[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]".
+3. **Justificación del contexto**: Si la ciudad ya es conocida (ej. "Puebla"), la IA NO debe preguntar por la ciudad. Si el historial de chat muestra que preguntaste la ciudad y el usuario no respondió explícitamente pero el CRM ya tiene "Puebla", asume la ciudad como resuelta e incorpórala de forma natural diciendo: "Como requiere el servicio en Puebla..." y pasa de inmediato a preguntar por el primer dato de la lista de "[DATOS FALTANTES]".
+4. **Respuestas Sugeridas son solo referencias**: Las respuestas de ejemplo o respuestas base provistas al final del prompt del sistema son exclusivamente referencias de tono. Modifícalas y adáptalas libremente de forma empática para jamás pedir datos que ya poseemos.
+5. **Pregunta solo un dato a la vez**: Elige el primer dato de la lista de "[DATOS FALTANTES]" y formula una pregunta cálida y empática sobre él. No abrumes al cliente con múltiples preguntas.`;
 
     // Fetch last 10 messages from the conversation history to give full context
     const chatHistory = await db.getMessagesByConversationId(idConversacion);
