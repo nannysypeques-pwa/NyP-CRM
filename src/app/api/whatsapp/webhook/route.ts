@@ -200,6 +200,11 @@ export async function POST(req: NextRequest) {
           if (extractedData.diasSolicitados) updates.diasSolicitados = extractedData.diasSolicitados;
           if (extractedData.horaInicioSolicitada) updates.horaInicioSolicitada = extractedData.horaInicioSolicitada;
           if (extractedData.horaFinSolicitada) updates.horaFinSolicitada = extractedData.horaFinSolicitada;
+          if (extractedData.fechaInicioDeseada) updates.fechaInicioDeseada = extractedData.fechaInicioDeseada;
+          if (extractedData.linkUbicacion) updates.linkUbicacion = extractedData.linkUbicacion;
+          if (extractedData.razonContratacion) updates.razonContratacion = extractedData.razonContratacion;
+          if (extractedData.mascotas) updates.mascotas = extractedData.mascotas;
+          if (extractedData.indicacionesIngreso) updates.indicacionesIngreso = extractedData.indicacionesIngreso;
 
           if (Object.keys(updates).length > 0) {
             console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, updates);
@@ -217,6 +222,11 @@ export async function POST(req: NextRequest) {
                 idLead: conv.idLead,
                 nombre: extractedData.nuevoHijo.nombre,
                 textoEdad: extractedData.nuevoHijo.textoEdad,
+                alergias: extractedData.nuevoHijo.alergias || "",
+                condicionMedica: extractedData.nuevoHijo.condicionMedica || "",
+                estadoSalud: extractedData.nuevoHijo.estadoSalud || "",
+                preferencias: extractedData.nuevoHijo.preferencias || "",
+                indicacionesNanny: extractedData.nuevoHijo.indicacionesNanny || "",
                 necesidades: extractedData.nuevoHijo.necesidades || ""
               });
             }

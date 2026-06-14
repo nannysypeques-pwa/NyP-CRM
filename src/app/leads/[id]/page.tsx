@@ -25,6 +25,11 @@ interface Child {
   id: string;
   nombre: string;
   textoEdad: string;
+  alergias?: string;
+  condicionMedica?: string;
+  estadoSalud?: string;
+  preferencias?: string;
+  indicacionesNanny?: string;
   necesidades?: string;
   instrucciones?: string;
 }
@@ -81,6 +86,10 @@ interface Lead {
   ultimoContactoEn: string;
   resumenIA?: string;
   datosFaltantes?: string[];
+  linkUbicacion?: string;
+  razonContratacion?: string;
+  mascotas?: string;
+  indicacionesIngreso?: string;
   hijos?: Child[];
   notas?: LeadNote[];
   seguimientos?: FollowUp[];
@@ -428,48 +437,90 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
               
               {/* General Info */}
               {activeTab === "general" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                  <div className="space-y-4">
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase block">Celular / WhatsApp</span>
-                      <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-                        <Phone className="w-4 h-4 text-emerald-500" /> {lead.telefono}
-                      </span>
+                <div className="space-y-8 text-sm">
+                  {/* Grid de 2 columnas para información básica */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Celular / WhatsApp</span>
+                        <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                          <Phone className="w-4 h-4 text-emerald-500" /> {lead.telefono}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Correo electrónico</span>
+                        <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                          <Mail className="w-4 h-4 text-sky-500" /> {lead.email || "No registrado"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Origen del Lead</span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#e1eff8] text-[#026692] inline-block mt-1">
+                          {lead.origen}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Razón de Contratación</span>
+                        <span className="font-semibold text-slate-700 block mt-0.5 italic">
+                          {lead.razonContratacion ? `"${lead.razonContratacion}"` : "No especificada"}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase block">Correo electrónico</span>
-                      <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-                        <Mail className="w-4 h-4 text-sky-500" /> {lead.email || "No registrado"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase block">Origen</span>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#e1eff8] text-[#026692] inline-block mt-1">
-                        {lead.origen}
-                      </span>
+
+                    <div className="space-y-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Servicio Solicitado</span>
+                        <span className="font-semibold text-slate-700 block mt-0.5">{lead.interesServicio}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-xs font-bold text-slate-400 uppercase block">Horas Estimadas</span>
+                          <span className="font-semibold text-slate-700 block mt-0.5">{lead.horaInicioSolicitada && lead.horaFinSolicitada ? `${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}` : "Por definir"}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-400 uppercase block">Días Requeridos</span>
+                          <span className="font-semibold text-slate-700 block mt-0.5">{lead.diasSolicitados || "Por definir"}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Fecha Tentativa de Inicio</span>
+                        <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                          <Calendar className="w-4 h-4 text-slate-400" /> {lead.fechaInicioDeseada || "Inmediato"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase block">Mascotas en el Hogar</span>
+                        <span className="font-semibold text-slate-700 block mt-0.5">
+                          {lead.mascotas || "Ninguna registrada"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase block">Servicio Solicitado</span>
-                      <span className="font-semibold text-slate-700 block mt-0.5">{lead.interesServicio}</span>
+                  {/* Sección a ancho completo para Ubicación e indicaciones de ingreso */}
+                  <div className="border-t border-[#f0f7fc] pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-[#f4f8fc] p-4 rounded-2xl border border-[#e8f2fa] space-y-1">
+                      <span className="text-xs font-bold text-[#026692] uppercase block">Ubicación y Mapa</span>
+                      <p className="text-xs text-slate-600 font-semibold">{lead.zona ? `${lead.zona}, ` : ""}{lead.ciudad}</p>
+                      {lead.linkUbicacion ? (
+                        <a 
+                          href={lead.linkUbicacion} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="inline-flex items-center gap-1.5 text-xs text-[#026692] hover:underline font-bold mt-2"
+                        >
+                          <MapPin className="w-3.5 h-3.5" /> Abrir enlace de ubicación
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 block mt-2">Enlace de mapa no compartido aún</span>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-xs font-bold text-slate-400 uppercase block">Horas Estimadas</span>
-                        <span className="font-semibold text-slate-700 block mt-0.5">{lead.horaInicioSolicitada && lead.horaFinSolicitada ? `${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}` : "Por definir"}</span>
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-400 uppercase block">Días Requeridos</span>
-                        <span className="font-semibold text-slate-700 block mt-0.5">{lead.diasSolicitados || "Por definir"}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase block">Fecha Tentativa de Inicio</span>
-                      <span className="font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-                        <Calendar className="w-4 h-4 text-slate-400" /> {lead.fechaInicioDeseada || "Inmediato"}
-                      </span>
+
+                    <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-1">
+                      <span className="text-xs font-bold text-amber-700 uppercase block">Indicaciones de Ingreso al Hogar</span>
+                      <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                        {lead.indicacionesIngreso || "No se han registrado indicaciones o claves de ingreso para este hogar."}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -480,31 +531,67 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                 <div className="space-y-6">
                   {lead.hijos && lead.hijos.length > 0 ? (
                     lead.hijos.map((child) => (
-                      <div key={child.id} className="bg-[#f4f8fc] p-6 rounded-2xl border border-[#e8f2fa] space-y-4">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      <div key={child.id} className="bg-[#f4f8fc] p-6 rounded-3xl border border-[#e8f2fa] space-y-5">
+                        {/* Cabecera del peque */}
+                        <div className="flex justify-between items-center border-b border-[#e8f2fa] pb-3">
+                          <h4 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
                             👶 {child.nombre}
                           </h4>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#026692] text-white">
-                            Activo ({child.textoEdad})
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#026692] text-white">
+                            {child.textoEdad}
                           </span>
                         </div>
 
-                        {child.necesidades && (
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase block">Necesidades de Cuidado:</span>
-                            <p className="text-xs text-slate-600">{child.necesidades}</p>
-                          </div>
-                        )}
+                        {/* Grid de detalles de salud y gustos */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          {/* Columna Izquierda: Salud y Seguridad */}
+                          <div className="space-y-3">
+                            <div className="bg-[#fff1f5] p-4 rounded-2xl border border-[#ffe1e8] space-y-1">
+                              <span className="text-[10px] font-bold text-rose-600 uppercase block tracking-wider">Alergias</span>
+                              <p className="text-xs text-rose-800 font-bold">
+                                {child.alergias || "Ninguna registrada"}
+                              </p>
+                            </div>
 
-                        {child.instrucciones && (
-                          <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-1">
-                            <span className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1">
-                              <AlertTriangle className="w-4 h-4" /> Instrucciones Especiales:
-                            </span>
-                            <p className="text-xs text-amber-800 font-medium">{child.instrucciones}</p>
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Condición Médica</span>
+                              <p className="text-xs text-slate-700 font-semibold">
+                                {child.condicionMedica || "Sin condiciones especiales"}
+                              </p>
+                            </div>
+
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Estado de Salud Actual</span>
+                              <p className="text-xs text-slate-700 font-semibold">
+                                {child.estadoSalud || "Bueno / No especificado"}
+                              </p>
+                            </div>
                           </div>
-                        )}
+
+                          {/* Columna Derecha: Preferencias y Cuidado */}
+                          <div className="space-y-3">
+                            <div className="bg-[#e8f4fd] p-4 rounded-2xl border border-[#d4e6f4] space-y-1">
+                              <span className="text-[10px] font-bold text-[#026692] uppercase block tracking-wider">Actividades Favoritas y Gustos</span>
+                              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                                {child.preferencias || "No especificadas aún"}
+                              </p>
+                            </div>
+
+                            <div className="bg-[#fcf8e3] p-4 rounded-2xl border border-[#faf2cc] space-y-1">
+                              <span className="text-[10px] font-bold text-[#8a6d3b] uppercase block tracking-wider">Indicaciones Especiales para Nanny</span>
+                              <p className="text-xs text-[#8a6d3b] font-bold leading-relaxed">
+                                {child.indicacionesNanny || child.instrucciones || "Sin indicaciones específicas"}
+                              </p>
+                            </div>
+
+                            {child.necesidades && (
+                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">Necesidades del Cuidado</span>
+                                <p className="text-xs text-slate-700 font-semibold">{child.necesidades}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))
                   ) : (

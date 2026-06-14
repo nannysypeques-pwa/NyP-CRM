@@ -50,6 +50,10 @@ model Lead {
   motivoPerdida          String?
   resumenIA              String?
   datosFaltantes         String?        // JSON string de datos faltantes detectados por la IA
+  linkUbicacion          String?
+  razonContratacion      String?
+  mascotas               String?        // e.g., "2 perros" o "Ninguna"
+  indicacionesIngreso    String?
   notas                  NotaLead[]
   cotizaciones           Cotizacion[]
   seguimientos           Seguimiento[]
@@ -75,6 +79,11 @@ model Hijo {
   nombre          String
   textoEdad       String   // e.g., "3 años y 4 meses"
   fechaNacimiento String?
+  alergias        String?
+  condicionMedica String?
+  estadoSalud     String?
+  preferencias    String?
+  indicacionesNanny String?
   necesidades     String?  // e.g., "Apoyo en control de esfínteres"
   instrucciones   String?  // e.g., "Alérgico a las nueces. Muy sensible a ruidos fuertes."
   creadoEn        DateTime @default(now())

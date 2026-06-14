@@ -66,6 +66,11 @@ export interface Hijo {
   idCliente?: string;
   nombre: string;
   textoEdad: string;
+  alergias?: string;
+  condicionMedica?: string;
+  estadoSalud?: string;
+  preferencias?: string;
+  indicacionesNanny?: string;
   necesidades?: string;
   instrucciones?: string;
 }
@@ -131,6 +136,10 @@ export interface Lead {
   motivoPerdida?: string;
   resumenIA?: string;
   datosFaltantes?: string[];
+  linkUbicacion?: string;
+  razonContratacion?: string;
+  mascotas?: string;
+  indicacionesIngreso?: string;
   hijos?: Hijo[];
   notas?: NotaLead[];
   seguimientos?: Seguimiento[];
@@ -774,14 +783,30 @@ class BaseDeDatos {
     });
   }
 
-  async crearHijo(hijoData: { idLead: string; nombre: string; textoEdad: string; necesidades?: string; instrucciones?: string }): Promise<Hijo> {
+  async crearHijo(hijoData: { 
+    idLead: string; 
+    nombre: string; 
+    textoEdad: string; 
+    necesidades?: string; 
+    instrucciones?: string;
+    alergias?: string;
+    condicionMedica?: string;
+    estadoSalud?: string;
+    preferencias?: string;
+    indicacionesNanny?: string;
+  }): Promise<Hijo> {
     const hijo = await prisma.hijo.create({
       data: {
         idLead: hijoData.idLead,
         nombre: hijoData.nombre,
         textoEdad: hijoData.textoEdad,
         necesidades: hijoData.necesidades,
-        instrucciones: hijoData.instrucciones
+        instrucciones: hijoData.instrucciones,
+        alergias: hijoData.alergias,
+        condicionMedica: hijoData.condicionMedica,
+        estadoSalud: hijoData.estadoSalud,
+        preferencias: hijoData.preferencias,
+        indicacionesNanny: hijoData.indicacionesNanny
       }
     });
     return hijo as unknown as Hijo;

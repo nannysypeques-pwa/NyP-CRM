@@ -737,10 +737,19 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - diasSolicitados: Días de la semana requeridos (ej: "Lunes a Viernes").
 - horaInicioSolicitada: Hora de inicio del servicio (ej: "09:00").
 - horaFinSolicitada: Hora de fin del servicio (ej: "18:00").
+- fechaInicioDeseada: Fecha tentativa de inicio del servicio (ej: "Inmediato", "Próximo lunes", "1 de Julio").
+- linkUbicacion: URL o enlace de ubicación (Google Maps, Waze, etc.) compartido por el cliente.
+- razonContratacion: Motivo o razón principal por la que contrata el servicio (ej: "Regreso al trabajo", "Evento familiar").
+- mascotas: Mascotas en el hogar (ej: "2 perros", "Ninguna", "1 gato").
+- indicacionesIngreso: Indicaciones relevantes para el ingreso al hogar o claves de seguridad.
 - nuevoHijo: Si el cliente menciona el nombre y la edad de su peque (ej: "Mateo tiene 4 años" o "mi hijo Mateo de 4 años"), crea un objeto con:
   * nombre: Nombre del niño (ej: "Mateo").
   * textoEdad: Edad del niño de forma descriptiva (ej: "4 años" o "3 años y 2 meses").
-  * necesidades: Alguna especificación, alergia o condición médica mencionada (opcional).
+  * alergias: Alergias del peque (ej: "Nueces", "Gluten", "Ninguna").
+  * condicionMedica: Condición médica o especificaciones adicionales.
+  * estadoSalud: Estado de salud actual.
+  * preferencias: Preferencias o actividades favoritas del peque.
+  * indicacionesNanny: Indicaciones generales para la nanny con respecto a este peque.
 
 Reglas críticas de extracción:
 1. No asumas ni inventes datos. Extrae solo lo que el cliente afirme o confirme en el mensaje.
