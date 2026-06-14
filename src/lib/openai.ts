@@ -609,6 +609,13 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       datosFaltantes.push(`Horario de entrada y salida estimado para el servicio.`);
     }
 
+    // Validar razón de contratación
+    if (lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún") {
+      datosConocidos.push(`- Razón de Contratación: "${lead.razonContratacion}" (YA REGISTRADA. No la vuelvas a preguntar).`);
+    } else {
+      datosFaltantes.push(`Razón o motivo principal por el que requiere o contrata el servicio (ej. regreso al trabajo, etc.).`);
+    }
+
     const datosConocidosText = datosConocidos.length > 0 ? datosConocidos.join("\n") : "- Ninguno hasta el momento.";
     const datosFaltantesText = datosFaltantes.length > 0 ? datosFaltantes.map((f, idx) => `${idx + 1}. ${f}`).join("\n") : "- Ninguno. Todos los datos comerciales clave ya fueron recopilados.";
 
@@ -633,12 +640,18 @@ ${datosFaltantesText}
 - Notas de Seguimiento Internas:
 ${leadNotes}
 
-INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL:
+INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL (CRÍTICO):
 1. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenos días...").
 2. **PROHIBICIÓN ESTRICTA DE PREGUNTAS REPETITIVAS**: Está terminantemente prohibido formular preguntas sobre campos que ya aparecen arriba en la sección "[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]".
 3. **Justificación del contexto**: Si la ciudad ya es conocida (ej. "Puebla"), la IA NO debe preguntar por la ciudad. Si el historial de chat muestra que preguntaste la ciudad y el usuario no respondió explícitamente pero el CRM ya tiene "Puebla", asume la ciudad como resuelta e incorpórala de forma natural diciendo: "Como requiere el servicio en Puebla..." y pasa de inmediato a preguntar por el primer dato de la lista de "[DATOS FALTANTES]".
 4. **Respuestas Sugeridas son solo referencias**: Las respuestas de ejemplo o respuestas base provistas al final del prompt del sistema son exclusivamente referencias de tono. Modifícalas y adáptalas libremente de forma empática para jamás pedir datos que ya poseemos.
-5. **Pregunta solo un dato a la vez**: Elige el primer dato de la lista de "[DATOS FALTANTES]" y formula una pregunta cálida y empática sobre él. No abrumes al cliente con múltiples preguntas.`;
+5. **Pregunta solo un dato a la vez**: Elige el primer dato de la lista de "[DATOS FALTANTES]" y formula una pregunta cálida y empática sobre él. No abrumes al cliente con múltiples preguntas.
+6. **PRECOTIZACIÓN DEL SERVICIO**: Si el cliente pregunta por costos, tarifas o precios, o si ya cuentas con los datos del servicio (servicio, ciudad, días, horario y cantidad de peques), debes realizar el cálculo y presentar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos antes de avanzar.
+7. **PROPUESTA DE ASESOR SOLO AL CIERRE**: Está terminantemente prohibido proponer proactivamente pasar al cliente con un asesor comercial a menos que:
+   - El cliente solicite explícitamente contratar o ver disponibilidad de niñera.
+   - O que ya tengas toda la información comercial calificada (incluyendo la razón de contratación) y le hayas presentado la precotización estimada del servicio; solo en ese momento, puedes proponerle de manera muy suave y con un cierre orientado a la venta: "¿Le gustaría que revisáramos la disponibilidad de su niñera ideal para la familia?".
+8. **EVITA MENSAJES REPETITIVOS O DE PLANTILLA**: No uses siempre la misma estructura de respuesta. Varía la redacción, las transiciones y el orden en que formulas las preguntas. Cada mensaje debe sentirse único, fresco, conversacional y sumamente orientado a la venta consultiva de Nannys y Peques.
+9. **SIGUE PREGUNTANDO SI EL CLIENTE TIENE DUDAS**: Antes de cualquier derivación, prioriza seguir resolviendo dudas y aclarando información. Si el cliente no está listo para cerrar, mantén la conversación cálida, educando sobre el valor de nuestro servicio.`;
 
     // Fetch last 10 messages from the conversation history to give full context
     const chatHistory = await db.getMessagesByConversationId(idConversacion);
