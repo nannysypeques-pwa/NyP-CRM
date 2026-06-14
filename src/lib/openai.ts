@@ -162,18 +162,27 @@ Si el cliente pregunta algo fuera de la Base de Conocimientos, no improvises.
 ==================================================
 
 Debes ser capaz de realizar una precotización estimada al cliente de acuerdo con la información de precios y tarifas que se encuentra en la Base de Conocimientos:
+* **RESTRICCIÓN OBLIGATORIA (CALIFICACIÓN ANTES DE COTIZAR)**: Está terminantemente prohibido proporcionar cualquier costo, precio o precotización estimada al cliente a menos que ya conozcas y tengas registrados en el contexto estos dos datos clave:
+  1. La **zona o colonia** del servicio.
+  2. La **razón o motivo principal** por el que requiere o contrata el servicio (dolor/necesidad de la familia).
+  * Si el cliente te pregunta por precios antes de dar estos datos, no le des ninguna tarifa. Explícale de forma muy amable y orientada a ventas que para verificar la cobertura de traslados de nuestras nannies y asegurar que el perfil seleccionado se adapte perfectamente a sus necesidades, es indispensable conocer primero su zona/colonia y el motivo por el cual busca el servicio.
+* **LABOR DE VENTA PREVIA AL PRECIO (OBLIGATORIA)**: Cuando ya tengas todos los datos (incluyendo zona y razón) y vayas a darle el precio estimado, **antes** de escribir el monto de la precotización, debes escribir 1 o 2 oraciones haciendo labor de venta. En este párrafo, valida su dolor o necesidad del servicio, resalta los beneficios de contratar Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) y explica cómo resolveremos su problema específico. Inmediatamente después, detalla el costo.
 * **ALGORITMO DE CÁLCULO EXACTO (CHAIN-OF-THOUGHT)**: Antes de responder con cualquier precio, realiza mentalmente estos pasos de razonamiento estricto:
   1. Identifica la **ciudad** del servicio en los datos registrados (ej: Puebla). Si la ciudad no está en el CRM, pídele al cliente que te la aclare.
-  2. Determina el **número de días** a la semana del servicio (ej: lunes a viernes = 5 días).
-  3. Determina las **horas por día** requeridas (ej: de 3:00 pm a 6:00 pm = 3 horas).
+  2. Determina el **número de días** a la semana del servicio (ej: de lunes a viernes = 5 días).
+  3. Determina las **horas por día** requeridas (ej: de 3:00 pm a 6:00 pm = 3 horas diarias).
   4. Ve a la sección de la Base de Conocimientos que corresponde exactamente a esa ciudad (ej: "TABULADOR PUEBLA"). Está prohibido usar tablas de otras ciudades.
-  5. Localiza la sección exacta "Servicio de X días" (donde X es el número de días).
-  6. En esa tabla, busca la fila correspondiente a las "Y horas por día".
+  5. Localiza la subsección exacta "Servicio de X días" (donde X es el número de días a la semana).
+  6. En esa tabla de X días, busca la fila correspondiente a las "Y horas por día" en la columna 'Horas por día'.
   7. El número en la columna "Total" de esa fila es el precio exacto mensual aproximado. No inventes, no aproximes, no redondees, no hagas cálculos matemáticos propios ni interpolaciones. Usa el número exacto de la celda.
+  * *EJEMPLO DE LECTURA CORRECTO*: Si el servicio es de lunes a viernes (5 días) y el horario es de 3pm a 6pm (3 horas por día) en Puebla:
+    - Vas a "TABULADOR PUEBLA".
+    - Vas a la subsección "Servicio de 5 días".
+    - Buscas la fila donde 'Horas por día' es igual a '3'.
+    - El total en esa celda es de **$1,610**. (Es un error crítico confundir y leer la fila de '5' que cuesta $2,125 pensando en los 5 días de la semana. Lee la fila del número de horas, que es 3).
   8. Si no encuentras la combinación exacta de días u horas en las tablas (ej: menos de 3 horas, más de 10 horas, o más de 7 días), indica amablemente que debido a las características especiales del servicio, un asesor comercial le brindará su cotización personalizada y no des un precio.
 * Aclara explícitamente que es una precotización estimada y de referencia comercial rápida para orientarle, y que la cotización oficial formal y final se la enviará un asesor comercial en PDF por WhatsApp.
-* Si te faltan datos clave para calcular la precotización (como horas, días o cantidad de peques), pídela amigablemente antes de realizar el cálculo.
-* Nunca inventes tarifas. Basa tus cálculos de manera estricta en las tarifas vigentes detalladas en la Base de Conocimientos.
+* Nunca inventes tarifas. Basa tus cálculos de manera estricta en las tarifas vigentes detalladas en la Base de Conocimientos. Si el cliente tiene dudas de los precios de la tabla, no inventes.
 
 ==================================================
 8. CALIFICACIÓN DEL PROSPECTO
@@ -604,15 +613,51 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     }
 
     // Validar días solicitados
+    let numDiasText = "";
+    if (lead?.diasSolicitados) {
+      const lowerDias = lead.diasSolicitados.toLowerCase();
+      if (lowerDias.includes("lunes a viernes")) {
+        numDiasText = " (equivalente a 5 días a la semana)";
+      } else if (lowerDias.includes("lunes a sábado") || lowerDias.includes("lunes a sabado")) {
+        numDiasText = " (equivalente a 6 días a la semana)";
+      } else if (lowerDias.includes("lunes a domingo")) {
+        numDiasText = " (equivalente a 7 días a la semana)";
+      } else {
+        const diasSemana = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"];
+        let count = 0;
+        diasSemana.forEach(d => {
+          if (lowerDias.includes(d)) count++;
+        });
+        if (count > 0) {
+          numDiasText = ` (equivalente a ${count} ${count === 1 ? 'día' : 'días'} a la semana)`;
+        }
+      }
+    }
+
     if (lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "") {
-      datosConocidos.push(`- Días Requeridos: "${lead.diasSolicitados}" (YA REGISTRADOS. No preguntar).`);
+      datosConocidos.push(`- Días Requeridos: "${lead.diasSolicitados}"${numDiasText} (YA REGISTRADOS. No preguntar).`);
     } else {
       datosFaltantes.push(`Qué días de la semana busca el servicio.`);
     }
 
     // Validar horario
+    let horasDiariasText = "";
     if (lead?.horaInicioSolicitada && lead.horaFinSolicitada) {
-      datosConocidos.push(`- Horario Requerido: "${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}" (YA REGISTRADO. No preguntar).`);
+      try {
+        const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
+        const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
+        const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (mins > 0) {
+          const hrs = Math.round((mins / 60) * 10) / 10;
+          horasDiariasText = ` (equivalente a ${hrs} ${hrs === 1 ? 'hora' : 'horas'} por día)`;
+        }
+      } catch (e) {
+        // Ignorar
+      }
+    }
+
+    if (lead?.horaInicioSolicitada && lead.horaFinSolicitada) {
+      datosConocidos.push(`- Horario Requerido: "${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}"${horasDiariasText} (YA REGISTRADO. No preguntar).`);
     } else {
       datosFaltantes.push(`Horario de entrada y salida estimado para el servicio.`);
     }
@@ -630,6 +675,17 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const leadNotes = lead?.notas && lead.notas.length > 0
       ? lead.notas.map(n => `- ${n.nombreAgente}: ${n.contenido}`).join("\n")
       : "No registradas";
+
+    const tieneZona = lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "";
+    const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
+
+    let reglaPrecotizacionDinamica = "";
+    if (!tieneZona || !tieneRazon) {
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún no se han registrado en el CRM la "Zona o Colonia" o la "Razón de Contratación" del cliente. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura de traslados de nuestras nannies en su zona y asegurar que el perfil de niñera seleccionado se adapte perfectamente a sus necesidades, es indispensable conocer primero su zona/colonia y el motivo por el cual busca el servicio. Solicita amigablemente estos datos antes de avanzar.`;
+    } else {
+      reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave (incluyendo Zona: "${lead?.zona}" y Razón de contratación: "${lead?.razonContratacion}"). Debes proporcionar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos. 
+      * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) le resolverá exactamente su problema y le dará tranquilidad. Inmediatamente después, proporciona el costo exacto (ej. para Puebla, de lunes a viernes, de 3 a 6pm, la tarifa de 3 horas es de $1,610 al mes).`;
+    }
 
     const dynamicPrompt = `${SYSTEM_PROMPT}
 
@@ -654,7 +710,7 @@ INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL (CRÍTICO):
 3. **Justificación del contexto**: Si la ciudad ya es conocida (ej. "Puebla"), la IA NO debe preguntar por la ciudad. Si el historial de chat muestra que preguntaste la ciudad y el usuario no respondió explícitamente pero el CRM ya tiene "Puebla", asume la ciudad como resuelta e incorpórala de forma natural diciendo: "Como requiere el servicio en Puebla..." y pasa de inmediato a preguntar por el primer dato de la lista de "[DATOS FALTANTES]".
 4. **Respuestas Sugeridas son solo referencias**: Las respuestas de ejemplo o respuestas base provistas al final del prompt del sistema son exclusivamente referencias de tono. Modifícalas y adáptalas libremente de forma empática para jamás pedir datos que ya poseemos.
 5. **Pregunta solo un dato a la vez**: Elige el primer dato de la lista de "[DATOS FALTANTES]" y formula una pregunta cálida y empática sobre él. No abrumes al cliente con múltiples preguntas.
-6. **PRECOTIZACIÓN DEL SERVICIO**: Si el cliente pregunta por costos, tarifas o precios, o si ya cuentas con los datos del servicio (servicio, ciudad, días, horario y cantidad de peques), debes realizar el cálculo y presentar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos antes de avanzar.
+${reglaPrecotizacionDinamica}
 7. **PROPUESTA DE ASESOR SOLO AL CIERRE**: Está terminantemente prohibido proponer proactivamente pasar al cliente con un asesor comercial a menos que:
    - El cliente solicite explícitamente contratar o ver disponibilidad de niñera.
    - O que ya tengas toda la información comercial calificada (incluyendo la razón de contratación) y le hayas presentado la precotización estimada del servicio; solo en ese momento, puedes proponerle de manera muy suave y con un cierre orientado a la venta: "¿Le gustaría que revisáramos la disponibilidad de su niñera ideal para la familia?".

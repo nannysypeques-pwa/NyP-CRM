@@ -668,17 +668,24 @@ class BaseDeDatos {
   }
 
   async getDocumentosConocimiento(): Promise<DocumentoConocimiento[]> {
-    const fetchDocs = cacheFn(
-      async () => {
-        return prisma.documentoConocimiento.findMany({
-          where: { estado: 'ACTIVO' }
-        });
-      },
-      ["documentos-conocimiento"],
-      { revalidate: 1800, tags: ["documentos-conocimiento"] }
-    );
-    const docs = await fetchDocs();
-    return docs as unknown as DocumentoConocimiento[];
+    const fn = async () => {
+      return prisma.documentoConocimiento.findMany({
+        where: { estado: 'ACTIVO' }
+      });
+    };
+    try {
+      const fetchDocs = cacheFn(
+        fn,
+        ["documentos-conocimiento"],
+        { revalidate: 1800, tags: ["documentos-conocimiento"] }
+      );
+      const docs = await fetchDocs();
+      return docs as unknown as DocumentoConocimiento[];
+    } catch (e: any) {
+      console.warn("Falla en caché de conocimientos. Usando fallback directo a base de datos:", e.message || e);
+      const docs = await fn();
+      return docs as unknown as DocumentoConocimiento[];
+    }
   }
 
   async addNota(leadId: string, contenido: string, nombreAgente: string): Promise<NotaLead> {
