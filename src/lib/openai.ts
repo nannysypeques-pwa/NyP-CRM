@@ -677,14 +677,20 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       ? lead.notas.map(n => `- ${n.nombreAgente}: ${n.contenido}`).join("\n")
       : "No registradas";
 
+    const tieneCiudad = leadCity && leadCity !== "Por definir" && leadCity !== "No definida" && leadCity !== "";
     const tieneZona = lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "";
     const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
 
     let reglaPrecotizacionDinamica = "";
-    if (!tieneZona || !tieneRazon) {
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún no se han registrado en el CRM la "Zona o Colonia" o la "Razón de Contratación" del cliente. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura de traslados de nuestras nannies en su zona y asegurar que el perfil de niñera seleccionado se adapte perfectamente a sus necesidades, es indispensable conocer primero su zona/colonia y el motivo por el cual busca el servicio. Solicita amigablemente estos datos antes de avanzar.`;
+    if (!tieneCiudad || !tieneZona || !tieneRazon) {
+      const faltantesList = [];
+      if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
+      if (!tieneZona) faltantesList.push("Zona o Colonia");
+      if (!tieneRazon) faltantesList.push("Razón de Contratación");
+
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona y asegurar que el perfil seleccionado se adapte a sus necesidades, es indispensable contar primero con la ciudad de cobertura, zona/colonia y el motivo por el cual busca el servicio. Solicita amigablemente estos datos faltantes (priorizando aclarar la ciudad) antes de avanzar.`;
     } else {
-      reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave (incluyendo Zona: "${lead?.zona}" y Razón de contratación: "${lead?.razonContratacion}"). Debes proporcionar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos. 
+      reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave (Ciudad: "${leadCity}", Zona: "${lead?.zona}" y Razón de contratación: "${lead?.razonContratacion}"). Debes proporcionar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos. 
       * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) le resolverá exactamente su problema y le dará tranquilidad. Inmediatamente después, proporciona el costo exacto (ej. para Puebla, de lunes a viernes, de 3 a 6pm, la tarifa de 3 horas es de $1,610 al mes).`;
     }
 

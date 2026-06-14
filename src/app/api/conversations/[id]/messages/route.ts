@@ -97,6 +97,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             }
             if (extractedData.ciudad) updates.ciudad = extractedData.ciudad;
             if (extractedData.zona) updates.zona = extractedData.zona;
+            const currentLead = await db.getLeadById(conv.idLead);
+
             if (extractedData.interesServicio) updates.interesServicio = extractedData.interesServicio;
             if (extractedData.edadHijo !== undefined && extractedData.edadHijo !== null) {
               updates.edadHijo = Number(extractedData.edadHijo);
@@ -113,6 +115,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             if (extractedData.mascotas) updates.mascotas = extractedData.mascotas;
             if (extractedData.indicacionesIngreso) updates.indicacionesIngreso = extractedData.indicacionesIngreso;
 
+            // Si se detecta un nuevo hijo con edad y el lead no tiene edad registrada, intentamos extraerla
+            if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre && extractedData.nuevoHijo.textoEdad) {
+              if (!updates.edadHijo && (!currentLead || !currentLead.edadHijo)) {
+                const matches = extractedData.nuevoHijo.textoEdad.match(/\d+/);
+                if (matches) {
+                  updates.edadHijo = parseInt(matches[0], 10);
+                }
+              }
+            }
+
             if (Object.keys(updates).length > 0) {
               console.log(`[EXTRACTOR IA - CRM] Actualizando Lead ${conv.idLead} con:`, updates);
               await db.updateLead(conv.idLead, updates);
@@ -124,7 +136,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             }
 
             if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre) {
-              const currentLead = await db.getLeadById(conv.idLead);
               const existeHijo = currentLead?.hijos?.some(
                 h => h.nombre.toLowerCase().trim() === extractedData.nuevoHijo.nombre.toLowerCase().trim()
               );
