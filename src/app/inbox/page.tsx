@@ -25,6 +25,7 @@ import {
   TrendingUp,
   UserCheck
 } from "lucide-react";
+import { formatIntencionComercial } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 interface Message {
@@ -48,6 +49,36 @@ interface Conversation {
   };
 }
 
+interface Hijo {
+  id: string;
+  nombre: string;
+  textoEdad: string;
+  alergias?: string;
+  condicionMedica?: string;
+  estadoSalud?: string;
+  preferencias?: string;
+  indicacionesNanny?: string;
+  necesidades?: string;
+  instrucciones?: string;
+}
+
+interface Quote {
+  id: string;
+  tipoServicio: string;
+  ciudad: string;
+  dias: string;
+  horaInicio: string;
+  horaFin: string;
+  horasPorDia: number;
+  cantidadHijos: number;
+  subtotal: number;
+  descuento: number;
+  total: number;
+  estado: string;
+  validoHasta: string;
+  deleted?: boolean;
+}
+
 interface Lead {
   id: string;
   nombreCompleto: string;
@@ -62,6 +93,14 @@ interface Lead {
   resumenIA?: string;
   datosFaltantes?: string[];
   notas?: { id: string; contenido: string; nombreAgente: string; creadoEn: string }[];
+  hijos?: Hijo[];
+  cotizaciones?: Quote[];
+  diasSolicitados?: string;
+  horaInicioSolicitada?: string;
+  horaFinSolicitada?: string;
+  linkUbicacion?: string;
+  razonContratacion?: string;
+  mascotas?: string;
 }
 
 export default function InboxPage() {
@@ -79,6 +118,23 @@ export default function InboxPage() {
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Emojis and files
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleEmojiClick = (emoji: string) => {
+    setChatInput(prev => prev + emoji);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      alert(`Archivo "${file.name}" seleccionado.`);
+    }
+  };
+
+  const EMOJIS = ["😀", "😊", "😍", "👍", "🙌", "❤️", "✨", "👋", "👶", "👩", "📅", "⏰", "📍", "💲"];
 
   // Poll messages and conversations every 1.5 seconds for real-time updates
   useEffect(() => {
@@ -420,85 +476,52 @@ export default function InboxPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggested Quick Insertion Bar */}
-        <div className="px-6 py-2 bg-white/70 border-t border-[#e2edf6] flex flex-wrap gap-2 items-center flex-shrink-0 z-10">
-          <button 
-            onClick={() => handleQuickInsert("Hola, ¿en qué horario requieres el servicio y qué edades tienen los niños?")}
-            className="px-3 py-1 bg-[#f0f7fc] hover:bg-[#e1eff8] rounded-full text-xs font-semibold text-[#026692] border border-[#d4e6f4] transition-all"
-          >
-            Horarios
-          </button>
-          <button 
-            onClick={() => handleQuickInsert("Nuestra tarifa base es de $450 USD mensuales para medio tiempo (4 hrs diarias).")}
-            className="px-3 py-1 bg-[#f0f7fc] hover:bg-[#e1eff8] rounded-full text-xs font-semibold text-[#026692] border border-[#d4e6f4] transition-all"
-          >
-            Precios
-          </button>
-          <button 
-            onClick={() => handleQuickInsert("Nos encontramos en Polanco, Ciudad de México, y cubrimos toda la zona metropolitana.")}
-            className="px-3 py-1 bg-[#f0f7fc] hover:bg-[#e1eff8] rounded-full text-xs font-semibold text-[#026692] border border-[#d4e6f4] transition-all"
-          >
-            Ubicación
-          </button>
-          
-          <div className="relative">
-            <button 
-              onClick={() => setIsQuickRepliesOpen(!isQuickRepliesOpen)}
-              className="px-3 py-1 bg-white hover:bg-slate-50 text-slate-600 rounded-full text-xs font-bold border border-slate-200 shadow-sm flex items-center gap-1"
-            >
-              ⚡ Respuestas Rápidas
-            </button>
-            
-            {/* Quick replies dropdown list */}
-            {isQuickRepliesOpen && (
-              <div className="absolute bottom-8 left-0 z-20 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 space-y-2 text-left">
-                <p className="text-[10px] uppercase font-bold text-slate-400 pb-1 border-b border-slate-100">Respuestas Pregrabadas</p>
-                <button 
-                  onClick={() => {
-                    handleQuickInsert("Hola, para proceder con la cotización requerimos saber: 1) Edad de los peques, 2) Zona de servicio, 3) Horarios sugeridos.");
-                    setIsQuickRepliesOpen(false);
-                  }}
-                  className="w-full text-left text-xs text-slate-700 hover:bg-[#f4f8fc] hover:text-[#026692] p-2 rounded-lg truncate block"
-                >
-                  Solicitud de Datos
-                </button>
-                <button 
-                  onClick={() => {
-                    handleQuickInsert("¡Felicidades! Tu perfil ha sido pre-aprobado. Para el siguiente paso agendemos una entrevista digital de 15 minutos.");
-                    setIsQuickRepliesOpen(false);
-                  }}
-                  className="w-full text-left text-xs text-slate-700 hover:bg-[#f4f8fc] hover:text-[#026692] p-2 rounded-lg truncate block"
-                >
-                  Filtros Niñeras
-                </button>
-                <button 
-                  onClick={() => {
-                    handleQuickInsert("Por políticas de seguridad, todas nuestras nannys pasan por pruebas psicométricas y de confianza completas.");
-                    setIsQuickRepliesOpen(false);
-                  }}
-                  className="w-full text-left text-xs text-slate-700 hover:bg-[#f4f8fc] hover:text-[#026692] p-2 rounded-lg truncate block"
-                >
-                  Políticas de Seguridad
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Chat Input form */}
-        <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10 shadow-inner">
+        <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10 shadow-inner relative">
+          
+          {/* Emoji Picker Popup */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-16 left-4 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 grid grid-cols-7 gap-1 z-30 max-w-[240px]">
+              {EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleEmojiClick(emoji)}
+                  className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded-lg text-sm"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+
           <form onSubmit={handleSendMessage} className="flex items-center space-x-3 bg-[#f0f7fc] border border-[#d4e6f4] rounded-2xl px-4 py-2">
-            <button type="button" className="text-slate-400 hover:text-[#026692]">
+            <button 
+              type="button" 
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="text-slate-400 hover:text-[#026692] transition-colors"
+            >
               <Smile className="w-5 h-5" />
             </button>
-            <button type="button" className="text-slate-400 hover:text-[#026692]">
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="text-slate-400 hover:text-[#026692] transition-colors"
+            >
               <Paperclip className="w-5 h-5" />
             </button>
+            <input 
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileChange}
+            />
             <input 
               type="text" 
               placeholder="Escribe un mensaje..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
+              onFocus={() => setShowEmojiPicker(false)}
               className="flex-1 bg-transparent border-0 outline-none focus:ring-0 text-sm text-slate-800"
             />
             <button 
@@ -572,6 +595,16 @@ export default function InboxPage() {
                   <span className="text-slate-400 font-bold block">Servicio de interés</span>
                   <span className="font-bold text-slate-700 uppercase leading-snug">{activeLead.interesServicio}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Intención Comercial */}
+            <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-2">
+              <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5">
+                <Bot className="w-3.5 h-3.5" /> Intención Comercial
+              </span>
+              <div className="text-[11px] text-slate-700 leading-relaxed font-semibold bg-[#f4f8fc] p-3 rounded-xl border border-[#e8f2fa] whitespace-pre-line overflow-y-auto max-h-48 custom-scrollbar">
+                {formatIntencionComercial(activeLead)}
               </div>
             </div>
 

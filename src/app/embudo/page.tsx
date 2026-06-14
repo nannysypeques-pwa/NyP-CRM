@@ -29,6 +29,7 @@ import {
   MoreVertical,
   Check
 } from "lucide-react";
+import { formatIntencionComercial } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 interface Hijo {
@@ -37,6 +38,11 @@ interface Hijo {
   idCliente?: string;
   nombre: string;
   textoEdad: string;
+  alergias?: string;
+  condicionMedica?: string;
+  estadoSalud?: string;
+  preferencias?: string;
+  indicacionesNanny?: string;
   necesidades?: string;
   instrucciones?: string;
 }
@@ -151,6 +157,23 @@ export default function KanbanPage() {
   
   // Drawer note form
   const [newNoteText, setNewNoteText] = useState("");
+
+  // Emojis and files
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleEmojiClick = (emoji: string) => {
+    setChatInput(prev => prev + emoji);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      alert(`Archivo "${file.name}" seleccionado.`);
+    }
+  };
+
+  const EMOJIS = ["😀", "😊", "😍", "👍", "🙌", "❤️", "✨", "👋", "👶", "👩", "📅", "⏰", "📍", "💲"];
 
   // Drawer Quote builder
   const [quoteBuilderOpen, setQuoteBuilderOpen] = useState(false);
@@ -864,10 +887,12 @@ export default function KanbanPage() {
                         <span className="font-bold text-slate-700">{selectedLead.ciudad}</span>
                       </div>
                     </div>
-                    {selectedLead.resumenIA && (
+                    {selectedLead && (
                       <div className="space-y-1 bg-sky-50/50 p-4 rounded-xl border border-sky-100 mt-2">
-                        <span className="text-[#026692] font-extrabold uppercase text-[9px] tracking-wide block">Intención Comercial (IA)</span>
-                        <p className="text-slate-600 leading-relaxed italic">"{selectedLead.resumenIA}"</p>
+                        <span className="text-[#026692] font-extrabold uppercase text-[9px] tracking-wide block">Intención Comercial</span>
+                        <div className="text-slate-600 leading-relaxed font-semibold whitespace-pre-line text-[11px] bg-white p-3 rounded-lg border border-slate-100">
+                          {formatIntencionComercial(selectedLead)}
+                        </div>
                       </div>
                     )}
                     {selectedLead.datosFaltantes && selectedLead.datosFaltantes.length > 0 && (
@@ -887,19 +912,59 @@ export default function KanbanPage() {
                   <div className="space-y-4">
                     {selectedLead.hijos && selectedLead.hijos.length > 0 ? (
                       selectedLead.hijos.map((child) => (
-                        <div key={child.id} className="bg-[#f4f8fc] p-4 rounded-xl border border-[#e8f2fa] space-y-2 text-xs">
-                          <div className="flex justify-between items-center">
+                        <div key={child.id} className="bg-[#f4f8fc] p-5 rounded-2xl border border-[#e8f2fa] space-y-3 text-xs">
+                          <div className="flex justify-between items-center border-b border-[#e8f2fa] pb-2">
                             <h4 className="font-extrabold text-slate-700">👶 {child.nombre}</h4>
                             <span className="bg-[#026692] text-white px-2 py-0.5 rounded-full text-[9px] font-bold">
                               {child.textoEdad}
                             </span>
                           </div>
-                          {child.necesidades && <p className="text-slate-500 font-medium">Requerimiento: {child.necesidades}</p>}
-                          {child.instrucciones && (
-                            <div className="bg-amber-50 p-2.5 rounded border border-amber-100 text-amber-800 text-[11px] font-semibold mt-1.5">
-                              ⚠️ {child.instrucciones}
-                            </div>
-                          )}
+                          
+                          <div className="space-y-2">
+                            {child.alergias && (
+                              <div className="bg-[#fff1f5] p-3 rounded-xl border border-[#ffe1e8]">
+                                <span className="text-[9px] font-bold text-rose-600 uppercase block tracking-wider mb-0.5">Alergias</span>
+                                <p className="text-rose-800 font-bold">{child.alergias}</p>
+                              </div>
+                            )}
+
+                            {child.condicionMedica && (
+                              <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Condición Médica</span>
+                                <p className="text-slate-700 font-semibold">{child.condicionMedica}</p>
+                              </div>
+                            )}
+
+                            {child.estadoSalud && (
+                              <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Estado de Salud</span>
+                                <p className="text-slate-700 font-semibold">{child.estadoSalud}</p>
+                              </div>
+                            )}
+
+                            {child.preferencias && (
+                              <div className="bg-[#e8f4fd] p-3 rounded-xl border border-[#d4e6f4]">
+                                <span className="text-[9px] font-bold text-[#026692] uppercase block tracking-wider mb-0.5">Actividades Favoritas</span>
+                                <p className="text-slate-700 font-semibold">{child.preferencias}</p>
+                              </div>
+                            )}
+
+                            {(child.indicacionesNanny || child.instrucciones) && (
+                              <div className="bg-[#fcf8e3] p-3 rounded-xl border border-[#faf2cc]">
+                                <span className="text-[9px] font-bold text-[#8a6d3b] uppercase block tracking-wider mb-0.5">Indicaciones para la Nanny</span>
+                                <p className="text-[#8a6d3b] font-bold leading-relaxed">
+                                  {child.indicacionesNanny || child.instrucciones}
+                                </p>
+                              </div>
+                            )}
+
+                            {child.necesidades && (
+                              <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Necesidades de Cuidado</span>
+                                <p className="text-slate-700 font-semibold">{child.necesidades}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -1014,30 +1079,52 @@ export default function KanbanPage() {
                 </div>
 
                 {/* Chat Form panel */}
-                <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10">
-                  {/* Suggestions bar */}
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    <button 
-                      onClick={() => setChatInput("Nuestras tarifas para medio tiempo son de $450 USD mensuales. ¿Te acomoda?")}
-                      className="px-2.5 py-1 bg-slate-50 hover:bg-[#e1eff8] text-[#026692] border border-slate-200 hover:border-transparent rounded-full text-[10px] font-bold transition-all"
-                    >
-                      Tarifas bilingües
-                    </button>
-                    <button 
-                      onClick={() => setChatInput("Con gusto agendamos una llamada de 10 minutos para definir los detalles de cuidado.")}
-                      className="px-2.5 py-1 bg-slate-50 hover:bg-[#e1eff8] text-[#026692] border border-slate-200 hover:border-transparent rounded-full text-[10px] font-bold transition-all"
-                    >
-                      Agendar Llamada
-                    </button>
-                  </div>
+                <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10 relative">
+                  
+                  {/* Emoji Picker Popup */}
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-16 left-4 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 grid grid-cols-7 gap-1 z-30 max-w-[240px]">
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleEmojiClick(emoji)}
+                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded-lg text-sm"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <form onSubmit={handleSendMessage} className="flex items-center space-x-2 bg-[#f0f7fc] border border-[#d4e6f4] rounded-2xl px-4 py-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="text-slate-400 hover:text-[#026692] transition-colors"
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-slate-400 hover:text-[#026692] transition-colors"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </button>
+                    <input 
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
                     <input 
                       type="text" 
                       placeholder="Escribe como agente..."
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
-                      className="flex-1 bg-transparent border-0 outline-none text-xs text-slate-800"
+                      onFocus={() => setShowEmojiPicker(false)}
+                      className="flex-1 bg-transparent border-0 outline-none text-xs text-slate-800 focus:ring-0"
                     />
                     <button 
                       type="submit" 
@@ -1111,24 +1198,7 @@ export default function KanbanPage() {
                   )}
                 </div>
 
-                {/* Simulated message triggers for testing the AI */}
-                <div className="bg-amber-50/50 border border-amber-200/60 p-4 rounded-2xl space-y-2.5">
-                  <span className="text-[9px] uppercase font-bold text-amber-700 block tracking-wide">Simulador de Cliente</span>
-                  <button 
-                    onClick={() => handleSimulateClient("Suena bien. ¿Qué incluye el programa?")}
-                    className="w-full text-left text-[9px] bg-white hover:bg-amber-50 text-amber-800 p-2 rounded-xl border border-amber-200 font-bold flex items-center justify-between transition-all"
-                  >
-                    <span>Preguntar: ¿Qué incluye?</span>
-                    <ArrowRight className="w-2.5 h-2.5 text-amber-500" />
-                  </button>
-                  <button 
-                    onClick={() => handleSimulateClient("¿Cuál es el costo por mes?")}
-                    className="w-full text-left text-[9px] bg-white hover:bg-amber-50 text-amber-800 p-2 rounded-xl border border-amber-200 font-bold flex items-center justify-between transition-all"
-                  >
-                    <span>Preguntar: Tarifas</span>
-                    <ArrowRight className="w-2.5 h-2.5 text-amber-500" />
-                  </button>
-                </div>
+
 
               </div>
 

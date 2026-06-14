@@ -19,6 +19,7 @@ import {
   DollarSign,
   Briefcase
 } from "lucide-react";
+import { formatIntencionComercial } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 interface Child {
@@ -368,9 +369,9 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Intención del Cliente</span>
-                <p className="text-xs text-slate-600 bg-[#f4f8fc] p-4 rounded-2xl border border-[#e8f2fa] leading-relaxed">
-                  {lead.resumenIA || "Analizando intención comercial del cliente..."}
-                </p>
+                <div className="text-xs text-slate-600 bg-[#f4f8fc] p-4 rounded-2xl border border-[#e8f2fa] leading-relaxed whitespace-pre-line overflow-y-auto max-h-60 custom-scrollbar">
+                  {formatIntencionComercial(lead)}
+                </div>
               </div>
 
               <div className="space-y-3">
