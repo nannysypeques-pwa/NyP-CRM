@@ -4,11 +4,17 @@ const prisma = new PrismaClient();
 
 async function main() {
   const conv = await prisma.conversacion.findFirst({
-    where: { telefono: "+522224552596" },
-    include: { mensajes: { orderBy: { creadoEn: 'asc' } } }
+    where: { telefono: "+522213458308" },
+    include: { mensajes: { orderBy: { creadoEn: 'desc' }, take: 10 } }
   });
-  console.log("=== ÚLTIMOS MENSAJES ===");
-  console.log(JSON.stringify(conv, null, 2));
+  console.log("=== ÚLTIMOS MENSAJES DIANA ARELY ===");
+  if (conv) {
+    conv.mensajes.reverse().forEach(m => {
+      console.log(`[${m.creadoEn.toISOString()}] ${m.direccion} (${m.tipoRemitente}): ${m.contenido}`);
+    });
+  } else {
+    console.log("Conversación no encontrada.");
+  }
 }
 
 main()

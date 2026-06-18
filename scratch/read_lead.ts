@@ -3,12 +3,17 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  const lead = await prisma.lead.findFirst({
-    where: { telefono: "+522224552596" },
-    include: { hijos: true }
+  const leads = await prisma.lead.findMany({
+    where: {
+      OR: [
+        { telefono: { contains: "636" } },
+        { telefono: { contains: "5794" } }
+      ]
+    },
+    include: { hijos: true, conversacion: true }
   });
-  console.log("=== DETALLE DEL LEAD ===");
-  console.log(JSON.stringify(lead, null, 2));
+  console.log("=== DETALLE DE LEADS ENCONTRADOS POR TEL ===");
+  console.log(JSON.stringify(leads, null, 2));
 }
 
 main()

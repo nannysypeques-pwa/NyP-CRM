@@ -118,6 +118,8 @@ export default function InboxPage() {
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const lastActiveConvIdRef = useRef<string | null>(null);
 
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -162,8 +164,23 @@ export default function InboxPage() {
 
   // Scroll to bottom when messages update
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages]);
+    if (!messagesEndRef.current || !chatContainerRef.current) return;
+    
+    const container = chatContainerRef.current;
+    
+    // Check if the user changed the active conversation
+    const isNewConversation = lastActiveConvIdRef.current !== activeConvId;
+    
+    // Check if the user is already scrolled to the bottom (within a threshold of 150px)
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    
+    if (isNewConversation || isAtBottom) {
+      messagesEndRef.current.scrollIntoView({ behavior: isNewConversation ? "auto" : "smooth", block: "nearest" });
+    }
+    
+    // Update the last active conversation ID ref
+    lastActiveConvIdRef.current = activeConvId;
+  }, [messages, activeConvId]);
 
   const fetchConversations = async () => {
     try {
@@ -194,7 +211,15 @@ export default function InboxPage() {
       const res = await fetch(`/api/conversations/${convId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data);
+        setMessages(prev => {
+          if (
+            prev.length === data.length &&
+            prev.every((msg, idx) => msg.id === data[idx].id && msg.contenido === data[idx].contenido)
+          ) {
+            return prev;
+          }
+          return data;
+        });
       }
     } catch (err) {
       console.error(err);
@@ -431,7 +456,7 @@ export default function InboxPage() {
         </div>
 
         {/* Message Stream */}
-        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
+        <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
           
           {messages.length === 0 ? (
             <p className="text-center text-xs text-slate-400 my-8">Sin mensajes previos en esta conversación.</p>

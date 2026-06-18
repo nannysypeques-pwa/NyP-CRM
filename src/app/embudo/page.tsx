@@ -191,6 +191,8 @@ export default function KanbanPage() {
   });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const lastActiveConvIdRef = useRef<string | null>(null);
 
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
@@ -228,8 +230,18 @@ export default function KanbanPage() {
 
   // Scroll chat to bottom
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+    if (!chatEndRef.current || !chatContainerRef.current) return;
+    
+    const container = chatContainerRef.current;
+    const isNewConversation = lastActiveConvIdRef.current !== activeConv?.id;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    
+    if (isNewConversation || isAtBottom) {
+      chatEndRef.current.scrollIntoView({ behavior: isNewConversation ? "auto" : "smooth" });
+    }
+    
+    lastActiveConvIdRef.current = activeConv?.id || null;
+  }, [chatMessages, activeConv?.id]);
 
   // Sync quote builder calculations
   useEffect(() => {
@@ -271,7 +283,15 @@ export default function KanbanPage() {
       const res = await fetch(`/api/conversations/${convId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(data);
+        setChatMessages(prev => {
+          if (
+            prev.length === data.length &&
+            prev.every((msg, idx) => msg.id === data[idx].id && msg.contenido === data[idx].contenido)
+          ) {
+            return prev;
+          }
+          return data;
+        });
       }
     } catch (err) {
       console.error(err);
@@ -1055,7 +1075,7 @@ export default function KanbanPage() {
                 </div>
 
                 {/* Message Stream area */}
-                <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
+                <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
                   {chatMessages.length === 0 ? (
                     <p className="text-center text-xs text-slate-400 py-8">Cargando conversación de WhatsApp...</p>
                   ) : chatMessages.map((msg) => {

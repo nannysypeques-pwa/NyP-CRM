@@ -176,12 +176,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Extraer y guardar información del Lead en la base de datos si aplica
+    let extractedData: any = null;
     if (conv.idLead) {
       try {
         const chatHistoryForExtraction = await db.getMessagesByConversationId(conv.id);
         const recentHistoryText = chatHistoryForExtraction.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
         
-        const extractedData = await extractLeadInfo(content, recentHistoryText);
+        extractedData = await extractLeadInfo(content, recentHistoryText);
         if (extractedData) {
           const updates: any = {};
           const currentLead = await db.getLeadById(conv.idLead);
@@ -206,6 +207,9 @@ export async function POST(req: NextRequest) {
           if (extractedData.razonContratacion) updates.razonContratacion = extractedData.razonContratacion;
           if (extractedData.mascotas) updates.mascotas = extractedData.mascotas;
           if (extractedData.indicacionesIngreso) updates.indicacionesIngreso = extractedData.indicacionesIngreso;
+          if (extractedData.listoParaCierre) {
+            updates.estado = "GANADO";
+          }
 
           // Si se detecta un nuevo hijo con edad y el lead no tiene edad registrada, intentamos extraerla
           if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre && extractedData.nuevoHijo.textoEdad) {
@@ -289,15 +293,26 @@ export async function POST(req: NextRequest) {
               updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
             }
 
-            // Detectar si la respuesta de la IA contiene una cotización o tarifa
+            // Detectar si el cliente está listo para el cierre / contratación o handoff de la IA
             const lowerAiResponse = aiResponseText.toLowerCase();
-            const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
-                                        lowerAiResponse.includes("cotización") || 
-                                        /\$\d+/.test(aiResponseText);
+            const esHandoffText = lowerAiResponse.includes("canalizar") || 
+                                  lowerAiResponse.includes("canalizaré") || 
+                                  lowerAiResponse.includes("pasar con un asesor") || 
+                                  lowerAiResponse.includes("paso con un asesor") || 
+                                  lowerAiResponse.includes("transferir") || 
+                                  lowerAiResponse.includes("equipo de asesoría");
             
             let nuevoEstado = lead.estado;
-            if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO") {
-              nuevoEstado = "COTIZADO";
+            if (esHandoffText || (extractedData && extractedData.listoParaCierre)) {
+              nuevoEstado = "GANADO";
+            } else {
+              const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
+                                          lowerAiResponse.includes("cotización") || 
+                                          /\$\d+/.test(aiResponseText);
+              
+              if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO") {
+                nuevoEstado = "COTIZADO";
+              }
             }
 
             await db.updateLead(conv.idLead, {

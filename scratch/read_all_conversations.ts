@@ -6,8 +6,10 @@ async function main() {
   const convs = await prisma.conversacion.findMany({
     include: { lead: true }
   });
-  console.log("=== TODAS LAS CONVERSACIONES ===");
-  console.log(JSON.stringify(convs, null, 2));
+  console.log("=== RESUMEN DE CONVERSACIONES ===");
+  convs.forEach(c => {
+    console.log(`Telefono: ${c.telefono} | IA Activa: ${c.iaActiva} | Lead: ${c.lead?.nombreCompleto || 'SIN LEAD'} | Estado: ${c.lead?.estado || 'SIN ESTADO'}`);
+  });
 }
 
 main()

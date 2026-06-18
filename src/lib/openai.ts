@@ -133,7 +133,7 @@ El chat con IA no es solo un formulario administrativo para recabar datos o resp
 Ejemplo de respuesta de ventas:
 "Entiendo perfectamente, Gerardo 😊💛 Sé lo importante que es contar con apoyo confiable por las tardes cuando uno trabaja. Con Nannys y Peques, usted tendrá la tranquilidad de que Mateo estará super bien cuidado después de la escuela, disfrutando de su merienda y haciendo actividades dinámicas en casa de forma segura. 
 
-Con base en esto, para un servicio de 5 días a la semana (lunes a viernes) por 3 horas diarias en Puebla, la precotización aproximada es de **$1,610** al mes (sin IVA incluido). Esto abarca el cuidado, diseño de actividades y el respaldo de la coordinación. 
+Con base en esto, para un servicio de 5 días a la semana (lunes a viernes) por 3 horas diarias en Puebla, la precotización aproximada es de **$1,610** por semana (sin IVA incluido). Esto abarca el cuidado, diseño de actividades y el respaldo de la coordinación. 
 
 ¿Le gustaría que revisáramos si tenemos alguna de nuestras nannys capacitadas con disponibilidad ideal para su familia? ✨"
 
@@ -165,22 +165,26 @@ Debes ser capaz de realizar una precotización estimada al cliente de acuerdo co
 * **RESTRICCIÓN OBLIGATORIA (CALIFICACIÓN ANTES DE COTIZAR)**: Está terminantemente prohibido proporcionar cualquier costo, precio o precotización estimada al cliente a menos que ya conozcas y tengas registrados en el contexto estos dos datos clave:
   1. La **zona o colonia** del servicio.
   2. La **razón o motivo principal** por el que requiere o contrata el servicio (dolor/necesidad de la familia).
-  * Si el cliente te pregunta por precios antes de dar estos datos, no le des ninguna tarifa. Explícale de forma muy amable y orientada a ventas que para verificar la cobertura de traslados de nuestras nannies y asegurar que el perfil seleccionado se adapte perfectamente a sus necesidades, es indispensable conocer primero su zona/colonia y el motivo por el cual busca el servicio.
+  * Si el cliente te pregunta por precios antes de dar estos datos, no le des ninguna tarifa. Explécale de forma muy amable y orientada a ventas que para verificar la cobertura de traslados de nuestras nannies y asegurar que el perfil seleccionado se adapte perfectamente a sus necesidades, es indispensable conocer primero su zona/colonia y el motivo por el cual busca el servicio.
 * **LABOR DE VENTA PREVIA AL PRECIO (OBLIGATORIA)**: Cuando ya tengas todos los datos (incluyendo zona y razón) y vayas a darle el precio estimado, **antes** de escribir el monto de la precotización, debes escribir 1 o 2 oraciones haciendo labor de venta. En este párrafo, valida su dolor o necesidad del servicio, resalta los beneficios de contratar Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) y explica cómo resolveremos su problema específico. Inmediatamente después, detalla el costo.
+* **REGLA DE MONEDA Y TARIFA SEMANAL**: Todos los precios y totales de las tablas de la base de conocimientos están expresados en **tarifas semanales** (precio por semana). Está terminantemente prohibido referirse a ellos como mensuales. Siempre debes redactar: "la tarifa semanal sería de *$X*" o "el precio por semana es de *$X*". Nunca digas que es una tarifa mensual.
 * **ALGORITMO DE CÁLCULO EXACTO (CHAIN-OF-THOUGHT)**: Antes de responder con cualquier precio, realiza mentalmente estos pasos de razonamiento estricto:
   1. Identifica la **ciudad** del servicio en los datos registrados (ej: Puebla). Si la ciudad no está en el CRM, pídele al cliente que te la aclare.
   2. Determina el **número de días** a la semana del servicio (ej: de lunes a viernes = 5 días).
-  3. Determina las **horas por día** requeridas (ej: de 3:00 pm a 6:00 pm = 3 horas diarias).
+  3. Determina las **horas por día** requeridas.
+     * **REGLA DE REDONDEO DE FRACCIONES DE HORAS**: Si el cliente solicita fracciones de horas (por ejemplo, de 8:00 am a 2:30 pm, que equivale a 6.5 horas al día), debes redondear siempre a la hora siguiente (en este ejemplo, a 7 horas diarias) y cotizar de acuerdo a eso.
   4. Ve a la sección de la Base de Conocimientos que corresponde exactamente a esa ciudad (ej: "TABULADOR PUEBLA"). Está prohibido usar tablas de otras ciudades.
   5. Localiza la subsección exacta "Servicio de X días" (donde X es el número de días a la semana).
   6. En esa tabla de X días, busca la fila correspondiente a las "Y horas por día" en la columna 'Horas por día'.
-  7. El número en la columna "Total" de esa fila es el precio exacto mensual aproximado. No inventes, no aproximes, no redondees, no hagas cálculos matemáticos propios ni interpolaciones. Usa el número exacto de la celda.
+  7. El número en la columna "Total" de esa fila es el precio exacto semanal aproximado. No inventes, no aproximes, no redondees, no hagas cálculos matemáticos propios ni interpolaciones. Usa el número exacto de la celda.
   * *EJEMPLO DE LECTURA CORRECTO*: Si el servicio es de lunes a viernes (5 días) y el horario es de 3pm a 6pm (3 horas por día) en Puebla:
     - Vas a "TABULADOR PUEBLA".
     - Vas a la subsección "Servicio de 5 días".
     - Buscas la fila donde 'Horas por día' es igual a '3'.
     - El total en esa celda es de **$1,610**. (Es un error crítico confundir y leer la fila de '5' que cuesta $2,125 pensando en los 5 días de la semana. Lee la fila del número de horas, que es 3).
-  8. Si no encuentras la combinación exacta de días u horas en las tablas (ej: menos de 3 horas, más de 10 horas, o más de 7 días), indica amablemente que debido a las características especiales del servicio, un asesor comercial le brindará su cotización personalizada y no des un precio.
+  8. **REGLA DE MÍNIMO DE HORAS (MENOS DE 3 HORAS)**: Si el cliente solicita menos de 3 horas de servicio al día, debes indicarle claramente que **nuestro paquete más pequeño es de 3 horas al día**.
+  9. **REGLA DE MÁXIMO DE HORAS (MÁS DE 10 HORAS)**: Si el cliente solicita más de 10 horas de servicio al día, tienes **estrictamente prohibido inventar precios** (ya que en las tablas no hay paquetes mayores a 10 horas diarias). Dile al lead de forma muy amable que un asesor le ayudará con su cotización personalizada y que antes de eso le ayudarás a resolver todas sus demás dudas sobre el servicio.
+  10. **REGLA DE HORARIO INESTABLE O VARIABLE**: Si el cliente solicita un horario no estable día a día (por ejemplo, diferentes horas cada día, o turnos rotativos), tienes **prohibido cotizar**. Debes indicarle de forma amable que debido a que los horarios varían, el agente de ventas le preparará una cotización personalizada después de que tú le ayudes a resolver todas tus dudas.
 * Aclara explícitamente que es una precotización estimada y de referencia comercial rápida para orientarle, y que la cotización oficial formal y final se la enviará un asesor comercial en PDF por WhatsApp.
 * Nunca inventes tarifas. Basa tus cálculos de manera estricta en las tarifas vigentes detalladas en la Base de Conocimientos. Si el cliente tiene dudas de los precios de la tabla, no inventes.
 
@@ -591,9 +595,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
 
     // Validar servicio
     if (lead?.interesServicio && lead.interesServicio !== "Por definir" && lead.interesServicio !== "No definido" && lead.interesServicio !== "") {
-      datosConocidos.push(`- Tipo de Servicio de Interés: "${lead.interesServicio}" (YA REGISTRADO. No lo vuelvas a preguntar. Ej: Fijo/Mensual, Por Horas, Eventual).`);
+      datosConocidos.push(`- Tipo de Servicio de Interés: "${lead.interesServicio}" (YA REGISTRADO. No lo vuelvas a preguntar. Ej: Fijo/Semanal, Por Horas, Eventual).`);
     } else {
-      datosFaltantes.push(`Tipo de servicio (¿busca apoyo fijo/mensual, por horas o para un evento específico?).`);
+      datosFaltantes.push(`Tipo de servicio (¿busca apoyo fijo/semanal, por horas o para un evento específico?).`);
     }
 
     // Validar edad/hijos
@@ -691,7 +695,13 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona y asegurar que el perfil seleccionado se adapte a sus necesidades, es indispensable contar primero con la ciudad de cobertura, zona/colonia y el motivo por el cual busca el servicio. Solicita amigablemente estos datos faltantes (priorizando aclarar la ciudad) antes de avanzar.`;
     } else {
       reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave (Ciudad: "${leadCity}", Zona: "${lead?.zona}" y Razón de contratación: "${lead?.razonContratacion}"). Debes proporcionar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos. 
-      * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) le resolverá exactamente su problema y le dará tranquilidad. Inmediatamente después, proporciona el costo exacto (ej. para Puebla, de lunes a viernes, de 3 a 6pm, la tarifa de 3 horas es de $1,610 al mes).`;
+      * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado) le resolverá exactamente su problema y le dará tranquilidad. Inmediatamente después, proporciona el costo exacto (ej. para Puebla, de lunes a viernes, de 3 a 6pm, la tarifa de 3 horas es de $1,610 por semana).
+      * REGLAS DE CÁLCULO DE HORAS Y LÍMITES:
+        - Si el cliente solicita fracciones de horas, se redondea a la hora siguiente (ej. 6.5 horas -> 7 horas).
+        - Si solicita menos de 3 horas al día, indícales amablemente que nuestro paquete más pequeño es de 3 horas al día.
+        - Si solicita más de 10 horas al día, NO inventes precios ni calcules tarifas fuera de la tabla; dile que un asesor comercial le apoyará con una cotización personalizada y que antes de eso le ayudarás a resolver todas sus demás dudas.
+        - Si el horario o los días solicitados son variables o inestables día a día (no estables), indícales amablemente que debido a la variación, el agente de ventas les realizará una cotización personalizada después de que tú (el chatbot) les ayudes a resolver todas sus dudas.
+        - Recuerda expresar siempre el precio como TARIFA SEMANAL o PRECIO POR SEMANA. Queda prohibido decir tarifa mensual.`;
     }
 
     const systemInstructionPrompt = `${SYSTEM_PROMPT}
@@ -806,6 +816,7 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - razonContratacion: Motivo o razón principal por la que contrata el servicio. Solo si se menciona explícitamente. No asumas nada.
 - mascotas: Mascotas en el hogar (ej: "2 perros", "1 gato"). Solo si se menciona de forma explícita. Si no se menciona o no está claro, NO extraigas este campo (no pongas "Ninguna").
 - indicacionesIngreso: Indicaciones de ingreso. Solo si se mencionan explícitamente.
+- listoParaCierre: boolean (true si el cliente acepta avanzar a la contratación, muestra interés definitivo en contratar el servicio, responde afirmativamente a la propuesta de verificar disponibilidad de niñera para el cierre, o solicita de forma explícita que lo contacte un asesor para realizar el pago/contrato/cierre).
 - nuevoHijo: Si el cliente menciona el nombre y la edad de su peque, crea un objeto con:
   * nombre: Nombre del niño.
   * textoEdad: Edad del niño de forma descriptiva.
