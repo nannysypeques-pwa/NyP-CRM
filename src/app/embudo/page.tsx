@@ -192,12 +192,10 @@ export default function KanbanPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const lastActiveConvIdRef = useRef<string | null>(null);
+  const hasScrolledForActiveConvRef = useRef<boolean>(false);
 
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
-    fetchLeadsAndConversations();
-    
     // Obtener la cookie activeCity para sincronizar la UI del Kanban con el menú lateral
     const activeCityCookie = document.cookie
       .split("; ")
@@ -228,20 +226,28 @@ export default function KanbanPage() {
     };
   }, [drawerOpen, activeConv]);
 
+  // Reset scroll ref and clear old messages when active conversation changes
+  useEffect(() => {
+    hasScrolledForActiveConvRef.current = false;
+    setChatMessages([]);
+  }, [activeConv?.id]);
+
   // Scroll chat to bottom
   useEffect(() => {
     if (!chatEndRef.current || !chatContainerRef.current) return;
     
     const container = chatContainerRef.current;
-    const isNewConversation = lastActiveConvIdRef.current !== activeConv?.id;
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
     
-    if (isNewConversation || isAtBottom) {
-      chatEndRef.current.scrollIntoView({ behavior: isNewConversation ? "auto" : "smooth" });
+    if (!hasScrolledForActiveConvRef.current) {
+      if (chatMessages.length > 0) {
+        chatEndRef.current.scrollIntoView({ behavior: "auto" });
+        hasScrolledForActiveConvRef.current = true;
+      }
+    } else if (isAtBottom) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-    
-    lastActiveConvIdRef.current = activeConv?.id || null;
-  }, [chatMessages, activeConv?.id]);
+  }, [chatMessages]);
 
   // Sync quote builder calculations
   useEffect(() => {
@@ -331,6 +337,7 @@ export default function KanbanPage() {
   };
 
   const handleDragOver = (e: React.DragEvent, colName: string) => {
+    if (colName === "NUEVO") return; // block dragover for PENDIENTES
     e.preventDefault();
     setActiveDropCol(colName);
   };
@@ -342,6 +349,8 @@ export default function KanbanPage() {
   const handleDrop = async (e: React.DragEvent, targetStatus: string) => {
     e.preventDefault();
     setActiveDropCol(null);
+    if (targetStatus === "NUEVO") return; // block drops into PENDIENTES
+    
     const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId;
     if (!leadId) return;
 
@@ -625,10 +634,9 @@ export default function KanbanPage() {
             {getLeadsByStatus("NUEVO").map((lead) => (
               <div 
                 key={lead.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, lead.id)}
+                draggable={false}
                 onClick={() => handleCardClick(lead)}
-                className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing hover:border-[#026692]/30 transition-all space-y-3 group"
+                className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm hover:shadow-md cursor-pointer hover:border-[#026692]/30 transition-all space-y-3 group"
               >
                 <div className="flex justify-between items-start">
                   <h4 className="font-bold text-slate-800 text-sm group-hover:text-[#026692] transition-colors">{lead.nombreCompleto}</h4>
@@ -1177,56 +1185,73 @@ export default function KanbanPage() {
                 <div className="space-y-4">
                   <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px] border-b border-slate-100 pb-2">Acciones Comerciales</h4>
                   
-                  {/* Quote action trigger */}
-                  <button 
-                    onClick={() => {
-                      setQuoteForm(q => ({ ...q, ciudad: selectedLead.ciudad, tipoServicio: selectedLead.interesServicio }));
-                      setQuoteBuilderOpen(true);
-                    }}
-                    className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <FileText className="w-4 h-4 text-slate-400" /> Crear Cotización
-                  </button>
-
-                  {/* Close Won trigger */}
-                  {selectedLead.estado !== "ATENCION_HUMANA" && selectedLead.estado !== "GANADO" && (
-                    <button 
-                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "ATENCION_HUMANA")}
-                      className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                    >
-                      <UserCheck className="w-4 h-4 text-indigo-500" /> Derivar a Atención Humana
-                    </button>
-                  )}
-
-                  {selectedLead.estado === "ATENCION_HUMANA" && (
-                    <button 
-                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
-                      className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                    >
-                      <Bot className="w-4 h-4 text-amber-500" /> Devolver a Conversación (IA)
-                    </button>
-                  )}
-
-                  {selectedLead.estado !== "GANADO" ? (
-                    <button 
-                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "GANADO")}
-                      className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-md"
-                    >
-                      ✓ Cerrar Ganado
-                    </button>
-                  ) : (
-                    <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
-                      <CheckCircle className="w-4 h-4" /> Cliente Ganado
+                  {selectedLead.ciudad === "Por definir" || selectedLead.ciudad === "" || !selectedLead.ciudad ? (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span>Falta Asignar Ciudad</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 leading-relaxed font-medium text-left">
+                        Este lead aún no tiene una ciudad asignada. El chatbot de WhatsApp la detectará automáticamente cuando el cliente la mencione, o puedes actualizarla en la sección de Leads.
+                      </p>
+                      <p className="text-[10px] text-amber-500 font-semibold italic text-left">
+                        Las acciones comerciales y el cambio de fase se habilitarán una vez que el lead tenga una ciudad asignada.
+                      </p>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Quote action trigger */}
+                      <button 
+                        onClick={() => {
+                          setQuoteForm(q => ({ ...q, ciudad: selectedLead.ciudad, tipoServicio: selectedLead.interesServicio }));
+                          setQuoteBuilderOpen(true);
+                        }}
+                        className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <FileText className="w-4 h-4 text-slate-400" /> Crear Cotización
+                      </button>
 
-                  {selectedLead.estado !== "PERDIDO" && (
-                    <button 
-                      onClick={() => handleUpdateLeadStatus(selectedLead.id, "PERDIDO")}
-                      className="w-full text-slate-400 hover:text-rose-500 py-2 text-xs font-bold text-center transition-all block"
-                    >
-                      Mover a Perdidos
-                    </button>
+                      {/* Close Won trigger */}
+                      {selectedLead.estado !== "ATENCION_HUMANA" && selectedLead.estado !== "GANADO" && (
+                        <button 
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "ATENCION_HUMANA")}
+                          className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <UserCheck className="w-4 h-4 text-indigo-500" /> Derivar a Atención Humana
+                        </button>
+                      )}
+
+                      {selectedLead.estado === "ATENCION_HUMANA" && (
+                        <button 
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
+                          className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <Bot className="w-4 h-4 text-amber-500" /> Devolver a Conversación (IA)
+                        </button>
+                      )}
+
+                      {selectedLead.estado !== "GANADO" ? (
+                        <button 
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "GANADO")}
+                          className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-md"
+                        >
+                          ✓ Cerrar Ganado
+                        </button>
+                      ) : (
+                        <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
+                          <CheckCircle className="w-4 h-4" /> Cliente Ganado
+                        </div>
+                      )}
+
+                      {selectedLead.estado !== "PERDIDO" && (
+                        <button 
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "PERDIDO")}
+                          className="w-full text-slate-400 hover:text-rose-500 py-2 text-xs font-bold text-center transition-all block"
+                        >
+                          Mover a Perdidos
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 

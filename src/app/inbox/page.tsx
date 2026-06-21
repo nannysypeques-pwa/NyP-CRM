@@ -119,7 +119,7 @@ export default function InboxPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const lastActiveConvIdRef = useRef<string | null>(null);
+  const hasScrolledForActiveConvRef = useRef<boolean>(false);
 
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -141,6 +141,9 @@ export default function InboxPage() {
   // Poll messages and conversations every 1.5 seconds for real-time updates
   useEffect(() => {
     fetchConversations();
+    if (activeConvId) {
+      fetchMessages(activeConvId);
+    }
     
     const interval = setInterval(() => {
       fetchConversations();
@@ -152,15 +155,18 @@ export default function InboxPage() {
     return () => clearInterval(interval);
   }, [activeConvId]);
 
-  // Load active lead when active conversation changes
+  // Load active lead and reset scroll ref when active conversation changes
   useEffect(() => {
+    hasScrolledForActiveConvRef.current = false;
+    setMessages([]); // Clear messages immediately for immediate screen transition
+
     const activeConv = conversations.find(c => c.id === activeConvId);
     if (activeConv?.idLead) {
       fetchLeadDetails(activeConv.idLead);
     } else {
       setActiveLead(null);
     }
-  }, [activeConvId, conversations]);
+  }, [activeConvId]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -168,19 +174,18 @@ export default function InboxPage() {
     
     const container = chatContainerRef.current;
     
-    // Check if the user changed the active conversation
-    const isNewConversation = lastActiveConvIdRef.current !== activeConvId;
-    
     // Check if the user is already scrolled to the bottom (within a threshold of 150px)
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
     
-    if (isNewConversation || isAtBottom) {
-      messagesEndRef.current.scrollIntoView({ behavior: isNewConversation ? "auto" : "smooth", block: "nearest" });
+    if (!hasScrolledForActiveConvRef.current) {
+      if (messages.length > 0) {
+        messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "nearest" });
+        hasScrolledForActiveConvRef.current = true;
+      }
+    } else if (isAtBottom) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-    
-    // Update the last active conversation ID ref
-    lastActiveConvIdRef.current = activeConvId;
-  }, [messages, activeConvId]);
+  }, [messages]);
 
   const fetchConversations = async () => {
     try {
