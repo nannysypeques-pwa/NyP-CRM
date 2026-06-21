@@ -196,6 +196,8 @@ export default function KanbanPage() {
 
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
+    fetchLeadsAndConversations();
+
     // Obtener la cookie activeCity para sincronizar la UI del Kanban con el menú lateral
     const activeCityCookie = document.cookie
       .split("; ")
