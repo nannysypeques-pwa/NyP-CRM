@@ -138,13 +138,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "ignored" });
     }
 
-    // Process only text messages for now
-    if (message.type !== "text") {
-      return NextResponse.json({ status: "ignored_non_text_type" });
-    }
-
     const rawPhone = message.from;
     const clientName = contact?.profile?.name || `Cliente WhatsApp (${rawPhone})`;
+
+    // Process non-text messages by logging them and responding if IA is active
+    if (message.type !== "text") {
+      const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
+      
+      let label = `[Archivo / Multimedia (${message.type})]`;
+      if (message.type === "image") label = "[Imagen / Foto]";
+      if (message.type === "audio" || message.type === "voice") label = "[Nota de voz / Audio]";
+      if (message.type === "document") label = "[Documento]";
+      if (message.type === "video") label = "[Video]";
+
+      // Guardar el mensaje inbound
+      await db.addMessage({
+        idConversacion: conv.id,
+        direccion: "INBOUND",
+        tipoRemitente: "CLIENT",
+        contenido: label
+      });
+
+      // Si la IA está activa, enviar respuesta automática aclarando que no puede leer multimedia
+      if (conv.iaActiva) {
+        const responseText = "¡Hola! 😊 En este momento por este medio automático solo puedo leer mensajes de texto. Si me envió un audio, imagen o documento, le pido de favor que me lo escriba en texto para poder ayudarle a resolver sus dudas. ¡Muchas gracias! 💛✨";
+        await sendWhatsAppMessage(rawPhone, responseText);
+        
+        await db.addMessage({
+          idConversacion: conv.id,
+          direccion: "OUTBOUND",
+          tipoRemitente: "IA",
+          contenido: responseText
+        });
+      }
+
+      return NextResponse.json({ status: "handled_non_text_type", type: message.type });
+    }
+
     const content = message.text?.body;
 
     if (!content) {
