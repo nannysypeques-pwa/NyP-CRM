@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateAIResponse, detectCityFromText, extractLeadInfo } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
+import prisma from "@/lib/prisma";
 
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
   const secret = process.env.META_APP_SECRET;
@@ -92,6 +93,57 @@ async function sendWhatsAppMessage(to: string, text: string) {
     await db.crearIncidente(
       "WHATSAPP",
       `Error de red al intentar conectar con la API de WhatsApp de Meta`,
+      error instanceof Error ? error.stack : JSON.stringify(error)
+    ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+  }
+}
+
+async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
+    console.log("WhatsApp credentials not set or mock. Skipping image API call.");
+    return;
+  }
+
+  const cleanPhone = to.replace(/\D/g, "");
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: cleanPhone,
+        type: "image",
+        image: {
+          link: imageUrl,
+          caption: caption || undefined
+        },
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Error sending WhatsApp image:", data);
+      await db.crearIncidente(
+        "WHATSAPP",
+        `Falla al enviar imagen de WhatsApp. API de Meta retornó status ${response.status}`,
+        JSON.stringify(data)
+      ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+    } else {
+      console.log("WhatsApp image sent successfully:", data);
+    }
+  } catch (error: any) {
+    console.error("Network error sending WhatsApp image:", error);
+    await db.crearIncidente(
+      "WHATSAPP",
+      `Error de red al intentar enviar imagen de WhatsApp`,
       error instanceof Error ? error.stack : JSON.stringify(error)
     ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
   }
@@ -299,15 +351,43 @@ export async function POST(req: NextRequest) {
         const aiResponseText = await generateAIResponse(conv.id, content);
 
         // Guardar mensaje de IA en la DB
+        let quoteCreated = null;
+        if (conv.idLead) {
+          const recentQuote = await prisma.cotizacion.findFirst({
+            where: {
+              idLead: conv.idLead,
+              creadoPor: "Asistente IA",
+              deleted: false
+            },
+            orderBy: { creadoEn: "desc" }
+          });
+          if (recentQuote && (Date.now() - new Date(recentQuote.creadoEn).getTime() < 15000)) {
+            quoteCreated = recentQuote;
+          }
+        }
+
+        let imageUrl = "";
+        if (quoteCreated) {
+          const host = req.headers.get("host") || "localhost:3000";
+          const protocol = req.headers.get("x-forwarded-proto") || "http";
+          const appUrl = `${protocol}://${host}`;
+          imageUrl = `${appUrl}/api/cotizaciones/${quoteCreated.id}/image`;
+        }
+
         await db.addMessage({
           idConversacion: conv.id,
           direccion: "OUTBOUND",
           tipoRemitente: "IA",
-          contenido: aiResponseText
-        });
+          contenido: aiResponseText,
+          urlMultimedia: imageUrl || null
+        } as any);
 
         // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
-        await sendWhatsAppMessage(rawPhone, aiResponseText);
+        if (imageUrl) {
+          await sendWhatsAppImage(rawPhone, imageUrl, aiResponseText);
+        } else {
+          await sendWhatsAppMessage(rawPhone, aiResponseText);
+        }
 
         // Actualizar datos de lead si aplica
         if (conv.idLead) {

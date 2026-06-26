@@ -619,7 +619,8 @@ class BaseDeDatos {
         direccion: messageData.direccion,
         tipoRemitente: messageData.tipoRemitente,
         idRemitente: messageData.idRemitente,
-        contenido: messageData.contenido
+        contenido: messageData.contenido,
+        urlMultimedia: (messageData as any).urlMultimedia || null
       }
     });
 

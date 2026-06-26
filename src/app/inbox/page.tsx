@@ -23,7 +23,8 @@ import {
   Sparkles,
   ArrowRight,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  X
 } from "lucide-react";
 import { formatIntencionComercial } from "@/lib/utils";
 import confetti from "canvas-confetti";
@@ -34,6 +35,7 @@ interface Message {
   direccion: 'INBOUND' | 'OUTBOUND';
   tipoRemitente: 'CLIENT' | 'AGENT' | 'IA';
   contenido: string;
+  urlMultimedia?: string;
   creadoEn: string;
 }
 
@@ -101,6 +103,7 @@ interface Lead {
   linkUbicacion?: string;
   razonContratacion?: string;
   mascotas?: string;
+  cantidadHijos?: number;
 }
 
 export default function InboxPage() {
@@ -125,6 +128,134 @@ export default function InboxPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Quote Modal State
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [quoteForm, setQuoteForm] = useState({
+    tipoServicio: "",
+    ciudad: "",
+    zona: "",
+    dias: "",
+    horaInicio: "09:00",
+    horaFin: "17:00",
+    horasPorDia: 8,
+    cantidadHijos: 1,
+    subtotal: 0,
+    descuento: 0,
+    total: 0,
+    notas: ""
+  });
+
+  const openQuoteModal = () => {
+    if (!activeLead) return;
+    setQuoteForm({
+      tipoServicio: activeLead.interesServicio || "FIXA SEMANAL",
+      ciudad: activeLead.ciudad || "Puebla",
+      zona: activeLead.zona || "",
+      dias: activeLead.diasSolicitados || "Lunes a Viernes",
+      horaInicio: activeLead.horaInicioSolicitada || "09:00",
+      horaFin: activeLead.horaFinSolicitada || "17:00",
+      horasPorDia: 8,
+      cantidadHijos: activeLead.cantidadHijos || 1,
+      subtotal: 0,
+      descuento: 0,
+      total: 0,
+      notas: "(Precotización estimada)"
+    });
+    setIsQuoteModalOpen(true);
+  };
+
+  const handleQuoteFormChange = (field: string, value: any) => {
+    setQuoteForm(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === "subtotal" || field === "descuento") {
+        const sub = Number(field === "subtotal" ? value : prev.subtotal) || 0;
+        const desc = Number(field === "descuento" ? value : prev.descuento) || 0;
+        updated.total = Math.max(0, sub - desc);
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveQuote = async (sendToClient: boolean) => {
+    if (!activeLead) return;
+    try {
+      const res = await fetch(`/api/leads/${activeLead.id}/quotes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipoServicio: quoteForm.tipoServicio,
+          ciudad: quoteForm.ciudad,
+          dias: quoteForm.dias,
+          horaInicio: quoteForm.horaInicio,
+          horaFin: quoteForm.horaFin,
+          horasPorDia: Number(quoteForm.horasPorDia),
+          cantidadHijos: Number(quoteForm.cantidadHijos),
+          subtotal: Number(quoteForm.subtotal),
+          descuento: Number(quoteForm.descuento),
+          total: Number(quoteForm.total),
+          notas: quoteForm.notas,
+          creadoPor: "Agente CRM"
+        })
+      });
+
+      if (!res.ok) {
+        alert("Error al guardar la cotización");
+        return;
+      }
+
+      const createdQuote = await res.json();
+      
+      // Refresh lead details
+      fetchLeadDetails(activeLead.id);
+      
+      const quoteImageUrl = `/api/cotizaciones/${createdQuote.id}/image`;
+
+      if (sendToClient) {
+        const msgRes = await fetch(`/api/conversations/${activeConvId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            direccion: "OUTBOUND",
+            tipoRemitente: "AGENT",
+            idRemitente: "agent-laura",
+            contenido: `Le comparto el detalle de su precotización estimada de servicio. 😊 💛`,
+            urlMultimedia: window.location.origin + quoteImageUrl
+          })
+        });
+        
+        if (msgRes.ok) {
+          fetchMessages(activeConvId);
+          fetchConversations();
+          confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 }
+          });
+        } else {
+          alert("Cotización guardada, pero hubo un error al enviar el mensaje de WhatsApp.");
+        }
+      } else {
+        const link = document.createElement("a");
+        link.href = quoteImageUrl;
+        link.download = `cotizacion_${activeLead.nombreCompleto.replace(/\s+/g, "_")}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        confetti({
+          particleCount: 100,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
+      }
+
+      setIsQuoteModalOpen(false);
+    } catch (error) {
+      console.error("Error saving quote:", error);
+      alert("Error al procesar la cotización");
+    }
+  };
+
   const handleEmojiClick = (emoji: string) => {
     setChatInput(prev => prev + emoji);
   };
@@ -490,7 +621,21 @@ export default function InboxPage() {
                     </span>
                   )}
 
-                  <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
+                  {msg.urlMultimedia ? (
+                    <div className="space-y-2">
+                      <img 
+                        src={msg.urlMultimedia} 
+                        alt="Cotización" 
+                        className="max-w-[280px] md:max-w-[340px] h-auto rounded-lg border border-[#cbdfe9]/50 shadow-sm cursor-pointer hover:opacity-90 transition-all"
+                        onClick={() => window.open(msg.urlMultimedia, "_blank")}
+                      />
+                      {msg.contenido && (
+                        <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
+                  )}
                   
                   {/* Time / checkmark indicator */}
                   <div className={`text-[9px] font-bold text-right mt-1.5 ${
@@ -657,14 +802,48 @@ export default function InboxPage() {
               )}
             </div>
 
+            {/* Cotizaciones Enviadas */}
+            <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-3">
+              <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                <FileText className="w-3.5 h-3.5" /> Cotizaciones Enviadas
+              </span>
+              {activeLead.cotizaciones && activeLead.cotizaciones.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                  {activeLead.cotizaciones.map((quote) => (
+                    <div key={quote.id} className="relative group border border-slate-100 rounded-xl overflow-hidden bg-slate-50 hover:border-[#026692]/30 transition-all shadow-sm">
+                      <img 
+                        src={`/api/cotizaciones/${quote.id}/image`} 
+                        alt={`Cotización ${quote.total}`} 
+                        className="w-full h-20 object-cover object-top cursor-pointer group-hover:scale-105 transition-all"
+                        onClick={() => window.open(`/api/cotizaciones/${quote.id}/image`, "_blank")}
+                      />
+                      <div className="p-1 text-[9px] font-bold text-center bg-white text-slate-700 border-t border-slate-100 flex justify-between items-center">
+                        <span>${quote.total.toLocaleString("es-MX")}</span>
+                        <a 
+                          href={`/api/cotizaciones/${quote.id}/image`} 
+                          download={`cotizacion_${quote.id}.png`}
+                          className="text-[#026692] hover:text-[#1d4359] font-extrabold px-1 rounded hover:bg-slate-100"
+                          title="Descargar"
+                        >
+                          ↓
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-400 italic">No hay cotizaciones enviadas.</p>
+              )}
+            </div>
+
             {/* Quick action buttons */}
             <div className="space-y-3 pt-4 border-t border-[#f0f7fc]">
-              <Link
-                href={`/leads/${activeLead.id}`}
+              <button
+                onClick={openQuoteModal}
                 className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
               >
                 <FileText className="w-4 h-4 text-sky-200" /> Generar Cotización
-              </Link>
+              </button>
               
               {activeLead.estado !== "GANADO" ? (
                 <button
@@ -693,6 +872,203 @@ export default function InboxPage() {
           <p className="text-xs text-slate-400 text-center py-8">Selecciona un chat para ver su ficha comercial.</p>
         )}
       </div>
+
+      {/* MODAL CREAR COTIZACION */}
+      {isQuoteModalOpen && activeLead && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full p-6 relative flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2 text-[#026692]">
+                <FileText className="w-5 h-5" />
+                <h3 className="font-extrabold text-slate-800 text-lg">Crear Precotización</h3>
+              </div>
+              <button 
+                onClick={() => setIsQuoteModalOpen(false)}
+                className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Content */}
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 custom-scrollbar">
+              
+              <div className="grid grid-cols-2 gap-4">
+                {/* Tipo de Servicio */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo de Servicio</label>
+                  <select 
+                    value={quoteForm.tipoServicio}
+                    onChange={(e) => handleQuoteFormChange("tipoServicio", e.target.value)}
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  >
+                    <option value="FIXA SEMANAL">FIXA SEMANAL</option>
+                    <option value="FIXA MENSUAL">FIXA MENSUAL</option>
+                    <option value="EVENTUAL">EVENTUAL</option>
+                    <option value="NEURONANNY">NEURONANNY</option>
+                    <option value="OTRO">OTRO</option>
+                  </select>
+                </div>
+
+                {/* Ciudad */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ciudad</label>
+                  <select 
+                    value={quoteForm.ciudad}
+                    onChange={(e) => handleQuoteFormChange("ciudad", e.target.value)}
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  >
+                    <option value="Puebla">Puebla</option>
+                    <option value="CDMX">CDMX</option>
+                    <option value="Querétaro">Querétaro</option>
+                    <option value="Atlixco">Atlixco</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Zona */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Zona</label>
+                  <input 
+                    type="text"
+                    value={quoteForm.zona}
+                    onChange={(e) => handleQuoteFormChange("zona", e.target.value)}
+                    placeholder="Ej. Polanco, Angelópolis"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+
+                {/* Días */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Días del Servicio</label>
+                  <input 
+                    type="text"
+                    value={quoteForm.dias}
+                    onChange={(e) => handleQuoteFormChange("dias", e.target.value)}
+                    placeholder="Ej. Lunes a Viernes"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {/* Hora Inicio */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Hora Inicio</label>
+                  <input 
+                    type="text"
+                    value={quoteForm.horaInicio}
+                    onChange={(e) => handleQuoteFormChange("horaInicio", e.target.value)}
+                    placeholder="09:00"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+
+                {/* Hora Fin */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Hora Fin</label>
+                  <input 
+                    type="text"
+                    value={quoteForm.horaFin}
+                    onChange={(e) => handleQuoteFormChange("horaFin", e.target.value)}
+                    placeholder="17:00"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+
+                {/* Horas por día */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Horas/Día</label>
+                  <input 
+                    type="number"
+                    value={quoteForm.horasPorDia}
+                    onChange={(e) => handleQuoteFormChange("horasPorDia", parseInt(e.target.value, 10))}
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {/* Cantidad de Peques */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Peques</label>
+                  <input 
+                    type="number"
+                    value={quoteForm.cantidadHijos}
+                    onChange={(e) => handleQuoteFormChange("cantidadHijos", parseInt(e.target.value, 10))}
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+
+                {/* Subtotal */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Subtotal ($)</label>
+                  <input 
+                    type="number"
+                    value={quoteForm.subtotal || ""}
+                    onChange={(e) => handleQuoteFormChange("subtotal", parseFloat(e.target.value))}
+                    placeholder="0"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+
+                {/* Descuento */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Descuento ($)</label>
+                  <input 
+                    type="number"
+                    value={quoteForm.descuento || ""}
+                    onChange={(e) => handleQuoteFormChange("descuento", parseFloat(e.target.value))}
+                    placeholder="0"
+                    className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                  />
+                </div>
+              </div>
+
+              {/* Total (read only highlight) */}
+              <div className="bg-sky-50 border border-sky-100 p-3 rounded-2xl flex justify-between items-center">
+                <span className="text-xs font-bold text-[#026692] uppercase tracking-wider">Total a Cotizar</span>
+                <span className="text-xl font-extrabold text-[#D53F8C]">${quoteForm.total.toLocaleString("es-MX")} MXN</span>
+              </div>
+
+              {/* Notas (Detalle del precio) */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Notas (Detalle en Imagen)</label>
+                <input 
+                  type="text"
+                  value={quoteForm.notas}
+                  onChange={(e) => handleQuoteFormChange("notas", e.target.value)}
+                  placeholder="Ej. (Precotización estimada semanal)"
+                  className="w-full bg-[#f8fbfe] border border-[#d4e6f4] rounded-xl px-3 py-2 text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                />
+              </div>
+
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="pt-4 border-t border-slate-100 flex space-x-3">
+              <button
+                type="button"
+                onClick={() => handleSaveQuote(false)}
+                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+              >
+                Guardar y Descargar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveQuote(true)}
+                className="flex-1 bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                ✓ Enviar al Cliente
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

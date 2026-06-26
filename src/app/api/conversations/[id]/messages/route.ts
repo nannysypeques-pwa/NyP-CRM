@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateAIResponse, extractLeadInfo } from "@/lib/openai";
+import prisma from "@/lib/prisma";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -52,10 +53,51 @@ async function sendWhatsAppMessage(to: string, text: string) {
   }
 }
 
+async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
+    console.log("WhatsApp credentials not set or mock. Skipping image API call.");
+    return;
+  }
+
+  const cleanPhone = to.replace(/\D/g, "");
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: cleanPhone,
+        type: "image",
+        image: {
+          link: imageUrl,
+          caption: caption || undefined
+        },
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Error sending WhatsApp image:", data);
+    } else {
+      console.log("WhatsApp image sent successfully:", data);
+    }
+  } catch (error: any) {
+    console.error("Network error sending WhatsApp image:", error);
+  }
+}
+
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    const { direccion, tipoRemitente, idRemitente, contenido } = body;
+    const { direccion, tipoRemitente, idRemitente, contenido, urlMultimedia } = body;
 
     if (!direccion || !tipoRemitente || !contenido) {
       return NextResponse.json({ error: "Faltan campos obligatorios (direccion, tipoRemitente o contenido)" }, { status: 400 });
@@ -67,14 +109,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       direccion,
       tipoRemitente,
       idRemitente,
-      contenido
-    });
+      contenido,
+      urlMultimedia: urlMultimedia || null
+    } as any);
 
     const conv = await db.getConversationById(params.id);
 
     // Si el agente responde desde el CRM, enviamos la respuesta de forma real por WhatsApp
     if (direccion === "OUTBOUND" && tipoRemitente === "AGENT" && conv) {
-      await sendWhatsAppMessage(conv.telefono, contenido);
+      if (urlMultimedia) {
+        await sendWhatsAppImage(conv.telefono, urlMultimedia, contenido);
+      } else {
+        await sendWhatsAppMessage(conv.telefono, contenido);
+      }
     }
 
     // Si el mensaje viene del cliente (INBOUND) y la IA está activada en la conversación,
@@ -170,12 +217,45 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const aiResponseText = await generateAIResponse(params.id, contenido);
 
       // Guardar el mensaje generado por la IA en la base de datos
+      let quoteCreated = null;
+      if (conv.idLead) {
+        const recentQuote = await prisma.cotizacion.findFirst({
+          where: {
+            idLead: conv.idLead,
+            creadoPor: "Asistente IA",
+            deleted: false
+          },
+          orderBy: { creadoEn: "desc" }
+        });
+        if (recentQuote && (Date.now() - new Date(recentQuote.creadoEn).getTime() < 15000)) {
+          quoteCreated = recentQuote;
+        }
+      }
+
+      let imageUrl = "";
+      if (quoteCreated) {
+        const host = req.headers.get("host") || "localhost:3000";
+        const protocol = req.headers.get("x-forwarded-proto") || "http";
+        const appUrl = `${protocol}://${host}`;
+        imageUrl = `${appUrl}/api/cotizaciones/${quoteCreated.id}/image`;
+      }
+
       await db.addMessage({
         idConversacion: params.id,
         direccion: "OUTBOUND",
         tipoRemitente: "IA",
-        contenido: aiResponseText
-      });
+        contenido: aiResponseText,
+        urlMultimedia: imageUrl || null
+      } as any);
+
+      // Si es un canal de comunicación real/simulado, enviar el mensaje generado por WhatsApp
+      if (conv) {
+        if (imageUrl) {
+          await sendWhatsAppImage(conv.telefono, imageUrl, aiResponseText);
+        } else {
+          await sendWhatsAppMessage(conv.telefono, aiResponseText);
+        }
+      }
       
       // Actualizar datos faltantes y resumen de IA al final
       if (conv.idLead) {

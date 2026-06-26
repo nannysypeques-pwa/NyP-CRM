@@ -13,8 +13,7 @@ No eres un bot genérico de cuestionarios fríos. Eres una asistente comercial s
 ==================================================
 
 * Responde de forma cálida, amable, profesional y muy clara.
-* Usa trato de "usted" pero siempre combinándolo con el primer nombre del cliente para sonar sumamente cercano.
-* **USO OBLIGATORIO DEL NOMBRE DEL CLIENTE**: Si ya tienes registrado o conoces el nombre del cliente/tutor, es **indispensable y obligatorio** que te dirijas a él/ella usando su primer nombre en la mayoría de tus respuestas (ej: "Entiendo perfectamente, Gerardo...", "Con mucho gusto, Mariana, le explico...", "Claro que sí, Lorena..."). Esto hace que la atención se sienta sumamente personalizada, cercana, cálida y de entera confianza.
+* Usa trato de "usted".
 * Sé empática con las familias. Recuerda que están buscando apoyo para el cuidado de lo que más aman.
 * Usa emojis de forma amable, sutil y elegante, pero con un poco más de presencia para que la conversación se sienta cercana y cálida. Puede usar de 2 a 3 emojis por mensaje cuando aporten empatía, claridad o calidez, evitando saturar o parecer poco profesional.
 * Evita sonar robótica, fría o insistente.
@@ -615,7 +614,7 @@ Si el cliente compara precios:
 
 Tu prioridad es ayudar al cliente, generar confianza, recopilar información útil y mantener la conversación clara.
 Nunca repitas preguntas sobre información que el cliente ya proporcionó o que ya está marcada como conocida en el contexto.
-Responde como una asesora profesional, cercana, cálida y consultiva, nunca como un robot con respuestas de plantilla fijas. Redacta de forma dinámica, usando SIEMPRE de forma amigable y natural el primer nombre del cliente para hacerlo sentir cercano y bien atendido, y refiriéndote a sus peques cuando dispongas de dichos datos.`;
+Responde como una asesora profesional, cercana, cálida y consultiva, nunca como un robot con respuestas de plantilla fijas. Redacta de forma dinámica, usando el nombre del cliente y refiriéndote a sus peques cuando dispongas de dichos datos.`;
 
 
 export function detectCityFromText(text: string): string | null {
@@ -652,7 +651,7 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
       if (mins > 0) {
         horasPorDia = Math.ceil(mins / 60);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   try {
@@ -702,13 +701,13 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const datosFaltantes: string[] = [];
 
     // Validar nombre
-    const esNombreGenerico = !lead?.nombreCompleto || 
-                             lead.nombreCompleto === "Prospecto" || 
-                             lead.nombreCompleto === "No registrado" || 
-                             lead.nombreCompleto.toLowerCase().includes("whatsapp") || 
-                             lead.nombreCompleto.toLowerCase().includes("relaciones publicas") || 
-                             lead.nombreCompleto.toLowerCase().includes("nannys") ||
-                             lead.nombreCompleto.toLowerCase().includes("peques");
+    const esNombreGenerico = !lead?.nombreCompleto ||
+      lead.nombreCompleto === "Prospecto" ||
+      lead.nombreCompleto === "No registrado" ||
+      lead.nombreCompleto.toLowerCase().includes("whatsapp") ||
+      lead.nombreCompleto.toLowerCase().includes("relaciones publicas") ||
+      lead.nombreCompleto.toLowerCase().includes("nannys") ||
+      lead.nombreCompleto.toLowerCase().includes("peques");
 
     if (lead?.nombreCompleto && !esNombreGenerico) {
       const primerNombre = lead.nombreCompleto.split(" ")[0];
@@ -928,18 +927,18 @@ ${reglaPrecotizacionDinamica}
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content;
-    
+
     if (reply) {
       const trimmedReply = reply.trim();
       if (lead) {
         // Ejecutar de forma segura de fondo o asíncrona
-        savePrecotizacionIfFound(lead.id, trimmedReply, lead).catch(err => 
+        savePrecotizacionIfFound(lead.id, trimmedReply, lead).catch(err =>
           console.error("Error in savePrecotizacionIfFound:", err)
         );
       }
       return trimmedReply;
     }
-    
+
     throw new Error("OpenAI returned an empty response text.");
   } catch (err: any) {
     console.error("Error communicating with OpenAI:", err);
@@ -1049,12 +1048,12 @@ function parseJSONRobust(text: string): any {
 
 function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage: string): any[] {
   const lowerMessage = lastMessage.toLowerCase();
-  const esCandidata = lowerMessage.includes("trabajo") || 
-                      lowerMessage.includes("vacante") || 
-                      lowerMessage.includes("empleo") || 
-                      lowerMessage.includes("postular") || 
-                      lowerMessage.includes("reclutamiento") || 
-                      lowerMessage.includes("candidata");
+  const esCandidata = lowerMessage.includes("trabajo") ||
+    lowerMessage.includes("vacante") ||
+    lowerMessage.includes("empleo") ||
+    lowerMessage.includes("postular") ||
+    lowerMessage.includes("reclutamiento") ||
+    lowerMessage.includes("candidata");
 
   return docs.map(doc => {
     // 1. Filtrar el documento de Reclutamiento de Nannies si no es una candidata
@@ -1065,7 +1064,7 @@ function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage:
     // 2. Optimizar el documento de Precios y Tarifas según la ciudad del lead
     if (doc.titulo.toLowerCase().includes("precios, tarifas y condiciones")) {
       let contenidoOptimizado = doc.contenido;
-      
+
       const ciudadNormalizada = ciudad.toLowerCase().trim();
       const esPuebla = ciudadNormalizada.includes("puebla") || ciudadNormalizada.includes("atlixco");
       const esXalapa = ciudadNormalizada.includes("xalapa");
@@ -1082,7 +1081,7 @@ function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage:
       } else {
         const partes = contenidoOptimizado.split("==================================================");
         const intro = partes[0] || "";
-        
+
         let tabuladorCiudad = "";
         if (esPuebla) {
           tabuladorCiudad = partes.find((p: string) => p.includes("TABULADOR PUEBLA")) || "";
