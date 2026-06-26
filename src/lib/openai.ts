@@ -817,8 +817,12 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
     const tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) || (lead?.hijos && lead.hijos.length > 0);
 
+    const countAiQuotes = lead?.cotizaciones?.filter((q: any) => q.creadoPor === "Asistente IA" && !q.deleted).length || 0;
+
     let reglaPrecotizacionDinamica = "";
-    if (!tieneCiudad || !tieneZona || !tieneRazon || !tieneEdad) {
+    if (countAiQuotes >= 3) {
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta.`;
+    } else if (!tieneCiudad || !tieneZona || !tieneRazon || !tieneEdad) {
       const faltantesList = [];
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
       if (!tieneZona) faltantesList.push("Zona o Colonia");
@@ -931,10 +935,11 @@ ${reglaPrecotizacionDinamica}
     if (reply) {
       const trimmedReply = reply.trim();
       if (lead) {
-        // Ejecutar de forma segura de fondo o asíncrona
-        savePrecotizacionIfFound(lead.id, trimmedReply, lead).catch(err =>
-          console.error("Error in savePrecotizacionIfFound:", err)
-        );
+        try {
+          await savePrecotizacionIfFound(lead.id, trimmedReply, lead);
+        } catch (err) {
+          console.error("Error in savePrecotizacionIfFound:", err);
+        }
       }
       return trimmedReply;
     }

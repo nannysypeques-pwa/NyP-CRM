@@ -353,16 +353,26 @@ export async function POST(req: NextRequest) {
         // Guardar mensaje de IA en la DB
         let quoteCreated = null;
         if (conv.idLead) {
-          const recentQuote = await prisma.cotizacion.findFirst({
-            where: {
-              idLead: conv.idLead,
-              creadoPor: "Asistente IA",
-              deleted: false
-            },
-            orderBy: { creadoEn: "desc" }
-          });
-          if (recentQuote && (Date.now() - new Date(recentQuote.creadoEn).getTime() < 15000)) {
-            quoteCreated = recentQuote;
+          const priceRegex = /\$\s*([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)/;
+          const match = aiResponseText.match(priceRegex);
+          if (match) {
+            const price = parseFloat(match[1].replace(/,/g, ""));
+            if (!isNaN(price) && price > 0) {
+              const matchingQuote = await prisma.cotizacion.findFirst({
+                where: {
+                  idLead: conv.idLead,
+                  total: {
+                    gte: price - 1,
+                    lte: price + 1
+                  },
+                  deleted: false
+                },
+                orderBy: { creadoEn: "desc" }
+              });
+              if (matchingQuote) {
+                quoteCreated = matchingQuote;
+              }
+            }
           }
         }
 
