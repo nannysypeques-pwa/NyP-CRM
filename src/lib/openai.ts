@@ -33,7 +33,7 @@ Ejemplo de estilo:
 WhatsApp requiere mensajes breves.
 
 * Responde normalmente en máximo 1 o 2 párrafos cortos.
-* Procura que cada respuesta tenga menos de 100 palabras.
+* Procura que cada respuesta tenga menos de 100 palabras. **EXCEPCIÓN POR LABOR DE VENTA**: Si estás haciendo labor de venta o conectando de forma empática con la razón de contratación (dolor del cliente), está totalmente permitido (y es recomendable) exceder este límite de longitud y párrafos para poder brindar una explicación completa, detallada y sumamente convincente que demuestre cómo resolvemos su problema.
 * Si el cliente hace varias preguntas, responde primero lo más importante y después pide un solo dato.
 * No mandes listas largas salvo que sea estrictamente necesario.
 * No envíes bloques extensos de texto.
@@ -121,10 +121,13 @@ Debes seguir una ruta comercial simple, natural y consultiva:
 
 El chat con IA no es solo un formulario administrativo para recabar datos o responder dudas. Es tu canal principal de ventas. Cada mensaje que envíes debe estar diseñado con psicología de ventas, transmitiendo valor, empatía y cerrando con una invitación a avanzar.
 
-* **CONEXIÓN DIRECTA CON EL DOLOR/RAZÓN DE CONTRATACIÓN**: Cuando el cliente te dé su razón de contratación (ej: trabaja por las tardes, necesita apoyo después de la escuela, actividades, etc.), debes:
-  1. Mostrar una profunda empatía y validación de su situación (ej: "Entiendo perfectamente, como mamá/papá que trabaja por las tardes, sé lo retador que es coordinar el regreso de la escuela...").
-  2. Ofrecer una solución real y persuasiva de cómo nuestro servicio le aliviará esa carga exacta (ej: "...con nuestra Neuronanny, usted tendrá la total tranquilidad de que su peque Mateo estará en las mejores manos, recibiendo su merienda a tiempo y siendo acompañado con actividades divertidas y educativas en la comodidad de su hogar, mientras usted se enfoca en sus proyectos").
-  3. No pases rápido de largo; haz que el cliente sienta que entendiste su dolor y que Nannys y Peques es la solución ideal a su problema.
+* **CONEXIÓN DIRECTA CON EL DOLOR/RAZÓN DE CONTRATACIÓN (CRÍTICO - RESPUESTA ALTAMENTE EMPÁTICA Y ORIENTADA A SOLUCIONES)**: 
+  Cuando el cliente te mencione la razón, dolor o motivo principal por el que requiere o busca contratar el servicio (ej: "necesito quien cuide a mi hijo mientras trabajo", "trabajo por las tardes", "salir de viaje", etc.), es **obligatorio** que apliques el principio de ventas de **brindar una solución real al problema del cliente**, en lugar de ignorar la razón o pasar directo a pedir datos comerciales.
+  1. **Muestra una profunda empatía y validación inmediata** de su situación específica. Hazle sentir que entiendes perfectamente su necesidad.
+  2. **Conecta de forma explícita con los beneficios de nuestra agencia** (los filtros de seguridad, el respaldo psicopedagógico, la app de reportes, nannies capacitadas y amorosas) explicando cómo nuestro servicio resolverá exactamente ese problema, permitiéndole estar tranquilo/a.
+  3. *EJEMPLO OBLIGATORIO DE REFERENCIA*: Si el cliente te dice: *"necesito ayuda para cuidar a mi hijo mientras trabajo"*, tu respuesta debe ser estructurada de forma similar a esta:
+     *"Entendemos totalmente la necesidad de contar con alguien de entera confianza y sumamente amorosa para el cuidado de su peque, y será un gran gusto ayudarle. Nuestros servicios se adaptan a sus necesidades brindando atención personalizada a su peque para que esté muy bien cuidado, estimulado y atendido en su hogar, permitiéndole a usted trabajar de manera sumamente concentrada, tranquila y productiva, con la tranquilidad total de saber que su peque está seguro y feliz."*
+  4. Recuerda que al hacer esta labor de venta consultiva empática, **está permitido exceder ligeramente la longitud habitual del mensaje** para asegurarte de dar una respuesta completa, cálida y sumamente convincente.
 * **ENFOQUE DE VENTAS EN CADA MENSAJE**:
   * Resalta constantemente los beneficios únicos de Nannys y Peques: filtros de selección rigurosos, capacitación continua, bitácoras de cuidado, coordinación de repuestos en caso de emergencia y el respaldo institucional del CRM corporativo.
   * No respondas de forma escueta o pasiva. Cada respuesta debe tener un gancho de ventas: responder la duda con valor -> conectar con un beneficio -> calificar/avanzar con empatía.
@@ -624,6 +627,55 @@ export function detectCityFromText(text: string): string | null {
   return null;
 }
 
+export async function savePrecotizacionIfFound(leadId: string, aiResponse: string, lead: any) {
+  if (!leadId || !aiResponse) return;
+
+  const regex = /\$\s*([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)/;
+  const match = aiResponse.match(regex);
+  if (!match) return;
+
+  const priceStr = match[1].replace(/,/g, "");
+  const price = parseFloat(priceStr);
+  if (isNaN(price) || price <= 0) return;
+
+  const existingQuotes = lead.cotizaciones || [];
+  const hasSameQuote = existingQuotes.some((q: any) => !q.deleted && Math.abs(q.total - price) < 0.1);
+  if (hasSameQuote) return;
+
+  let horasPorDia = 0;
+  if (lead.horaInicioSolicitada && lead.horaFinSolicitada) {
+    try {
+      const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
+      const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
+      const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (mins > 0) {
+        horasPorDia = Math.ceil(mins / 60);
+      }
+    } catch (e) {}
+  }
+
+  try {
+    await db.addCotizacion(leadId, {
+      idLead: leadId,
+      tipoServicio: lead.interesServicio || "Por definir",
+      ciudad: lead.ciudad || "Por definir",
+      dias: lead.diasSolicitados || "Por definir",
+      horaInicio: lead.horaInicioSolicitada || "Por definir",
+      horaFin: lead.horaFinSolicitada || "Por definir",
+      horasPorDia: horasPorDia || 0,
+      cantidadHijos: lead.cantidadHijos || 1,
+      subtotal: price,
+      descuento: 0,
+      total: price,
+      creadoPor: "Asistente IA",
+      notas: "Precotización estimada calculada automáticamente por el asistente de IA."
+    });
+    console.log(`[COTIZADOR IA] Guardada precotización de $${price} para Lead ${leadId}`);
+  } catch (err) {
+    console.error("Error al guardar cotización automática:", err);
+  }
+}
+
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -864,7 +916,7 @@ ${reglaPrecotizacionDinamica}
         model: "gpt-4o-mini",
         messages: formattedMessages,
         temperature: 0.5,
-        max_tokens: 200,
+        max_tokens: 400,
       }),
     });
 
@@ -877,7 +929,14 @@ ${reglaPrecotizacionDinamica}
     const reply = data.choices?.[0]?.message?.content;
     
     if (reply) {
-      return reply.trim();
+      const trimmedReply = reply.trim();
+      if (lead) {
+        // Ejecutar de forma segura de fondo o asíncrona
+        savePrecotizacionIfFound(lead.id, trimmedReply, lead).catch(err => 
+          console.error("Error in savePrecotizacionIfFound:", err)
+        );
+      }
+      return trimmedReply;
     }
     
     throw new Error("OpenAI returned an empty response text.");
@@ -915,7 +974,7 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - horaFinSolicitada: Hora de fin del servicio (ej: "18:00").
 - fechaInicioDeseada: Fecha de inicio deseada (ej: "Inmediato", "Próximo lunes").
 - linkUbicacion: URL o enlace de ubicación (Google Maps, Waze, etc.) compartido por el cliente.
-- razonContratacion: Motivo o razón principal por la que contrata el servicio. Solo si se menciona explícitamente. No asumas nada.
+- razonContratacion: Motivo, necesidad o razón principal por la que busca o contrata el servicio (ej: 'necesito quien cuide a mi hijo mientras trabajo', 'trabajo por las tardes', 'apoyo después de la escuela', 'salir de viaje', etc.). Extrae siempre una frase corta y descriptiva resumida que represente esta razón si el cliente menciona para qué o por qué requiere el servicio. No lo dejes vacío si el cliente responde a la pregunta de por qué requiere el servicio.
 - mascotas: Mascotas en el hogar (ej: "2 perros", "1 gato"). Solo si se menciona de forma explícita. Si no se menciona o no está claro, NO extraigas este campo (no pongas "Ninguna").
 - indicacionesIngreso: Indicaciones de ingreso. Solo si se mencionan explícitamente.
 - listoParaCierre: boolean (true si el cliente acepta avanzar a la contratación, muestra interés definitivo en contratar el servicio, responde afirmativamente a la propuesta de verificar disponibilidad de niñera para el cierre, o solicita de forma explícita que lo contacte un asesor para realizar el pago/contrato/cierre).
