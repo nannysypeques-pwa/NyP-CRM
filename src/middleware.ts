@@ -11,6 +11,7 @@ export function middleware(request: NextRequest) {
   const isStatic = path.startsWith("/_next") || path.startsWith("/images") || path.endsWith(".ico") || path.endsWith(".png") || path.endsWith(".jpg");
   const isAuthApi = path.startsWith("/api/auth");
   const isWhatsAppWebhook = path === "/api/whatsapp/webhook";
+  const isPublicQuoteImage = path.startsWith("/api/cotizaciones/") && path.endsWith("/image");
   const isLoginPage = path === "/login";
 
   // Check if session cookie is present
@@ -34,7 +35,7 @@ export function middleware(request: NextRequest) {
   }
 
   // 2. Protect non-auth API routes
-  if (path.startsWith("/api") && !isAuthApi && !isWhatsAppWebhook) {
+  if (path.startsWith("/api") && !isAuthApi && !isWhatsAppWebhook && !isPublicQuoteImage) {
     if (!session) {
       return new NextResponse(JSON.stringify({ error: "No autorizado" }), {
         status: 401,

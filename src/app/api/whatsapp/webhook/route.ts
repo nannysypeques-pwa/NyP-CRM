@@ -352,31 +352,103 @@ export async function POST(req: NextRequest) {
 
         // Guardar mensaje de IA en la DB
         let quoteCreated = null;
+        let finalResponseText = aiResponseText;
+        let imageUrl = "";
+
         if (conv.idLead) {
-          const priceRegex = /\$\s*([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)/;
-          const match = aiResponseText.match(priceRegex);
+          const tagRegex = /\[COTIZACION:(\d+)\]/;
+          const match = aiResponseText.match(tagRegex);
           if (match) {
-            const price = parseFloat(match[1].replace(/,/g, ""));
-            if (!isNaN(price) && price > 0) {
-              const matchingQuote = await prisma.cotizacion.findFirst({
+            const price = parseFloat(match[1]);
+            finalResponseText = aiResponseText.replace(tagRegex, "").trim();
+
+            const lead = await db.getLeadById(conv.idLead);
+            if (lead) {
+              // Extract dias
+              let numDias = 0;
+              if (lead.diasSolicitados) {
+                const lowerDias = lead.diasSolicitados.toLowerCase();
+                if (lowerDias.includes("lunes a viernes")) numDias = 5;
+                else if (lowerDias.includes("lunes a sábado") || lowerDias.includes("lunes a sabado")) numDias = 6;
+                else if (lowerDias.includes("lunes a domingo")) numDias = 7;
+                else {
+                  const diasSemana = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"];
+                  let count = 0;
+                  diasSemana.forEach(d => { if (lowerDias.includes(d)) count++; });
+                  numDias = count;
+
+                  if (numDias === 0) {
+                    const matchDigits = lowerDias.match(/\b([1-7])\s*d[ií]as?\b/);
+                    if (matchDigits) {
+                      numDias = parseInt(matchDigits[1], 10);
+                    } else {
+                      const wordToNum: { [key: string]: number } = {
+                        un: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7
+                      };
+                      for (const [word, val] of Object.entries(wordToNum)) {
+                        const regex = new RegExp(`\\b${word}\\s*d[ií]as?\\b`);
+                        if (regex.test(lowerDias)) {
+                          numDias = val;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Extract horasDiarias
+              let horasDiarias = 0;
+              if (lead.horaInicioSolicitada && lead.horaFinSolicitada) {
+                try {
+                  const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
+                  const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
+                  const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+                  if (mins > 0) horasDiarias = Math.ceil(mins / 60);
+                } catch (e) {}
+              }
+
+              // Reuse an existing quote if it was created recently by AI and has the same total
+              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+              const existingQuote = await prisma.cotizacion.findFirst({
                 where: {
                   idLead: conv.idLead,
-                  total: {
-                    gte: price - 1,
-                    lte: price + 1
-                  },
+                  total: price,
+                  creadoPor: "Asistente IA",
+                  creadoEn: { gte: fiveMinutesAgo },
                   deleted: false
                 },
                 orderBy: { creadoEn: "desc" }
               });
-              if (matchingQuote) {
-                quoteCreated = matchingQuote;
+
+              if (existingQuote) {
+                quoteCreated = existingQuote;
+              } else {
+                // Create a new Quote in the database
+                quoteCreated = await prisma.cotizacion.create({
+                  data: {
+                    idLead: conv.idLead,
+                    tipoServicio: lead.interesServicio || "Por horas",
+                    ciudad: lead.ciudad,
+                    dias: lead.diasSolicitados || "Por definir",
+                    horaInicio: lead.horaInicioSolicitada || "09:00",
+                    horaFin: lead.horaFinSolicitada || "17:00",
+                    horasPorDia: horasDiarias || 8,
+                    cantidadHijos: lead.cantidadHijos || 1,
+                    subtotal: price,
+                    descuento: 0,
+                    total: price,
+                    estado: "ENVIADA",
+                    validoHasta: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días
+                    creadoPor: "Asistente IA",
+                    notas: `${numDias} días, ${horasDiarias} horas por día.`
+                  }
+                });
               }
             }
           }
         }
 
-        let imageUrl = "";
         if (quoteCreated) {
           const host = req.headers.get("host") || "localhost:3000";
           const protocol = req.headers.get("x-forwarded-proto") || "http";
@@ -388,15 +460,15 @@ export async function POST(req: NextRequest) {
           idConversacion: conv.id,
           direccion: "OUTBOUND",
           tipoRemitente: "IA",
-          contenido: aiResponseText,
+          contenido: finalResponseText,
           urlMultimedia: imageUrl || null
         } as any);
 
         // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
         if (imageUrl) {
-          await sendWhatsAppImage(rawPhone, imageUrl, aiResponseText);
+          await sendWhatsAppImage(rawPhone, imageUrl, finalResponseText);
         } else {
-          await sendWhatsAppMessage(rawPhone, aiResponseText);
+          await sendWhatsAppMessage(rawPhone, finalResponseText);
         }
 
         // Actualizar datos de lead si aplica

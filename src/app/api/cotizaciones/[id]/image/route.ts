@@ -4,6 +4,20 @@ import sharp from "sharp";
 import path from "path";
 import fs from "fs";
 
+function escapeXml(unsafe: string): string {
+  if (!unsafe) return "";
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
@@ -21,19 +35,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return new NextResponse("Plantilla base no encontrada", { status: 500 });
     }
 
-    const fecha = new Date(cotizacion.creadoEn).toLocaleDateString("es-MX", {
+    const fecha = escapeXml(new Date(cotizacion.creadoEn).toLocaleDateString("es-MX", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric"
-    });
-    const cliente = cotizacion.lead.nombreCompleto;
-    const edadPeque = cotizacion.lead.edadHijo ? `${cotizacion.lead.edadHijo} años` : "Por definir";
-    const horario = `${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`;
-    const zona = cotizacion.lead.zona || "Por definir";
-    const precio = `$${cotizacion.total.toLocaleString("es-MX")} MXN`;
-    const precioDetalle = cotizacion.notas || "";
-    const nota = cotizacion.tipoServicio || "Por definir";
-    const notaDetalle = "Las horas extra tienen un costo de $100 pesos c/u.";
+    }));
+    const cliente = escapeXml(cotizacion.lead.nombreCompleto);
+    const edadPeque = escapeXml(cotizacion.lead.edadHijo ? `${cotizacion.lead.edadHijo} años` : "Por definir");
+    const horario = escapeXml(`${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`);
+    const zona = escapeXml(cotizacion.lead.zona || "Por definir");
+    const precio = escapeXml(`$${cotizacion.total.toLocaleString("es-MX")} MXN`);
+    const precioDetalle = escapeXml(cotizacion.notas || "");
+    const nota = escapeXml(cotizacion.tipoServicio || "Por definir");
+    const notaDetalle = escapeXml("Las horas extra tienen un costo de $100 pesos c/u.");
 
     const svgOverlay = `
       <svg width="791" height="1024" xmlns="http://www.w3.org/2000/svg">

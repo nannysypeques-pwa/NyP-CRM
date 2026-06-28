@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { calculatePrecotizacion } from "./pricing";
 
 const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia especializada en el cuidado y desarrollo infantil en Puebla, Xalapa, Querétaro y CDMX.
 
@@ -749,13 +750,17 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
 
     // Validar días solicitados
     let numDiasText = "";
+    let numDias = 0;
     if (lead?.diasSolicitados) {
       const lowerDias = lead.diasSolicitados.toLowerCase();
       if (lowerDias.includes("lunes a viernes")) {
+        numDias = 5;
         numDiasText = " (equivalente a 5 días a la semana)";
       } else if (lowerDias.includes("lunes a sábado") || lowerDias.includes("lunes a sabado")) {
+        numDias = 6;
         numDiasText = " (equivalente a 6 días a la semana)";
       } else if (lowerDias.includes("lunes a domingo")) {
+        numDias = 7;
         numDiasText = " (equivalente a 7 días a la semana)";
       } else {
         const diasSemana = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"];
@@ -763,8 +768,28 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
         diasSemana.forEach(d => {
           if (lowerDias.includes(d)) count++;
         });
-        if (count > 0) {
-          numDiasText = ` (equivalente a ${count} ${count === 1 ? 'día' : 'días'} a la semana)`;
+        numDias = count;
+
+        if (numDias === 0) {
+          const matchDigits = lowerDias.match(/\b([1-7])\s*d[ií]as?\b/);
+          if (matchDigits) {
+            numDias = parseInt(matchDigits[1], 10);
+          } else {
+            const wordToNum: { [key: string]: number } = {
+              un: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7
+            };
+            for (const [word, val] of Object.entries(wordToNum)) {
+              const regex = new RegExp(`\\b${word}\\s*d[ií]as?\\b`);
+              if (regex.test(lowerDias)) {
+                numDias = val;
+                break;
+              }
+            }
+          }
+        }
+
+        if (numDias > 0) {
+          numDiasText = ` (equivalente a ${numDias} ${numDias === 1 ? 'día' : 'días'} a la semana)`;
         }
       }
     }
@@ -777,6 +802,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
 
     // Validar horario
     let horasDiariasText = "";
+    let horasDiarias = 0;
     if (lead?.horaInicioSolicitada && lead.horaFinSolicitada) {
       try {
         const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
@@ -785,6 +811,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
         if (mins > 0) {
           const hrs = Math.round((mins / 60) * 10) / 10;
           const hrsRounded = Math.ceil(hrs);
+          horasDiarias = hrsRounded;
           horasDiariasText = ` (equivalente a ${hrs} horas reales, las cuales para buscar en la tabla de precios se deben redondear a ${hrsRounded} horas por día)`;
         }
       } catch (e) {
@@ -809,43 +836,46 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const datosFaltantesText = datosFaltantes.length > 0 ? datosFaltantes.map((f, idx) => `${idx + 1}. ${f}`).join("\n") : "- Ninguno. Todos los datos comerciales clave ya fueron recopilados.";
 
     const leadNotes = lead?.notas && lead.notas.length > 0
-      ? lead.notas.map(n => `- ${n.nombreAgente}: ${n.contenido}`).join("\n")
+      ? lead.notas.map((n: any) => `- ${n.nombreAgente}: ${n.contenido}`).join("\n")
       : "No registradas";
 
     const tieneCiudad = leadCity && leadCity !== "Por definir" && leadCity !== "No definida" && leadCity !== "";
     const tieneZona = lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "";
     const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
     const tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) || (lead?.hijos && lead.hijos.length > 0);
+    const tieneDias = lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" && numDias > 0;
+    const tieneHorario = lead?.horaInicioSolicitada && lead.horaFinSolicitada && lead.horaInicioSolicitada !== "" && lead.horaFinSolicitada !== "" && horasDiarias > 0;
 
     const countAiQuotes = lead?.cotizaciones?.filter((q: any) => q.creadoPor === "Asistente IA" && !q.deleted).length || 0;
 
     let reglaPrecotizacionDinamica = "";
     if (countAiQuotes >= 3) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta.`;
-    } else if (!tieneCiudad || !tieneZona || !tieneRazon || !tieneEdad) {
+    } else if (!tieneCiudad || !tieneZona || !tieneRazon || !tieneEdad || !tieneDias || !tieneHorario) {
       const faltantesList = [];
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
       if (!tieneZona) faltantesList.push("Zona o Colonia");
       if (!tieneRazon) faltantesList.push("Razón de Contratación");
       if (!tieneEdad) faltantesList.push("Nombre y Edad de su peque");
+      if (!tieneDias) faltantesList.push("Días de servicio");
+      if (!tieneHorario) faltantesList.push("Horario de servicio");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio y el nombre y edad de su peque. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, el nombre y edad de su peque, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
     } else {
-      reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave (Ciudad: "${leadCity}", Zona: "${lead?.zona}", Razón de contratación: "${lead?.razonContratacion}" y Edad del peque: "${lead?.edadHijo || (lead?.hijos?.[0]?.textoEdad || '')}"). Debes proporcionar la precotización aproximada basada estrictamente en la tabla de tarifas de la Base de Conocimientos. 
-      * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes de detallar el costo aproximado en tu respuesta, debes escribir 1 o 2 oraciones haciendo labor de venta. Valida empáticamente el motivo por el que requiere el servicio ("${lead?.razonContratacion}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado, app de reportes diarios) le resolverá exactamente su problema y le dará tranquilidad.
-      * ADVERTENCIA Y USO OBLIGATORIO DEL TÉRMINO "PRECOTIZACIÓN": Al entregar el precio, debes usar explícitamente el término **"precotización"** o **"tarifa estimada"** y dejar sumamente claro que **"el asesor de ventas oficial se encargará de realizar la cotización final y de confirmar la disponibilidad de la nanny ideal"**. Nunca uses la palabra "cotización" sola sin el prefijo "pre" o "estimada".
-      * ¡ADVERTENCIA CRÍTICA PARA EL CÁLCULO DE HORAS (EVITA EL ERROR DE DÍAS VS HORAS)!:
-        - Si el cliente solicita un servicio de 5 días a la semana de 8 horas al día (de 8:00 a 16:00): ve a la tabla "Servicio de 5 días" y busca el renglón correspondiente a **8 horas por día** (tarifa de $2,800 en Puebla). Tienes estrictamente prohibido confundirte y usar el renglón de 5 horas ($2,125) solo porque el servicio es de 5 días.
-        - Haz este análisis: "El horario es de 8 horas al día. Busco la fila labeled '8' en la tabla de '5 días'. El precio es $2,800."
-        - Confía plenamente en la indicación "(redondear a X horas por día)" que aparece en el campo "- Horario Requerido:" para buscar la fila correspondiente en la tabla.
-      * REGLAS DE CÁLCULO DE HORAS Y LÍMITES:
-        - Si el cliente solicita fracciones de horas, se redondea a la hora siguiente. Confía plenamente en la indicación "(redondear a X horas por día)" que aparece en el campo "- Horario Requerido:" para buscar la fila correspondiente en la tabla (ej. si dice redondear a 7 horas, busca exactamente la fila de 7 en la tabla).
-        - Si solicita menos de 3 horas al día, indícales amablemente que nuestro paquete más pequeño es de 3 horas al día.
-        - Si solicita más de 10 horas al día, NO inventes precios ni calcules tarifas fuera de la tabla; dile que un asesor comercial le apoyará con una cotización personalizada y que antes de eso le ayudarás a resolver todas sus demás dudas.
-        - Si el horario o los días solicitados son variables o inestables día a día (no estables), indícales amablemente que debido a la variación, el agente de ventas les realizará una cotización personalizada después de que tú (el chatbot) les ayudes a resolver todas sus dudas.
-        - Regla de Tipo de Servicio (Fijo vs Eventual/1 día):
-          * Si el tipo de servicio es "Eventual" (o es un servicio eventual de 1 día, ej: solo el domingo), el precio de la tabla representa el COSTO TOTAL DEL SERVICIO por ese día específico. En este caso, NO utilices los términos "tarifa semanal" ni "por semana". Exprésalo directamente como "el costo del servicio por ese día". Y asegúrate de usar la sección de la tabla llamada "Servicio de 1 día / Servicio eventual".
-          * Si el tipo de servicio es Fijo/Semanal (de 2 a 7 días a la semana), debes expresar siempre el precio como "tarifa semanal" o "precio por semana". Queda estrictamente prohibido decir tarifa mensual.`;
+      const calculatedPrice = calculatePrecotizacion(leadCity, numDias, horasDiarias);
+      if (calculatedPrice) {
+        reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave y el sistema ha calculado la tarifa.
+        * TARIFA DETERMINADA POR EL SISTEMA: **$${calculatedPrice.toLocaleString("es-MX")} MXN por semana** (basada en ${numDias} días a la semana, ${horasDiarias} horas al día en ${leadCity}).
+        * REGLA DE OBLIGATORIEDAD DE PRECIO: Tienes ABSOLUTAMENTE PROHIBIDO inventar, calcular, interpolar o mencionar cualquier otro monto. El precio es exactamente **$${calculatedPrice.toLocaleString("es-MX")}**.
+        * REGLA DE RETORNO DE TAG DE COTIZACIÓN (CRÍTICO):
+          - Para que el CRM genere la imagen de la cotización y se envíe de manera automática al cliente, DEBES finalizar o incluir en tu respuesta la siguiente etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
+          - Queda ESTRICTAMENTE PROHIBIDO escribir el precio o detalles numéricos del costo en texto plano fuera de esa etiqueta en tu mensaje. El cliente NO debe ver la cantidad monetaria en el texto plano (ej: no escribas "el precio es de $1,800").
+          - En su lugar, debes decirle al cliente con mucha calidez y trato de "usted" que le compartes su precotización estimada en formato de imagen a continuación, de la siguiente manera:
+            "Con mucho gusto, ${lead?.nombreCompleto ? lead.nombreCompleto.split(" ")[0] : 'señora/señor'} 😊💛 A continuación le comparto la imagen con el detalle de su precotización estimada. Quedo a sus órdenes por si tiene alguna otra duda. [COTIZACION:${calculatedPrice}]"
+        * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes del cierre y de la etiqueta de la cotización, debes hacer labor de venta: valida empáticamente la necesidad del cliente ("${lead?.razonContratacion || 'apoyo con su peque'}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado, app y respaldo) le resolverá su problema y le dará tranquilidad.`;
+      } else {
+        reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN PERSONALIZADA POR ASESOR**: Debido a que los horarios o días solicitados son variables, inestables o están fuera de los límites de la tabla de precios, debes indicarle de manera sumamente atenta y cálida que el asesor de ventas oficial se encargará de prepararle una cotización a la medida para confirmar la disponibilidad y el precio exacto. Mientras tanto, ofrécete a seguir aclarando cualquier duda general sobre el servicio y nannies.`;
+      }
     }
 
     const systemInstructionPrompt = `${SYSTEM_PROMPT}
