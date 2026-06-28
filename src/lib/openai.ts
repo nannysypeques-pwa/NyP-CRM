@@ -1,6 +1,66 @@
 import { db } from "./db";
 import { calculatePrecotizacion } from "./pricing";
 
+export function parseNumDias(diasText: string): number {
+  if (!diasText) return 0;
+  const lower = diasText.toLowerCase().trim();
+
+  // 1. Explicits
+  if (lower.includes("lunes a viernes")) return 5;
+  if (lower.includes("lunes a sábado") || lower.includes("lunes a sabado")) return 6;
+  if (lower.includes("lunes a domingo")) return 7;
+
+  // 2. Detect range using " a " or " al " (e.g., "lunes a jueves", "lunes al viernes")
+  const rangeMatch = lower.match(/(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\s+a[l]?\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)/);
+  if (rangeMatch) {
+    const daysMap: { [key: string]: number } = {
+      lunes: 0, martes: 1, miércoles: 2, miercoles: 2, jueves: 3, viernes: 4, sábado: 5, sabado: 5, domingo: 6
+    };
+    const startIdx = daysMap[rangeMatch[1]];
+    const endIdx = daysMap[rangeMatch[2]];
+    if (startIdx !== undefined && endIdx !== undefined && endIdx >= startIdx) {
+      return (endIdx - startIdx) + 1;
+    }
+  }
+
+  // 3. Check for list of individual days
+  let count = 0;
+  const uniqueDays = [
+    { keys: ["lunes"] },
+    { keys: ["martes"] },
+    { keys: ["miércoles", "miercoles"] },
+    { keys: ["jueves"] },
+    { keys: ["viernes"] },
+    { keys: ["sábado", "sabado"] },
+    { keys: ["domingo"] }
+  ];
+  uniqueDays.forEach(group => {
+    if (group.keys.some(k => lower.includes(k))) {
+      count++;
+    }
+  });
+
+  if (count > 0) return count;
+
+  // 4. Check for digits/words like "3 días", "tres días"
+  const matchDigits = lower.match(/\b([1-7])\s*d[ií]as?\b/);
+  if (matchDigits) {
+    return parseInt(matchDigits[1], 10);
+  }
+
+  const wordToNum: { [key: string]: number } = {
+    un: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7
+  };
+  for (const [word, val] of Object.entries(wordToNum)) {
+    const regex = new RegExp(`\\b${word}\\s*d[ií]as?\\b`);
+    if (regex.test(lower)) {
+      return val;
+    }
+  }
+
+  return 0;
+}
+
 const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia especializada en el cuidado y desarrollo infantil en Puebla, Xalapa, Querétaro y CDMX.
 
 Tu objetivo principal es atender por WhatsApp a madres, padres o tutores interesados en nuestros servicios, responder sus dudas con amabilidad, resaltar los beneficios reales de contratar Nannys y Peques, recopilar la información necesaria para el CRM y facilitar que un asesor comercial pueda cerrar la venta.
@@ -738,7 +798,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       const hijosStr = lead.hijos.map(h => `${h.nombre} (${h.textoEdad})`).join(", ");
       datosConocidos.push(`- Hijos Registrados: "${hijosStr}" (YA REGISTRADO. Dirígete a ellos por sus nombres en la conversación).`);
     } else {
-      datosFaltantes.push(`Nombre y edad de su peque (dato clave para calificar el perfil ideal. Nota: Pídelo siempre en singular como "nombre y edad de su peque"; si el cliente aclara que son varios peques, pide los datos de todos ellos).`);
+      datosFaltantes.push(`Edad de su peque (dato clave para calificar el perfil ideal. Nota: Pídelo siempre en singular como "edad de su peque"; si el cliente aclara que son varios peques, pide los datos de todos ellos).`);
     }
 
     // Validar zona
@@ -752,45 +812,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     let numDiasText = "";
     let numDias = 0;
     if (lead?.diasSolicitados) {
-      const lowerDias = lead.diasSolicitados.toLowerCase();
-      if (lowerDias.includes("lunes a viernes")) {
-        numDias = 5;
-        numDiasText = " (equivalente a 5 días a la semana)";
-      } else if (lowerDias.includes("lunes a sábado") || lowerDias.includes("lunes a sabado")) {
-        numDias = 6;
-        numDiasText = " (equivalente a 6 días a la semana)";
-      } else if (lowerDias.includes("lunes a domingo")) {
-        numDias = 7;
-        numDiasText = " (equivalente a 7 días a la semana)";
-      } else {
-        const diasSemana = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"];
-        let count = 0;
-        diasSemana.forEach(d => {
-          if (lowerDias.includes(d)) count++;
-        });
-        numDias = count;
-
-        if (numDias === 0) {
-          const matchDigits = lowerDias.match(/\b([1-7])\s*d[ií]as?\b/);
-          if (matchDigits) {
-            numDias = parseInt(matchDigits[1], 10);
-          } else {
-            const wordToNum: { [key: string]: number } = {
-              un: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7
-            };
-            for (const [word, val] of Object.entries(wordToNum)) {
-              const regex = new RegExp(`\\b${word}\\s*d[ií]as?\\b`);
-              if (regex.test(lowerDias)) {
-                numDias = val;
-                break;
-              }
-            }
-          }
-        }
-
-        if (numDias > 0) {
-          numDiasText = ` (equivalente a ${numDias} ${numDias === 1 ? 'día' : 'días'} a la semana)`;
-        }
+      numDias = parseNumDias(lead.diasSolicitados);
+      if (numDias > 0) {
+        numDiasText = ` (equivalente a ${numDias} ${numDias === 1 ? 'día' : 'días'} a la semana)`;
       }
     }
 
@@ -856,11 +880,11 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
       if (!tieneZona) faltantesList.push("Zona o Colonia");
       if (!tieneRazon) faltantesList.push("Razón de Contratación");
-      if (!tieneEdad) faltantesList.push("Nombre y Edad de su peque");
+      if (!tieneEdad) faltantesList.push("Edad de su peque");
       if (!tieneDias) faltantesList.push("Días de servicio");
       if (!tieneHorario) faltantesList.push("Horario de servicio");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, el nombre y edad de su peque, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, la edad de su peque, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
     } else {
       const calculatedPrice = calculatePrecotizacion(leadCity, numDias, horasDiarias);
       if (calculatedPrice) {
@@ -870,9 +894,10 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
         * REGLA DE RETORNO DE TAG DE COTIZACIÓN (CRÍTICO):
           - Para que el CRM genere la imagen de la cotización y se envíe de manera automática al cliente, DEBES finalizar o incluir en tu respuesta la siguiente etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
           - Queda ESTRICTAMENTE PROHIBIDO escribir el precio o detalles numéricos del costo en texto plano fuera de esa etiqueta en tu mensaje. El cliente NO debe ver la cantidad monetaria en el texto plano (ej: no escribas "el precio es de $1,800").
-          - En su lugar, debes decirle al cliente con mucha calidez y trato de "usted" que le compartes su precotización estimada en formato de imagen a continuación, de la siguiente manera:
-            "Con mucho gusto, ${lead?.nombreCompleto ? lead.nombreCompleto.split(" ")[0] : 'señora/señor'} 😊💛 A continuación le comparto la imagen con el detalle de su precotización estimada. Quedo a sus órdenes por si tiene alguna otra duda. [COTIZACION:${calculatedPrice}]"
-        * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes del cierre y de la etiqueta de la cotización, debes hacer labor de venta: valida empáticamente la necesidad del cliente ("${lead?.razonContratacion || 'apoyo con su peque'}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado, app y respaldo) le resolverá su problema y le dará tranquilidad.`;
+          - En su lugar, debes decirle al cliente con mucha calidez y trato de "usted" que le compartes su precotización estimada en formato de imagen a continuación, y cerrar obligatoriamente haciendo labor de venta y con una propuesta consultiva activa de valor, de la siguiente manera:
+            "Con mucho gusto, ${lead?.nombreCompleto ? lead.nombreCompleto.split(" ")[0] : 'señora/señor'} 😊💛 A continuación le comparto la imagen con el detalle de su precotización estimada. Esta tarifa estimada es una referencia rápida de base de conocimientos y, por supuesto, una asesora comercial le validará los detalles finales en un PDF formal y revisará la disponibilidad de nannies si gusta. Mientras tanto, me encantaría seguir platicándole sobre nuestro servicio. Por ejemplo, ¿le gustaría conocer cómo seleccionamos a nuestras nannies bajo rigurosos filtros de seguridad, o qué funciones tiene nuestra app exclusiva de reportes diarios? 😊✨ [COTIZACION:${calculatedPrice}]"
+        * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes del cierre y de la etiqueta de la cotización, debes hacer labor de venta: valida empáticamente la necesidad del cliente ("${lead?.razonContratacion || 'apoyo con su peque'}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado, app y respaldo) le resolverá su problema y le dará tranquilidad.
+        * REGLA DE CIERRE ACTIVO DE CONVERSACIÓN (CRÍTICO): Tienes TERMINANTEMENTE PROHIBIDO terminar tu mensaje de manera pasiva diciendo únicamente "Quedo a sus órdenes por si tiene alguna otra duda" o similar. Tu objetivo es mantener viva la conversación, generar valor y guiar al cliente de manera fluida y consultiva hacia el asesor de ventas. Siempre finaliza formulando una pregunta abierta sobre nuestro valor agregado (seguridad, app, psicopedagogía) o el paso con el asesor.`;
       } else {
         reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN PERSONALIZADA POR ASESOR**: Debido a que los horarios o días solicitados son variables, inestables o están fuera de los límites de la tabla de precios, debes indicarle de manera sumamente atenta y cálida que el asesor de ventas oficial se encargará de prepararle una cotización a la medida para confirmar la disponibilidad y el precio exacto. Mientras tanto, ofrécete a seguir aclarando cualquier duda general sobre el servicio y nannies.`;
       }
@@ -1004,7 +1029,7 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - interesServicio: Tipo de servicio solicitado. Intenta normalizarlo a: "Fijo", "Por horas" o "Eventual" (o el término específico usado).
 - edadHijo: Edad del hijo (número entero). Si menciona que tiene 4 años, extrae 4.
 - cantidadHijos: Cantidad de hijos a cuidar (número entero).
-- diasSolicitados: Días de la semana requeridos (ej: "Lunes a Viernes").
+- diasSolicitados: Días de la semana o cantidad de días requerida (ej: "Lunes a Viernes", "3 días a la semana"). CRÍTICO: Si el cliente indica una cantidad de días (ej: "3 días") pero NO menciona qué días de la semana específicos quiere, debes guardar exactamente lo que dijo (ej: "3 días a la semana" o "3 días"). Tienes ESTRICTAMENTE PROHIBIDO asumir o inventar días específicos (por ejemplo, nunca asumas "Lunes a Miércoles" para "3 días").
 - horaInicioSolicitada: Hora de inicio del servicio (ej: "09:00").
 - horaFinSolicitada: Hora de fin del servicio (ej: "18:00").
 - fechaInicioDeseada: Fecha de inicio deseada (ej: "Inmediato", "Próximo lunes").
@@ -1026,7 +1051,8 @@ Reglas críticas de extracción:
 1. No asumas ni inventes datos. Extrae solo lo que el cliente afirme o confirme en el mensaje.
 2. Si una propiedad de nuevoHijo o del Lead no es mencionada explícitamente por el usuario, no le asignes ningún valor ficticio por defecto. Simplemente deja el campo fuera del JSON o vacío.
 3. Si el mensaje no contiene ningún dato nuevo para extraer, devuelve un objeto vacío: {}.
-4. Devuelve ÚNICAMENTE un objeto JSON válido, sin delimitadores como \`\`\`json ni comentarios ni texto extra.`;
+4. Devuelve ÚNICAMENTE un objeto JSON válido, sin delimitadores como \`\`\`json ni comentarios ni texto extra.
+5. PROHIBIDO ASUMIR DÍAS: Está estrictamente prohibido que asumas qué días específicos de la semana corresponden a expresiones genéricas de cantidad de días. Si el cliente dice "3 días", debes extraer "3 días" y NUNCA asumir "Lunes a Miércoles" o similares.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

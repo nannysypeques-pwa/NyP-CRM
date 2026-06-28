@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, detectCityFromText, extractLeadInfo } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, extractLeadInfo, parseNumDias } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/prisma";
 
@@ -364,37 +364,9 @@ export async function POST(req: NextRequest) {
 
             const lead = await db.getLeadById(conv.idLead);
             if (lead) {
-              // Extract dias
               let numDias = 0;
               if (lead.diasSolicitados) {
-                const lowerDias = lead.diasSolicitados.toLowerCase();
-                if (lowerDias.includes("lunes a viernes")) numDias = 5;
-                else if (lowerDias.includes("lunes a sábado") || lowerDias.includes("lunes a sabado")) numDias = 6;
-                else if (lowerDias.includes("lunes a domingo")) numDias = 7;
-                else {
-                  const diasSemana = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"];
-                  let count = 0;
-                  diasSemana.forEach(d => { if (lowerDias.includes(d)) count++; });
-                  numDias = count;
-
-                  if (numDias === 0) {
-                    const matchDigits = lowerDias.match(/\b([1-7])\s*d[ií]as?\b/);
-                    if (matchDigits) {
-                      numDias = parseInt(matchDigits[1], 10);
-                    } else {
-                      const wordToNum: { [key: string]: number } = {
-                        un: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7
-                      };
-                      for (const [word, val] of Object.entries(wordToNum)) {
-                        const regex = new RegExp(`\\b${word}\\s*d[ií]as?\\b`);
-                        if (regex.test(lowerDias)) {
-                          numDias = val;
-                          break;
-                        }
-                      }
-                    }
-                  }
-                }
+                numDias = parseNumDias(lead.diasSolicitados);
               }
 
               // Extract horasDiarias

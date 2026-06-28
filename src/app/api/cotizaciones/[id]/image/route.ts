@@ -35,11 +35,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return new NextResponse("Plantilla base no encontrada", { status: 500 });
     }
 
-    const fecha = escapeXml(new Date(cotizacion.creadoEn).toLocaleDateString("es-MX", {
+    const rawFecha = new Date(cotizacion.creadoEn).toLocaleDateString("es-MX", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric"
-    }));
+    });
+    const fecha = escapeXml(rawFecha.replace(/[\u200e\u200f\u202a-\u202e]/g, ""));
     const cliente = escapeXml(cotizacion.lead.nombreCompleto);
     const edadPeque = escapeXml(cotizacion.lead.edadHijo ? `${cotizacion.lead.edadHijo} años` : "Por definir");
     const horario = escapeXml(`${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`);
@@ -51,50 +52,28 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const svgOverlay = `
       <svg width="791" height="1024" xmlns="http://www.w3.org/2000/svg">
-        <style>
-          .val {
-            font-family: 'Segoe UI', 'Arial', sans-serif;
-            font-size: 20px;
-            font-weight: 600;
-            fill: #3A3A3C;
-          }
-          .bold-val {
-            font-family: 'Segoe UI', 'Arial', sans-serif;
-            font-size: 22px;
-            font-weight: 700;
-            fill: #D53F8C;
-          }
-          .sub-val {
-            font-family: 'Segoe UI', 'Arial', sans-serif;
-            font-size: 16px;
-            font-weight: 500;
-            fill: #718096;
-            font-style: italic;
-          }
-        </style>
-        
         <!-- Fecha -->
-        <text x="120" y="200" class="val">${fecha}</text>
+        <text x="120" y="200" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${fecha}</text>
         
         <!-- Nombre del cliente -->
-        <text x="350" y="340" class="val">${cliente}</text>
+        <text x="350" y="340" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${cliente}</text>
         
         <!-- Edad del peque -->
-        <text x="310" y="390" class="val">${edadPeque}</text>
+        <text x="310" y="390" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${edadPeque}</text>
         
         <!-- Horario -->
-        <text x="210" y="440" class="val">${horario}</text>
+        <text x="210" y="440" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${horario}</text>
         
         <!-- Zona -->
-        <text x="180" y="490" class="val">${zona}</text>
+        <text x="180" y="490" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${zona}</text>
         
         <!-- Precio -->
-        <text x="200" y="565" class="bold-val">${precio}</text>
-        <text x="200" y="615" class="sub-val">${precioDetalle}</text>
+        <text x="200" y="565" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#D53F8C">${precio}</text>
+        <text x="200" y="615" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500" fill="#718096" font-style="italic">${precioDetalle}</text>
         
         <!-- Nota -->
-        <text x="170" y="670" class="val">${nota}</text>
-        <text x="200" y="730" class="sub-val">${notaDetalle}</text>
+        <text x="170" y="670" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${nota}</text>
+        <text x="200" y="730" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500" fill="#718096" font-style="italic">${notaDetalle}</text>
       </svg>
     `;
 
