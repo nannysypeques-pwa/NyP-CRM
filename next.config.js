@@ -1,3 +1,7 @@
+const path = require("path");
+process.env.FONTCONFIG_PATH = path.join(__dirname, "src", "lib", "fontconfig");
+process.env.PANGOCAIRO_BACKEND = "fontconfig";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
