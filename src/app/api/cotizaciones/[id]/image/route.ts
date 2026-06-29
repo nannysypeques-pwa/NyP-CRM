@@ -1,5 +1,7 @@
+import "@/lib/initFontconfig";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import sharp from "sharp";
 import path from "path";
 import fs from "fs";
 
@@ -20,13 +22,6 @@ function escapeXml(unsafe: string): string {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-
-    // Configurar FontConfig antes de cargar sharp
-    const fontconfigDir = path.join(process.cwd(), "src", "lib", "fontconfig");
-    process.env.FONTCONFIG_PATH = fontconfigDir;
-    process.env.PANGOCAIRO_BACKEND = "fontconfig";
-
-    const { default: sharp } = await import("sharp");
 
     const cotizacion = await prisma.cotizacion.findUnique({
       where: { id },
