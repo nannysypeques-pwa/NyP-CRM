@@ -193,6 +193,16 @@ export async function POST(req: NextRequest) {
     const rawPhone = message.from;
     const clientName = contact?.profile?.name || `Cliente WhatsApp (${rawPhone})`;
 
+    // Convert raw Meta timestamp (in seconds) to Date
+    const timestampStr = message.timestamp;
+    let creadoEn: Date | undefined = undefined;
+    if (timestampStr) {
+      const seconds = parseInt(timestampStr, 10);
+      if (!isNaN(seconds)) {
+        creadoEn = new Date(seconds * 1000);
+      }
+    }
+
     // Process non-text messages by logging them and responding if IA is active
     if (message.type !== "text") {
       const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
@@ -208,7 +218,8 @@ export async function POST(req: NextRequest) {
         idConversacion: conv.id,
         direccion: "INBOUND",
         tipoRemitente: "CLIENT",
-        contenido: label
+        contenido: label,
+        creadoEn: creadoEn
       });
 
       // Si la IA está activa, enviar respuesta automática aclarando que no puede leer multimedia
@@ -220,7 +231,8 @@ export async function POST(req: NextRequest) {
           idConversacion: conv.id,
           direccion: "OUTBOUND",
           tipoRemitente: "IA",
-          contenido: responseText
+          contenido: responseText,
+          creadoEn: creadoEn ? new Date(creadoEn.getTime() + 1000) : undefined
         });
       }
 
@@ -254,7 +266,8 @@ export async function POST(req: NextRequest) {
       idConversacion: conv.id,
       direccion: "INBOUND",
       tipoRemitente: "CLIENT",
-      contenido: content
+      contenido: content,
+      creadoEn: creadoEn
     });
 
     // Extraer y guardar información del Lead en la base de datos si aplica
@@ -293,12 +306,18 @@ export async function POST(req: NextRequest) {
             updates.estado = "GANADO";
           }
 
-          // Si se detecta un nuevo hijo con edad y el lead no tiene edad registrada, intentamos extraerla
-          if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre && extractedData.nuevoHijo.textoEdad) {
+          // Si se detecta nuevos hijos
+          if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos) && extractedData.nuevosHijos.length > 0) {
+            if (!updates.cantidadHijos && (!currentLead || !currentLead.cantidadHijos)) {
+              updates.cantidadHijos = extractedData.nuevosHijos.length;
+            }
             if (!updates.edadHijo && (!currentLead || !currentLead.edadHijo)) {
-              const matches = extractedData.nuevoHijo.textoEdad.match(/\d+/);
-              if (matches) {
-                updates.edadHijo = parseInt(matches[0], 10);
+              const firstChild = extractedData.nuevosHijos[0];
+              if (firstChild && firstChild.textoEdad) {
+                const matches = firstChild.textoEdad.match(/\d+/);
+                if (matches) {
+                  updates.edadHijo = parseInt(matches[0], 10);
+                }
               }
             }
           }
@@ -314,28 +333,64 @@ export async function POST(req: NextRequest) {
             await db.addNota(conv.idLead, `[Extractor IA] Datos calificados: ${fieldsText}`, "Asistente IA");
           }
 
-          if (extractedData.nuevoHijo && extractedData.nuevoHijo.nombre) {
+          if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos)) {
             const currentLeadForChild = await db.getLeadById(conv.idLead);
-            const existeHijo = currentLeadForChild?.hijos?.some(
-              h => h.nombre.toLowerCase().trim() === extractedData.nuevoHijo.nombre.toLowerCase().trim()
-            );
-            if (!existeHijo) {
-              console.log(`[EXTRACTOR IA] Creando nuevo hijo para Lead ${conv.idLead}:`, extractedData.nuevoHijo);
-              await db.crearHijo({
-                idLead: conv.idLead,
-                nombre: extractedData.nuevoHijo.nombre,
-                textoEdad: extractedData.nuevoHijo.textoEdad,
-                alergias: extractedData.nuevoHijo.alergias || "",
-                condicionMedica: extractedData.nuevoHijo.condicionMedica || "",
-                estadoSalud: extractedData.nuevoHijo.estadoSalud || "",
-                preferencias: extractedData.nuevoHijo.preferencias || "",
-                indicacionesNanny: extractedData.nuevoHijo.indicacionesNanny || "",
-                necesidades: extractedData.nuevoHijo.necesidades || ""
-              });
+            for (const hijo of extractedData.nuevosHijos) {
+              if (!hijo.nombre) continue;
+              
+              const existeHijo = currentLeadForChild?.hijos?.some(
+                h => h.nombre.toLowerCase().trim() === hijo.nombre.toLowerCase().trim()
+              );
+              
+              if (!existeHijo) {
+                // Intentar buscar si hay un "Peque X" con la misma edad para renombrarlo
+                const matchesNueva = hijo.textoEdad ? hijo.textoEdad.match(/\d+/) : null;
+                const edadNueva = matchesNueva ? parseInt(matchesNueva[0], 10) : null;
+                
+                let placeholderHijo = null;
+                if (edadNueva !== null && hijo.nombre && !hijo.nombre.toLowerCase().startsWith("peque")) {
+                  placeholderHijo = currentLeadForChild?.hijos?.find(h => {
+                    if (!h.nombre.toLowerCase().startsWith("peque")) return false;
+                    const matchesPlaceholder = h.textoEdad ? h.textoEdad.match(/\d+/) : null;
+                    const edadPlaceholder = matchesPlaceholder ? parseInt(matchesPlaceholder[0], 10) : null;
+                    return edadPlaceholder === edadNueva;
+                  });
+                }
+                
+                if (placeholderHijo) {
+                  console.log(`[EXTRACTOR IA] Renombrando placeholder hijo ${placeholderHijo.nombre} a ${hijo.nombre}`);
+                  await db.actualizarHijo(placeholderHijo.id, {
+                    nombre: hijo.nombre,
+                    textoEdad: hijo.textoEdad || placeholderHijo.textoEdad,
+                    alergias: hijo.alergias || placeholderHijo.alergias || "",
+                    condicionMedica: hijo.condicionMedica || placeholderHijo.condicionMedica || "",
+                    estadoSalud: hijo.estadoSalud || placeholderHijo.estadoSalud || "",
+                    preferencias: hijo.preferencias || placeholderHijo.preferencias || "",
+                    indicacionesNanny: hijo.indicacionesNanny || placeholderHijo.indicacionesNanny || "",
+                    necesidades: hijo.necesidades || placeholderHijo.necesidades || ""
+                  });
+                  
+                  const renameNota = `[Extractor IA] Peque renombrado: ${placeholderHijo.nombre} ahora es ${hijo.nombre} (${hijo.textoEdad})`;
+                  await db.addNota(conv.idLead, renameNota, "Asistente IA");
+                } else {
+                  console.log(`[EXTRACTOR IA] Creando nuevo hijo para Lead ${conv.idLead}:`, hijo);
+                  await db.crearHijo({
+                    idLead: conv.idLead,
+                    nombre: hijo.nombre,
+                    textoEdad: hijo.textoEdad || "",
+                    alergias: hijo.alergias || "",
+                    condicionMedica: hijo.condicionMedica || "",
+                    estadoSalud: hijo.estadoSalud || "",
+                    preferencias: hijo.preferencias || "",
+                    indicacionesNanny: hijo.indicacionesNanny || "",
+                    necesidades: hijo.necesidades || ""
+                  });
 
-              // Agregar nota de seguimiento para el peque calificado
-              const hijoNota = `[Extractor IA] Peque calificado: ${extractedData.nuevoHijo.nombre} (${extractedData.nuevoHijo.textoEdad || "edad no especificada"})${extractedData.nuevoHijo.alergias ? `, Alergias: ${extractedData.nuevoHijo.alergias}` : ""}${extractedData.nuevoHijo.condicionMedica ? `, Condición: ${extractedData.nuevoHijo.condicionMedica}` : ""}`;
-              await db.addNota(conv.idLead, hijoNota, "Asistente IA");
+                  // Agregar nota de seguimiento para el peque calificado
+                  const hijoNota = `[Extractor IA] Peque calificado: ${hijo.nombre} (${hijo.textoEdad || "edad no especificada"})${hijo.alergias ? `, Alergias: ${hijo.alergias}` : ""}${hijo.condicionMedica ? `, Condición: ${hijo.condicionMedica}` : ""}`;
+                  await db.addNota(conv.idLead, hijoNota, "Asistente IA");
+                }
+              }
             }
           }
         }
@@ -433,7 +488,8 @@ export async function POST(req: NextRequest) {
           direccion: "OUTBOUND",
           tipoRemitente: "IA",
           contenido: finalResponseText,
-          urlMultimedia: imageUrl || null
+          urlMultimedia: imageUrl || null,
+          creadoEn: creadoEn ? new Date(creadoEn.getTime() + 1000) : undefined
         } as any);
 
         // Enviar el mensaje generado de forma real por WhatsApp al número del cliente

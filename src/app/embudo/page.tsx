@@ -214,6 +214,17 @@ export default function KanbanPage() {
     }
   }, []);
 
+  // Poll leads and conversations every 3 seconds to keep Kanban board up to date, unless dragging a card
+  useEffect(() => {
+    if (draggedLeadId !== null) return;
+
+    const interval = setInterval(() => {
+      fetchLeadsAndConversations();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [draggedLeadId]);
+
   // Poll chat messages in Drawer if open
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -278,6 +289,24 @@ export default function KanbanPage() {
         ]);
         setLeads(leadsData);
         setConversations(convsData);
+
+        // Sincronizar selectedLead si el drawer está abierto
+        setSelectedLead(current => {
+          if (current) {
+            const freshLead = leadsData.find((l: any) => l.id === current.id);
+            return freshLead || current;
+          }
+          return current;
+        });
+
+        // Sincronizar activeConv si el drawer está abierto
+        setActiveConv(current => {
+          if (current) {
+            const freshConv = convsData.find((c: any) => c.id === current.id);
+            return freshConv || current;
+          }
+          return current;
+        });
       }
     } catch (err) {
       console.error("Error loading board data:", err);

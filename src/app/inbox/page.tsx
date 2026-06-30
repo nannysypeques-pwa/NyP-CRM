@@ -49,6 +49,7 @@ interface Conversation {
   lead?: {
     nombreCompleto: string;
   };
+  mensajes?: Message[];
 }
 
 interface Hijo {
@@ -62,6 +63,49 @@ interface Hijo {
   indicacionesNanny?: string;
   necesidades?: string;
   instrucciones?: string;
+}
+
+function formatLastMessageTime(dateString: string | Date | undefined | null): string {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    
+    // Check if it is the same calendar day
+    const isToday = now.getDate() === date.getDate() && 
+                    now.getMonth() === date.getMonth() && 
+                    now.getFullYear() === date.getFullYear();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    // Check if it was yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = yesterday.getDate() === date.getDate() && 
+                        yesterday.getMonth() === date.getMonth() && 
+                        yesterday.getFullYear() === date.getFullYear();
+
+    if (isYesterday) {
+      return "Ayer";
+    }
+
+    // Check if it is in the last 7 days
+    const diffTime = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays < 7) {
+      const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      return days[date.getDay()];
+    }
+
+    // Otherwise show date
+    return date.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+  } catch (e) {
+    return "";
+  }
 }
 
 interface Quote {
@@ -508,7 +552,7 @@ export default function InboxPage() {
           ) : filteredConversations.map((conv) => {
             const isActive = conv.id === activeConvId;
             const leadName = conv.lead?.nombreCompleto || conv.telefono;
-            const lastMsg = messages.filter(m => m.idConversacion === conv.id).pop()?.contenido || "Mensaje recibido...";
+            const lastMsg = conv.mensajes?.[0]?.contenido || "Mensaje recibido...";
             
             return (
               <button 
@@ -528,7 +572,7 @@ export default function InboxPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex justify-between items-baseline">
                     <h4 className="font-semibold text-slate-800 text-sm truncate">{leadName}</h4>
-                    <span className="text-[10px] text-slate-400">10:45 AM</span>
+                    <span className="text-[10px] text-slate-400">{formatLastMessageTime(conv.ultimoMensajeEn)}</span>
                   </div>
                   <p className="text-xs text-slate-500 truncate mt-1">{lastMsg}</p>
                   

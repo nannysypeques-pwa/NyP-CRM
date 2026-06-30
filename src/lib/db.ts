@@ -166,6 +166,10 @@ export interface Conversacion {
   idUsuarioAsignado?: string;
   iaActiva: boolean;
   ultimoMensajeEn: string;
+  lead?: {
+    nombreCompleto: string;
+  };
+  mensajes?: Mensaje[];
 }
 
 export interface RespuestaRapida {
@@ -438,6 +442,10 @@ class BaseDeDatos {
           select: {
             nombreCompleto: true
           }
+        },
+        mensajes: {
+          orderBy: { creadoEn: 'desc' },
+          take: 1
         }
       },
       orderBy: {
@@ -446,7 +454,11 @@ class BaseDeDatos {
     });
     return conversations.map(c => ({
       ...c,
-      ultimoMensajeEn: c.ultimoMensajeEn.toISOString()
+      ultimoMensajeEn: c.ultimoMensajeEn.toISOString(),
+      mensajes: c.mensajes.map(m => ({
+        ...m,
+        creadoEn: m.creadoEn.toISOString()
+      }))
     })) as unknown as Conversacion[];
   }
 
@@ -612,7 +624,7 @@ class BaseDeDatos {
     })) as unknown as Mensaje[];
   }
 
-  async addMessage(messageData: Omit<Mensaje, 'id' | 'creadoEn'>): Promise<Mensaje> {
+  async addMessage(messageData: Omit<Mensaje, 'id' | 'creadoEn'> & { creadoEn?: Date | string }): Promise<Mensaje> {
     const msg = await prisma.mensaje.create({
       data: {
         idConversacion: messageData.idConversacion,
@@ -620,7 +632,8 @@ class BaseDeDatos {
         tipoRemitente: messageData.tipoRemitente,
         idRemitente: messageData.idRemitente,
         contenido: messageData.contenido,
-        urlMultimedia: (messageData as any).urlMultimedia || null
+        urlMultimedia: (messageData as any).urlMultimedia || null,
+        creadoEn: messageData.creadoEn ? new Date(messageData.creadoEn) : undefined
       }
     });
 
@@ -644,9 +657,10 @@ class BaseDeDatos {
   }
 
   async updateConversation(id: string, updates: Partial<Conversacion>): Promise<Conversacion> {
+    const { mensajes, lead, ...directUpdates } = updates as any;
     const conv = await prisma.conversacion.update({
       where: { id },
-      data: updates
+      data: directUpdates
     });
     return {
       ...conv,
@@ -815,6 +829,24 @@ class BaseDeDatos {
         estadoSalud: hijoData.estadoSalud,
         preferencias: hijoData.preferencias,
         indicacionesNanny: hijoData.indicacionesNanny
+      }
+    });
+    return hijo as unknown as Hijo;
+  }
+
+  async actualizarHijo(id: string, updates: Partial<Omit<Hijo, 'id'>>): Promise<Hijo> {
+    const hijo = await prisma.hijo.update({
+      where: { id },
+      data: {
+        nombre: updates.nombre,
+        textoEdad: updates.textoEdad,
+        necesidades: updates.necesidades,
+        instrucciones: updates.instrucciones,
+        alergias: updates.alergias,
+        condicionMedica: updates.condicionMedica,
+        estadoSalud: updates.estadoSalud,
+        preferencias: updates.preferencias,
+        indicacionesNanny: updates.indicacionesNanny
       }
     });
     return hijo as unknown as Hijo;
