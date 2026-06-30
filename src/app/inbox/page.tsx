@@ -26,7 +26,7 @@ import {
   UserCheck,
   X
 } from "lucide-react";
-import { formatIntencionComercial } from "@/lib/utils";
+import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import confetti from "canvas-confetti";
 
 interface Message {
@@ -774,14 +774,14 @@ export default function InboxPage() {
             </div>
 
             {/* Intención Comercial */}
-            <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-2">
-              <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5">
-                <Bot className="w-3.5 h-3.5" /> Intención Comercial
-              </span>
-              <div className="text-[11px] text-slate-700 leading-relaxed font-semibold bg-[#f4f8fc] p-3 rounded-xl border border-[#e8f2fa] whitespace-pre-line overflow-y-auto max-h-48 custom-scrollbar">
-                {formatIntencionComercial(activeLead)}
-              </div>
-            </div>
+            <FormattedIntencionComercial 
+              lead={activeLead}
+              title={
+                <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                  <Bot className="w-3.5 h-3.5" /> Intención Comercial
+                </span>
+              }
+            />
 
             {/* Internal Notes card */}
             <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-2">

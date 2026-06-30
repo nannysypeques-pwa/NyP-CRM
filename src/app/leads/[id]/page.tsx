@@ -19,7 +19,7 @@ import {
   DollarSign,
   Briefcase
 } from "lucide-react";
-import { formatIntencionComercial } from "@/lib/utils";
+import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import confetti from "canvas-confetti";
 
 interface Child {
@@ -367,12 +367,18 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Intención del Cliente</span>
-                <div className="text-xs text-slate-600 bg-[#f4f8fc] p-4 rounded-2xl border border-[#e8f2fa] leading-relaxed whitespace-pre-line overflow-y-auto max-h-60 custom-scrollbar">
-                  {formatIntencionComercial(lead)}
-                </div>
-              </div>
+              <FormattedIntencionComercial 
+                lead={lead}
+                title={
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    Intención del Cliente
+                  </span>
+                }
+                maxHeightClass="max-h-60"
+                paddingClass="p-4"
+                textClass="text-xs text-slate-600 font-semibold leading-relaxed"
+                containerClass="space-y-2"
+              />
 
               <div className="space-y-3">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Datos Faltantes por Recopilar</span>

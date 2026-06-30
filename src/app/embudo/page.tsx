@@ -29,7 +29,7 @@ import {
   MoreVertical,
   Check
 } from "lucide-react";
-import { formatIntencionComercial } from "@/lib/utils";
+import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import confetti from "canvas-confetti";
 
 interface Hijo {
@@ -930,12 +930,20 @@ export default function KanbanPage() {
                       </div>
                     </div>
                     {selectedLead && (
-                      <div className="space-y-1 bg-sky-50/50 p-4 rounded-xl border border-sky-100 mt-2">
-                        <span className="text-[#026692] font-extrabold uppercase text-[9px] tracking-wide block">Intención Comercial</span>
-                        <div className="text-slate-600 leading-relaxed font-semibold whitespace-pre-line text-[11px] bg-white p-3 rounded-lg border border-slate-100">
-                          {formatIntencionComercial(selectedLead)}
-                        </div>
-                      </div>
+                      <FormattedIntencionComercial
+                        lead={selectedLead}
+                        title={
+                          <span className="text-[#026692] font-extrabold uppercase text-[9px] tracking-wide block">
+                            Intención Comercial
+                          </span>
+                        }
+                        containerClass="space-y-1 bg-sky-50/50 p-4 rounded-xl border border-sky-100 mt-2"
+                        bgClass="bg-white"
+                        borderClass="border-slate-100"
+                        paddingClass="p-3"
+                        textClass="text-slate-600 leading-relaxed font-semibold text-[11px]"
+                        maxHeightClass="max-h-48"
+                      />
                     )}
                     {selectedLead.datosFaltantes && selectedLead.datosFaltantes.length > 0 && (
                       <div className="space-y-1.5">
