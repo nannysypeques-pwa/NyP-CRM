@@ -24,7 +24,8 @@ import {
   ArrowRight,
   TrendingUp,
   UserCheck,
-  X
+  X,
+  Save
 } from "lucide-react";
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import confetti from "canvas-confetti";
@@ -188,6 +189,44 @@ export default function InboxPage() {
     total: 0,
     notas: ""
   });
+
+  // Note manual input state
+  const [newNoteText, setNewNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(err => console.error("Error loading current user:", err));
+  }, []);
+
+  const handleSaveNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteText.trim() || !activeLead) return;
+    setSavingNote(true);
+    try {
+      const agentName = currentUser?.nombre || "Asesor de ventas";
+      const res = await fetch(`/api/leads/${activeLead.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contenido: newNoteText, nombreAgente: agentName }),
+      });
+      if (res.ok) {
+        setNewNoteText("");
+        fetchLeadDetails(activeLead.id);
+      }
+    } catch (err) {
+      console.error("Error saving note:", err);
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   const openQuoteModal = () => {
     if (!activeLead) return;
@@ -829,7 +868,7 @@ export default function InboxPage() {
 
             {/* Internal Notes card */}
             <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-2">
-              <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5">
+              <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
                 <MessageSquare className="w-3.5 h-3.5" /> Notas del Agente
               </span>
               {activeLead.notas && activeLead.notas.length > 0 ? (
@@ -844,6 +883,23 @@ export default function InboxPage() {
               ) : (
                 <p className="text-xs text-slate-400 italic">No hay notas registradas para este prospecto.</p>
               )}
+              
+              {/* Formulario para agregar nota manual */}
+              <form onSubmit={handleSaveNote} className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                <textarea
+                  placeholder="Escribe una nota interna sobre este lead..."
+                  value={newNoteText}
+                  onChange={(e) => setNewNoteText(e.target.value)}
+                  className="w-full text-[10px] p-2 bg-[#f8fbfe] border border-[#e2edf6] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#026692] resize-none h-14"
+                />
+                <button
+                  type="submit"
+                  disabled={!newNoteText.trim() || savingNote}
+                  className="w-full py-1.5 bg-[#026692] hover:bg-[#1d4359] text-white rounded-xl text-[10px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
+                >
+                  <Save className="w-3.5 h-3.5" /> Guardar Nota
+                </button>
+              </form>
             </div>
 
             {/* Cotizaciones Enviadas */}
