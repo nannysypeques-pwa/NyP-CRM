@@ -17,6 +17,7 @@ import {
   Send,
   Smile,
   Paperclip,
+  MessageSquare,
   ArrowRight,
   TrendingUp,
   User,
@@ -157,6 +158,8 @@ export default function KanbanPage() {
   
   // Drawer note form
   const [newNoteText, setNewNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -197,6 +200,16 @@ export default function KanbanPage() {
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
     fetchLeadsAndConversations();
+
+    // Fetch logged in user details for agent notes audit
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(err => console.error("Error loading current user:", err));
 
     // Obtener la cookie activeCity para sincronizar la UI del Kanban con el menú lateral
     const activeCityCookie = document.cookie
@@ -486,11 +499,13 @@ export default function KanbanPage() {
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteText.trim() || !selectedLead) return;
+    setSavingNote(true);
     try {
+      const agentName = currentUser?.nombre || "Asesor de ventas";
       const res = await fetch(`/api/leads/${selectedLead.id}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contenido: newNoteText, nombreAgente: "Laura Méndez" }),
+        body: JSON.stringify({ contenido: newNoteText, nombreAgente: agentName }),
       });
       if (res.ok) {
         setNewNoteText("");
@@ -500,9 +515,13 @@ export default function KanbanPage() {
           const updatedLead = await updatedRes.json();
           setSelectedLead(updatedLead);
         }
+        // Also refresh board to update notes list/status
+        fetchLeadsAndConversations();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -888,239 +907,58 @@ export default function KanbanPage() {
           <div className="w-[85%] max-w-6xl bg-[#f4f8fc] h-full flex flex-col shadow-2xl border-l border-[#e2edf6] transform transition-transform duration-300 animate-slide-in relative">
             
             {/* Header of Drawer */}
-            <div className="h-16 bg-white border-b border-[#e2edf6] px-6 flex items-center justify-between flex-shrink-0">
+            <div className="h-16 bg-white border-b border-[#e2edf6] px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-[#026692] text-white font-extrabold rounded-full flex items-center justify-center text-lg shadow-sm">
                   {selectedLead.nombreCompleto.split(' ').map(n=>n[0]).join('').slice(0,2)}
                 </div>
                 <div>
-                  <h2 className="font-extrabold text-slate-800 text-base">{selectedLead.nombreCompleto}</h2>
-                  <p className="text-slate-400 text-xs">{selectedLead.ciudad} • {selectedLead.telefono}</p>
+                  <h2 className="font-extrabold text-slate-800 text-sm leading-tight">{selectedLead.nombreCompleto}</h2>
+                  <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
+                  </span>
                 </div>
               </div>
-              <button 
-                onClick={handleCloseDrawer}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              
+              <div className="flex items-center space-x-4">
+                {/* AI toggler */}
+                {activeConv && (
+                  <div className="flex items-center space-x-2 bg-[#f4f8fc] px-3 py-1.5 rounded-xl border border-[#e8f2fa]">
+                    <span className="text-xs font-bold text-slate-500">Asistente IA</span>
+                    <button 
+                      type="button"
+                      onClick={handleToggleAI}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        activeConv.iaActiva ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <span 
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          activeConv.iaActiva ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <span className={`text-[10px] font-extrabold uppercase ${activeConv.iaActiva ? "text-emerald-500" : "text-slate-400"}`}>
+                      {activeConv.iaActiva ? "Activo" : "Pausado"}
+                    </span>
+                  </div>
+                )}
+                
+                <button 
+                  onClick={handleCloseDrawer}
+                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Inner Grid content */}
             <div className="flex-1 flex overflow-hidden min-h-0">
               
-              {/* SECTION A: Expediente Lead (Left Side - 30% width) */}
-              <div className="w-80 border-r border-[#e2edf6] bg-white flex flex-col overflow-y-auto custom-scrollbar p-6 space-y-6 flex-shrink-0">
-                {/* Tab selector */}
-                <div className="flex border-b border-slate-100 pb-2 space-x-3">
-                  <button 
-                    onClick={() => setDrawerTab("general")}
-                    className={`text-xs font-bold uppercase pb-1.5 border-b-2 transition-all ${
-                      drawerTab === "general" ? "border-[#026692] text-[#026692]" : "border-transparent text-slate-400"
-                    }`}
-                  >
-                    Detalles
-                  </button>
-                  <button 
-                    onClick={() => setDrawerTab("peques")}
-                    className={`text-xs font-bold uppercase pb-1.5 border-b-2 transition-all ${
-                      drawerTab === "peques" ? "border-[#026692] text-[#026692]" : "border-transparent text-slate-400"
-                    }`}
-                  >
-                    Niños ({selectedLead.hijos?.length || 0})
-                  </button>
-                  <button 
-                    onClick={() => setDrawerTab("notes")}
-                    className={`text-xs font-bold uppercase pb-1.5 border-b-2 transition-all ${
-                      drawerTab === "notes" ? "border-[#026692] text-[#026692]" : "border-transparent text-slate-400"
-                    }`}
-                  >
-                    Notas
-                  </button>
-                </div>
-
-                {/* Tab Content Rendering */}
-                {drawerTab === "general" && (
-                  <div className="space-y-4 text-xs">
-                    <div>
-                      <span className="text-slate-400 font-bold block uppercase tracking-wider text-[9px] mb-1">Servicio Interés</span>
-                      <span className="font-semibold text-slate-700 block bg-[#f4f8fc] p-3 rounded-xl border border-[#e8f2fa]">
-                        {selectedLead.interesServicio}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <span className="text-slate-400 font-bold block uppercase tracking-wider text-[9px] mb-1">Zona</span>
-                        <span className="font-bold text-slate-700">{selectedLead.zona}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-bold block uppercase tracking-wider text-[9px] mb-1">Ciudad</span>
-                        <span className="font-bold text-slate-700">{selectedLead.ciudad}</span>
-                      </div>
-                    </div>
-                    {selectedLead && (
-                      <FormattedIntencionComercial
-                        lead={selectedLead}
-                        title={
-                          <span className="text-[#026692] font-extrabold uppercase text-[9px] tracking-wide block">
-                            Intención Comercial
-                          </span>
-                        }
-                        containerClass="space-y-1 bg-sky-50/50 p-4 rounded-xl border border-sky-100 mt-2"
-                        bgClass="bg-white"
-                        borderClass="border-slate-100"
-                        paddingClass="p-3"
-                        textClass="text-slate-600 leading-relaxed font-semibold text-[11px]"
-                        maxHeightClass="max-h-48"
-                      />
-                    )}
-                    {selectedLead.datosFaltantes && selectedLead.datosFaltantes.length > 0 && (
-                      <div className="space-y-1.5">
-                        <span className="text-rose-500 font-extrabold uppercase text-[9px] tracking-wide block">Datos por recopilar:</span>
-                        <ul className="space-y-1.5 pl-3 list-disc text-slate-600">
-                          {selectedLead.datosFaltantes.map((d, i) => (
-                            <li key={i}>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {drawerTab === "peques" && (
-                  <div className="space-y-4">
-                    {selectedLead.hijos && selectedLead.hijos.length > 0 ? (
-                      selectedLead.hijos.map((child) => (
-                        <div key={child.id} className="bg-[#f4f8fc] p-5 rounded-2xl border border-[#e8f2fa] space-y-3 text-xs">
-                          <div className="flex justify-between items-center border-b border-[#e8f2fa] pb-2">
-                            <h4 className="font-extrabold text-slate-700">👶 {child.nombre}</h4>
-                            <span className="bg-[#026692] text-white px-2 py-0.5 rounded-full text-[9px] font-bold">
-                              {child.textoEdad}
-                            </span>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            {child.alergias && (
-                              <div className="bg-[#fff1f5] p-3 rounded-xl border border-[#ffe1e8]">
-                                <span className="text-[9px] font-bold text-rose-600 uppercase block tracking-wider mb-0.5">Alergias</span>
-                                <p className="text-rose-800 font-bold">{child.alergias}</p>
-                              </div>
-                            )}
-
-                            {child.condicionMedica && (
-                              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Condición Médica</span>
-                                <p className="text-slate-700 font-semibold">{child.condicionMedica}</p>
-                              </div>
-                            )}
-
-                            {child.estadoSalud && (
-                              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Estado de Salud</span>
-                                <p className="text-slate-700 font-semibold">{child.estadoSalud}</p>
-                              </div>
-                            )}
-
-                            {child.preferencias && (
-                              <div className="bg-[#e8f4fd] p-3 rounded-xl border border-[#d4e6f4]">
-                                <span className="text-[9px] font-bold text-[#026692] uppercase block tracking-wider mb-0.5">Actividades Favoritas</span>
-                                <p className="text-slate-700 font-semibold">{child.preferencias}</p>
-                              </div>
-                            )}
-
-                            {(child.indicacionesNanny || child.instrucciones) && (
-                              <div className="bg-[#fcf8e3] p-3 rounded-xl border border-[#faf2cc]">
-                                <span className="text-[9px] font-bold text-[#8a6d3b] uppercase block tracking-wider mb-0.5">Indicaciones para la Nanny</span>
-                                <p className="text-[#8a6d3b] font-bold leading-relaxed">
-                                  {child.indicacionesNanny || child.instrucciones}
-                                </p>
-                              </div>
-                            )}
-
-                            {child.necesidades && (
-                              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                                <span className="text-[9px] font-bold text-slate-500 uppercase block tracking-wider mb-0.5">Necesidades de Cuidado</span>
-                                <p className="text-slate-700 font-semibold">{child.necesidades}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-slate-400 text-center py-4">No hay perfiles de peques.</p>
-                    )}
-                  </div>
-                )}
-
-                {drawerTab === "notes" && (
-                  <div className="space-y-4 text-xs">
-                    {/* Notes List */}
-                    <div className="space-y-3 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                      {selectedLead.notas && selectedLead.notas.length > 0 ? (
-                        selectedLead.notas.map((n) => (
-                          <div key={n.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-1">✍️ {n.nombreAgente}</span>
-                            <p className="text-slate-600 font-medium italic">"{n.contenido}"</p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-slate-400 text-center py-2">Sin notas guardadas.</p>
-                      )}
-                    </div>
-                    
-                    {/* Notes form */}
-                    <form onSubmit={handleSaveNote} className="space-y-2 pt-2 border-t border-slate-100">
-                      <textarea
-                        value={newNoteText}
-                        onChange={(e) => setNewNoteText(e.target.value)}
-                        placeholder="Escribe una nota interna..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none resize-none"
-                        rows={2}
-                      />
-                      <button 
-                        type="submit" 
-                        disabled={!newNoteText.trim()}
-                        className="w-full bg-[#f4f8fc] hover:bg-[#026692] text-[#026692] hover:text-white disabled:opacity-50 py-2 rounded-xl text-xs font-bold transition-all border border-[#c3dfef] hover:border-transparent flex items-center justify-center gap-1.5"
-                      >
-                        <Save className="w-3.5 h-3.5" /> Guardar Nota
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-
-              {/* SECTION B: Real-Time Chat Column (Middle - Flexible width) */}
+              {/* COLUMN 1 (Center): Real-Time Chat Column (Middle - Flexible width) */}
               <div className="flex-1 flex flex-col h-full bg-[#f4f8fc]">
                 
-                {/* Chat Column Header bar */}
-                <div className="h-12 bg-white border-b border-[#e2edf6] px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
-                  <span className="text-xs text-slate-500 font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> WhatsApp Multiagente
-                  </span>
-                  
-                  {/* AI switch inside drawer */}
-                  {activeConv && (
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[11px] font-bold text-slate-500">Asistente IA</span>
-                      <button 
-                        onClick={handleToggleAI}
-                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          activeConv.iaActiva ? "bg-emerald-500" : "bg-slate-300"
-                        }`}
-                      >
-                        <span 
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            activeConv.iaActiva ? "translate-x-4" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                      <span className={`text-[9px] font-extrabold uppercase ${activeConv.iaActiva ? "text-emerald-500" : "text-slate-400"}`}>
-                        {activeConv.iaActiva ? "ON" : "OFF"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
                 {/* Message Stream area */}
                 <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
                   {chatMessages.length === 0 ? (
@@ -1143,13 +981,10 @@ export default function KanbanPage() {
                               <Sparkles className="w-3 h-3" /> Respuesta IA
                             </span>
                           )}
-                          <p className="text-xs font-semibold leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
-                          <div className={`text-[8px] font-bold text-right mt-1.5 ${
-                            isClient ? "text-slate-400" : isIA ? "text-sky-200" : "text-slate-400"
-                          }`}>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
+                          <span className={`text-[8px] block mt-1.5 text-right ${isIA || !isClient ? "text-sky-100" : "text-slate-400"}`}>
                             {new Date(msg.creadoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {!isClient && <span className="ml-1">✓✓</span>}
-                          </div>
+                          </span>
                         </div>
                       </div>
                     );
@@ -1157,18 +992,49 @@ export default function KanbanPage() {
                   <div ref={chatEndRef} />
                 </div>
 
-                {/* Chat Form panel */}
-                <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10 relative">
-                  
-                  {/* Emoji Picker Popup */}
+                {/* Quick replies bar if open */}
+                {isQuickRepliesOpen && (
+                  <div className="p-4 bg-white border-t border-[#e2edf6] flex flex-wrap gap-2 z-10 shadow-lg">
+                    <button 
+                      onClick={() => {
+                        setChatInput("¡Hola! Me comunico de Nannys y Peques. Con gusto te ayudamos con tu solicitud.");
+                        setIsQuickRepliesOpen(false);
+                      }}
+                      className="px-3 py-1.5 bg-[#f4f8fc] border border-[#e2edf6] rounded-xl text-xs font-semibold text-[#026692] hover:bg-[#e8f4fd] transition-all"
+                    >
+                      Saludo Inicial
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setChatInput("Para brindarte una cotización formal y verificar disponibilidad de nannys, ¿podrías indicarme tu zona o colonia en la ciudad?");
+                        setIsQuickRepliesOpen(false);
+                      }}
+                      className="px-3 py-1.5 bg-[#f4f8fc] border border-[#e2edf6] rounded-xl text-xs font-semibold text-[#026692] hover:bg-[#e8f4fd] transition-all"
+                    >
+                      Preguntar Zona
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setChatInput("Claro que sí, con gusto un asesor comercial te validará los detalles finales y te enviará la propuesta en un archivo PDF formal.");
+                        setIsQuickRepliesOpen(false);
+                      }}
+                      className="px-3 py-1.5 bg-[#f4f8fc] border border-[#e2edf6] rounded-xl text-xs font-semibold text-[#026692] hover:bg-[#e8f4fd] transition-all"
+                    >
+                      Ofrecer PDF
+                    </button>
+                  </div>
+                )}
+
+                {/* Formulario de envío de mensajes en el chat */}
+                <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 relative">
                   {showEmojiPicker && (
-                    <div className="absolute bottom-16 left-4 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 grid grid-cols-7 gap-1 z-30 max-w-[240px]">
+                    <div className="absolute bottom-16 left-4 bg-white border border-[#e2edf6] rounded-2xl p-3 shadow-xl grid grid-cols-7 gap-1 z-30">
                       {EMOJIS.map((emoji) => (
-                        <button
-                          key={emoji}
+                        <button 
+                          key={emoji} 
                           type="button"
                           onClick={() => handleEmojiClick(emoji)}
-                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded-lg text-sm"
+                          className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg text-lg transition-all"
                         >
                           {emoji}
                         </button>
@@ -1176,7 +1042,7 @@ export default function KanbanPage() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSendMessage} className="flex items-center space-x-2 bg-[#f0f7fc] border border-[#d4e6f4] rounded-2xl px-4 py-2">
+                  <form onSubmit={handleSendMessage} className="flex items-center space-x-3 bg-[#f4f8fc] border border-[#cbdfe9] rounded-2xl px-4 py-2">
                     <button 
                       type="button" 
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -1217,44 +1083,211 @@ export default function KanbanPage() {
 
               </div>
 
-              {/* SECTION C: Pipeline Actions Column (Right Side - 250px width) */}
-              <div className="w-64 border-l border-[#e2edf6] bg-white flex flex-col overflow-y-auto custom-scrollbar p-6 space-y-6 flex-shrink-0 justify-between">
+              {/* COLUMN 2 (Right): Lead Details Sidebar */}
+              <div className="w-80 border-l border-[#e2edf6] bg-white flex flex-col overflow-y-auto custom-scrollbar p-6 space-y-6 flex-shrink-0">
                 
-                {/* Pipeline action buttons */}
-                <div className="space-y-4">
-                  <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px] border-b border-slate-100 pb-2">Acciones Comerciales</h4>
+                {/* Top Avatar & Name & Status */}
+                <div className="text-center space-y-3 pb-6 border-b border-[#f0f7fc]">
+                  <div className="w-20 h-20 mx-auto rounded-full bg-[#026692]/10 text-[#026692] border border-[#e2edf6] flex items-center justify-center text-2xl font-extrabold shadow-sm">
+                    {selectedLead.nombreCompleto.split(' ').map(n=>n[0]).join('').slice(0,2)}
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-extrabold text-slate-800 text-base leading-tight">{selectedLead.nombreCompleto}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide inline-block ${
+                      selectedLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
+                      selectedLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
+                      selectedLead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
+                      selectedLead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                    }`}>
+                      {selectedLead.estado === "GANADO" ? "CLIENTE CERRADO" : "POTENCIAL " + selectedLead.estado}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Profile Info fields */}
+                <div className="space-y-4 text-xs pb-4 border-b border-[#f0f7fc]">
+                  <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px]">Información del Lead</h4>
+                  
+                  {/* Location */}
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-slate-400 font-bold block">Ciudad y Zona</span>
+                      <span className="font-bold text-slate-700">{selectedLead.ciudad || "Por definir"}, {selectedLead.zona || "Por definir"}</span>
+                    </div>
+                  </div>
+
+                  {/* Age */}
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-slate-400 font-bold block">Edad del Niño/a</span>
+                      <span className="font-bold text-slate-700">
+                        {selectedLead.edadHijo ? `${selectedLead.edadHijo} años` : "Por definir"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Service interest */}
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                      <Briefcase className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-slate-400 font-bold block">Servicio de interés</span>
+                      <span className="font-bold text-slate-700 uppercase leading-snug">{selectedLead.interesServicio || "Por definir"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Intención Comercial */}
+                <FormattedIntencionComercial 
+                  lead={selectedLead}
+                  title={
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                      <Bot className="w-3.5 h-3.5" /> Intención Comercial
+                    </span>
+                  }
+                />
+
+                {/* Niños/as detail section */}
+                {selectedLead.hijos && selectedLead.hijos.length > 0 && (
+                  <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-3">
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                      👶 Niños ({selectedLead.hijos.length})
+                    </span>
+                    <div className="space-y-2.5 max-h-48 overflow-y-auto custom-scrollbar">
+                      {selectedLead.hijos.map((child) => (
+                        <div key={child.id} className="bg-[#f4f8fc] p-3 rounded-xl border border-[#e8f2fa] space-y-1.5 text-[10px]">
+                          <div className="flex justify-between items-center font-bold text-slate-700 border-b border-slate-100 pb-1">
+                            <span>{child.nombre}</span>
+                            <span className="bg-[#026692] text-white px-1.5 py-0.2 rounded-full text-[8px] font-bold">
+                              {child.textoEdad}
+                            </span>
+                          </div>
+                          {child.alergias && (
+                            <p className="text-slate-600"><span className="text-rose-500 font-bold">Alergias:</span> {child.alergias}</p>
+                          )}
+                          {child.condicionMedica && (
+                            <p className="text-slate-600"><span className="text-slate-500 font-bold">Condición:</span> {child.condicionMedica}</p>
+                          )}
+                          {child.indicacionesNanny && (
+                            <p className="text-slate-600"><span className="text-amber-600 font-bold">Indicaciones:</span> {child.indicacionesNanny || child.instrucciones}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notas del Agente */}
+                <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-2">
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                    <MessageSquare className="w-3.5 h-3.5" /> Notas del Agente
+                  </span>
+                  {selectedLead.notas && selectedLead.notas.length > 0 ? (
+                    <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                      {selectedLead.notas.map(n => (
+                        <div key={n.id} className="text-[10px] text-slate-600 leading-relaxed border-b border-slate-100 pb-1.5 last:border-0 last:pb-0">
+                          <p className="italic">"{n.contenido}"</p>
+                          <span className="text-[8px] text-slate-400 block mt-0.5">— {n.nombreAgente}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No hay notas registradas para este prospecto.</p>
+                  )}
+                  
+                  {/* Formulario para agregar nota manual */}
+                  <form onSubmit={handleSaveNote} className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                    <textarea
+                      placeholder="Escribe una nota interna sobre este lead..."
+                      value={newNoteText}
+                      onChange={(e) => setNewNoteText(e.target.value)}
+                      className="w-full text-[10px] p-2 bg-[#f8fbfe] border border-[#e2edf6] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#026692] resize-none h-14"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newNoteText.trim() || savingNote}
+                      className="w-full py-1.5 bg-[#026692] hover:bg-[#1d4359] text-white rounded-xl text-[10px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Guardar Nota
+                    </button>
+                  </form>
+                </div>
+
+                {/* Cotizaciones Enviadas */}
+                <div className="bg-[#fcfdfd] border border-[#e2edf6] p-4 rounded-2xl shadow-sm space-y-3">
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                    <FileText className="w-3.5 h-3.5" /> Cotizaciones Enviadas
+                  </span>
+                  {selectedLead.cotizaciones && selectedLead.cotizaciones.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                      {selectedLead.cotizaciones.map((quote) => (
+                        <div key={quote.id} className="relative group border border-slate-100 rounded-xl overflow-hidden bg-slate-50 hover:border-[#026692]/30 transition-all shadow-sm">
+                          <img 
+                            src={`/api/cotizaciones/${quote.id}/image`} 
+                            alt={`Cotización ${quote.total}`} 
+                            className="w-full h-20 object-cover object-top cursor-pointer group-hover:scale-105 transition-all"
+                            onClick={() => window.open(`/api/cotizaciones/${quote.id}/image`, "_blank")}
+                          />
+                          <div className="p-1 text-[9px] font-bold text-center bg-white text-slate-700 border-t border-slate-100 flex justify-between items-center">
+                            <span>${quote.total.toLocaleString("es-MX")}</span>
+                            <a 
+                              href={`/api/cotizaciones/${quote.id}/image`} 
+                              download={`cotizacion_${quote.id}.png`}
+                              className="text-[#026692] hover:text-[#1d4359] font-extrabold px-1 rounded hover:bg-slate-100"
+                              title="Descargar"
+                            >
+                              ↓
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 italic">No hay cotizaciones enviadas.</p>
+                  )}
+                </div>
+
+                {/* Acciones Comerciales */}
+                <div className="space-y-3 pt-4 border-t border-[#f0f7fc]">
+                  <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px]">Acciones Comerciales</h4>
                   
                   {selectedLead.ciudad === "Por definir" || selectedLead.ciudad === "" || !selectedLead.ciudad ? (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left">
                       <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
                         <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                         <span>Falta Asignar Ciudad</span>
                       </div>
-                      <p className="text-[11px] text-amber-700 leading-relaxed font-medium text-left">
-                        Este lead aún no tiene una ciudad asignada. El chatbot de WhatsApp la detectará automáticamente cuando el cliente la mencione, o puedes actualizarla en la sección de Leads.
-                      </p>
-                      <p className="text-[10px] text-amber-500 font-semibold italic text-left">
-                        Las acciones comerciales y el cambio de fase se habilitarán una vez que el lead tenga una ciudad asignada.
+                      <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
+                        Este lead aún no tiene una ciudad asignada. El chatbot la detectará o puedes actualizarla en Leads.
                       </p>
                     </div>
                   ) : (
-                    <>
+                    <div className="space-y-3">
                       {/* Quote action trigger */}
                       <button 
+                        type="button"
                         onClick={() => {
                           setQuoteForm(q => ({ ...q, ciudad: selectedLead.ciudad, tipoServicio: selectedLead.interesServicio }));
                           setQuoteBuilderOpen(true);
                         }}
-                        className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                        className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                       >
-                        <FileText className="w-4 h-4 text-slate-400" /> Crear Cotización
+                        <FileText className="w-4 h-4 text-[#026692]" /> Crear Cotización
                       </button>
 
                       {/* Close Won trigger */}
                       {selectedLead.estado !== "ATENCION_HUMANA" && selectedLead.estado !== "GANADO" && (
                         <button 
+                          type="button"
                           onClick={() => handleUpdateLeadStatus(selectedLead.id, "ATENCION_HUMANA")}
-                          className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                          className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                         >
                           <UserCheck className="w-4 h-4 text-indigo-500" /> Derivar a Atención Humana
                         </button>
@@ -1262,8 +1295,9 @@ export default function KanbanPage() {
 
                       {selectedLead.estado === "ATENCION_HUMANA" && (
                         <button 
+                          type="button"
                           onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
-                          className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                          className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                         >
                           <Bot className="w-4 h-4 text-amber-500" /> Devolver a Conversación (IA)
                         </button>
@@ -1271,30 +1305,30 @@ export default function KanbanPage() {
 
                       {selectedLead.estado !== "GANADO" ? (
                         <button 
+                          type="button"
                           onClick={() => handleUpdateLeadStatus(selectedLead.id, "GANADO")}
-                          className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-md"
+                          className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-md"
                         >
                           ✓ Cerrar Ganado
                         </button>
                       ) : (
-                        <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
+                        <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
                           <CheckCircle className="w-4 h-4" /> Cliente Ganado
                         </div>
                       )}
 
                       {selectedLead.estado !== "PERDIDO" && (
                         <button 
+                          type="button"
                           onClick={() => handleUpdateLeadStatus(selectedLead.id, "PERDIDO")}
                           className="w-full text-slate-400 hover:text-rose-500 py-2 text-xs font-bold text-center transition-all block"
                         >
                           Mover a Perdidos
                         </button>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
-
-
 
               </div>
 
