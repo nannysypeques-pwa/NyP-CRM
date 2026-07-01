@@ -84,7 +84,13 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
       }
     }
   } else if (data.cantidadHijos) {
-    text += `. Para sus ${data.cantidadHijos} peques`;
+    const num = parseInt(data.cantidadHijos, 10);
+    const edad = data.edadHijo ? ` de ${data.edadHijo} ${parseInt(data.edadHijo, 10) === 1 ? "año" : "años"}` : "";
+    if (num === 1) {
+      text += `. Para su peque${edad}`;
+    } else {
+      text += `. Para sus ${num} peques${edad}`;
+    }
   }
 
   // Reason
@@ -110,4 +116,23 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
   }
 
   return `[Extractor IA] ${text}`;
+}
+
+export function renderNoteContent(content: string, leadNombre?: string): string {
+  if (!content || typeof content !== "string") return content;
+  
+  if (content.includes("Datos calificados:")) {
+    const parsed: any = {};
+    const regex = /(\w+)\s*=\s*"([^"]*)"/g;
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      parsed[match[1]] = match[2];
+    }
+    
+    // Call buildNarrativeSummary with a mock lead containing the name, and the parsed values
+    const narrative = buildNarrativeSummary({ nombreCompleto: leadNombre }, parsed);
+    return narrative;
+  }
+  
+  return content;
 }

@@ -28,6 +28,7 @@ import {
   Save
 } from "lucide-react";
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
+import { renderNoteContent } from "@/lib/narrative";
 import confetti from "canvas-confetti";
 
 interface Message {
@@ -875,7 +876,7 @@ export default function InboxPage() {
                 <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
                   {activeLead.notas.map(n => (
                     <div key={n.id} className="text-[10px] text-slate-600 leading-relaxed border-b border-slate-100 pb-1.5 last:border-0 last:pb-0">
-                      <p className="italic">"{n.contenido}"</p>
+                      <p className="italic">"{renderNoteContent(n.contenido, activeLead.nombreCompleto)}"</p>
                       <span className="text-[8px] text-slate-400 block mt-0.5">— {n.nombreAgente}</span>
                     </div>
                   ))}
