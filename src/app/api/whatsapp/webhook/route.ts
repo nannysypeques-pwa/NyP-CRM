@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { generateAIResponse, detectCityFromText, extractLeadInfo, parseNumDias } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/prisma";
+import { buildNarrativeSummary } from "@/lib/narrative";
 
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
   const secret = process.env.META_APP_SECRET;
@@ -327,10 +328,8 @@ export async function POST(req: NextRequest) {
             await db.updateLead(conv.idLead, updates);
             
             // Agregar una nota de seguimiento interna en el Lead para auditar los datos extraídos
-            const fieldsText = Object.entries(updates)
-              .map(([k, v]) => `${k} = "${v}"`)
-              .join(", ");
-            await db.addNota(conv.idLead, `[Extractor IA] Datos calificados: ${fieldsText}`, "Asistente IA");
+            const summaryNote = buildNarrativeSummary(currentLead, updates, extractedData.nuevosHijos);
+            await db.addNota(conv.idLead, summaryNote, "Asistente IA");
           }
 
           if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos)) {
