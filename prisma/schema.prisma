@@ -220,3 +220,12 @@ model Incidente {
   creadoEn   DateTime  @default(now())
   resueltoEn DateTime?
 }
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+

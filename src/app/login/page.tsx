@@ -5,12 +5,14 @@ import { Lock, Mail, HeartHandshake, Eye, EyeOff, Loader2, ArrowLeft } from "luc
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "reset">("login");
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   
   // Password reset fields
   const [resetEmail, setResetEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -22,8 +24,13 @@ export default function LoginPage() {
 
   const handleToggleMode = (newMode: "login" | "reset") => {
     setMode(newMode);
+    setResetStep(1);
     setError("");
     setSuccess("");
+    setResetEmail("");
+    setOtp("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,9 +68,49 @@ export default function LoginPage() {
     }
   };
 
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      setError("Por favor ingresa tu correo electrónico.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/auth/reset-password/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Algo salió mal. Inténtalo de nuevo.");
+        setLoading(false);
+        return;
+      }
+
+      let successMsg = data.message || "Código OTP enviado con éxito.";
+      if (data.localLog) {
+        successMsg += " (Desarrollo local: se guardó en el archivo otp-log.txt)";
+      }
+      setSuccess(successMsg);
+      setResetStep(2);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setError("Error de conexión. Inténtalo más tarde.");
+      setLoading(false);
+    }
+  };
+
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail || !newPassword || !confirmPassword) {
+    if (!resetEmail || !otp || !newPassword || !confirmPassword) {
       setError("Por favor completa todos los campos.");
       return;
     }
@@ -81,10 +128,10 @@ export default function LoginPage() {
     setSuccess("");
 
     try {
-      const response = await fetch("/api/auth/reset-password", {
+      const response = await fetch("/api/auth/reset-password/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: resetEmail, newPassword })
+        body: JSON.stringify({ email: resetEmail, code: otp, newPassword })
       });
 
       const data = await response.json();
@@ -97,8 +144,10 @@ export default function LoginPage() {
 
       setSuccess(data.message || "Contraseña restablecida con éxito.");
       setResetEmail("");
+      setOtp("");
       setNewPassword("");
       setConfirmPassword("");
+      setResetStep(1);
       setLoading(false);
       
       // Wait a moment and redirect back to login mode
@@ -130,10 +179,15 @@ export default function LoginPage() {
               <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Iniciar Sesión</h1>
               <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tus credenciales para acceder a NyP CRM</p>
             </div>
+          ) : resetStep === 1 ? (
+            <div>
+              <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Recuperar Acceso</h1>
+              <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tu correo para recibir un código de verificación</p>
+            </div>
           ) : (
             <div>
-              <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Restablecer Contraseña</h1>
-              <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tu correo y tu nueva contraseña para actualizarla</p>
+              <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Verificar Código OTP</h1>
+              <p className="text-xs text-slate-500 font-medium mt-1">Introduce el código y tu nueva contraseña</p>
             </div>
           )}
         </div>
@@ -223,10 +277,9 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-        ) : (
-          /* Reset Password Form */
-          <form onSubmit={handleResetSubmit} className="space-y-5">
-            {/* Email Input */}
+        ) : resetStep === 1 ? (
+          /* Reset Password Step 1: Request OTP */
+          <form onSubmit={handleRequestOtp} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Correo Electrónico</label>
               <div className="relative">
@@ -242,6 +295,47 @@ export default function LoginPage() {
                   placeholder="ejemplo@nannysypeques.com"
                 />
               </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#026692] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1d4359] focus:outline-none focus:ring-4 focus:ring-[#026692]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-[#026692]/10 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Enviando código...
+                </>
+              ) : (
+                "Enviar Código OTP"
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleToggleMode("login")}
+              className="w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver al Inicio de Sesión
+            </button>
+          </form>
+        ) : (
+          /* Reset Password Step 2: Input OTP & New Password */
+          <form onSubmit={handleResetSubmit} className="space-y-5">
+            {/* OTP Code Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Código de Verificación OTP</label>
+              <input
+                type="text"
+                required
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl py-3 text-center text-lg font-mono font-bold tracking-[8px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                placeholder="000000"
+              />
             </div>
 
             {/* New Password Input */}
@@ -294,7 +388,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -310,14 +403,17 @@ export default function LoginPage() {
               )}
             </button>
 
-            {/* Cancel/Back Button */}
             <button
               type="button"
-              onClick={() => handleToggleMode("login")}
+              onClick={() => {
+                setResetStep(1);
+                setError("");
+                setSuccess("");
+              }}
               className="w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
-              Volver al Inicio de Sesión
+              Atrás (Cambiar correo)
             </button>
           </form>
         )}
