@@ -1,14 +1,30 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock, Mail, HeartHandshake, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, Mail, HeartHandshake, Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<"login" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Password reset fields
+  const [resetEmail, setResetEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [success, setSuccess] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleToggleMode = (newMode: "login" | "reset") => {
+    setMode(newMode);
+    setError("");
+    setSuccess("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +35,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -44,6 +61,58 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !newPassword || !confirmPassword) {
+      setError("Por favor completa todos los campos.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail, newPassword })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Algo salió mal. Inténtalo de nuevo.");
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(data.message || "Contraseña restablecida con éxito.");
+      setResetEmail("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setLoading(false);
+      
+      // Wait a moment and redirect back to login mode
+      setTimeout(() => {
+        setMode("login");
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      setError("Error de conexión. Inténtalo más tarde.");
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#e8f4fd] via-[#f3f8fc] to-[#d4e6f4] p-4 relative overflow-hidden font-sans">
       {/* Decorative Blur Orbs */}
@@ -56,10 +125,17 @@ export default function LoginPage() {
           <div className="inline-flex w-14 h-14 bg-[#026692] rounded-2xl items-center justify-center text-white shadow-lg shadow-[#026692]/20">
             <HeartHandshake className="w-8 h-8" />
           </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Iniciar Sesión</h1>
-            <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tus credenciales para acceder a NyP CRM</p>
-          </div>
+          {mode === "login" ? (
+            <div>
+              <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Iniciar Sesión</h1>
+              <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tus credenciales para acceder a NyP CRM</p>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-extrabold text-[#026692] tracking-tight">Restablecer Contraseña</h1>
+              <p className="text-xs text-slate-500 font-medium mt-1">Ingresa tu correo y tu nueva contraseña para actualizarla</p>
+            </div>
+          )}
         </div>
 
         {/* Error Alert */}
@@ -69,67 +145,182 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email Input */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Correo Electrónico</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Mail className="w-4 h-4" />
-              </span>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
-                placeholder="ejemplo@nannysypeques.com"
-              />
-            </div>
+        {/* Success Alert */}
+        {success && (
+          <div className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-3 rounded-2xl text-xs font-semibold text-center">
+            {success}
           </div>
+        )}
 
-          {/* Password Input */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Contraseña</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Lock className="w-4 h-4" />
-              </span>
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-10 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#026692] transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+        {mode === "login" ? (
+          /* Login Form */
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Correo Electrónico</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                  placeholder="ejemplo@nannysypeques.com"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#026692] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1d4359] focus:outline-none focus:ring-4 focus:ring-[#026692]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-[#026692]/10 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Iniciando sesión...
-              </>
-            ) : (
-              "Ingresar al Portal"
-            )}
-          </button>
-        </form>
+            {/* Password Input */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Contraseña</label>
+                <button
+                  type="button"
+                  onClick={() => handleToggleMode("reset")}
+                  className="text-[10px] text-[#026692] hover:underline font-bold"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-10 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#026692] transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#026692] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1d4359] focus:outline-none focus:ring-4 focus:ring-[#026692]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-[#026692]/10 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                "Ingresar al Portal"
+              )}
+            </button>
+          </form>
+        ) : (
+          /* Reset Password Form */
+          <form onSubmit={handleResetSubmit} className="space-y-5">
+            {/* Email Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Correo Electrónico</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  type="email"
+                  required
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                  placeholder="ejemplo@nannysypeques.com"
+                />
+              </div>
+            </div>
+
+            {/* New Password Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Nueva Contraseña</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-10 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                  placeholder="Mínimo 6 caracteres"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#026692] transition-colors"
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Confirmar Nueva Contraseña</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-[#f4f8fc]/80 border border-[#d4e6f4] rounded-2xl pl-10 pr-10 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] focus:bg-white transition-all placeholder-slate-400"
+                  placeholder="Repite la contraseña"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#026692] transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#026692] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1d4359] focus:outline-none focus:ring-4 focus:ring-[#026692]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-[#026692]/10 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Restableciendo...
+                </>
+              ) : (
+                "Restablecer Contraseña"
+              )}
+            </button>
+
+            {/* Cancel/Back Button */}
+            <button
+              type="button"
+              onClick={() => handleToggleMode("login")}
+              className="w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver al Inicio de Sesión
+            </button>
+          </form>
+        )}
 
         {/* Help Note */}
         <div className="pt-4 border-t border-[#f0f7fc] text-center">

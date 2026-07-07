@@ -49,7 +49,7 @@ export default function LeadsPage() {
     nombreCompleto: "",
     telefono: "",
     email: "",
-    ciudad: "Ciudad de México",
+    ciudad: "Puebla",
     zona: "",
     origen: "WhatsApp Directo",
     interesServicio: "Cuidado Premium Medio Tiempo",
@@ -92,7 +92,7 @@ export default function LeadsPage() {
           nombreCompleto: "",
           telefono: "",
           email: "",
-          ciudad: "Ciudad de México",
+          ciudad: "Puebla",
           zona: "",
           origen: "WhatsApp Directo",
           interesServicio: "Cuidado Premium Medio Tiempo",
@@ -129,7 +129,20 @@ export default function LeadsPage() {
                           lead.telefono.includes(searchTerm) || 
                           (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesCity = cityFilter === "TODAS" || lead.ciudad.toUpperCase() === cityFilter.toUpperCase();
+    const normalizedCity = lead.ciudad ? lead.ciudad.trim().toUpperCase() : "";
+    let matchesCity = true;
+    if (cityFilter === "TODAS") {
+      matchesCity = true;
+    } else if (cityFilter === "OTRAS") {
+      const mainCities = ["PUEBLA", "XALAPA", "QUERÉTARO", "QUERETARO", "CDMX", "CIUDAD DE MÉXICO", "CIUDAD DE MEXICO"];
+      matchesCity = !mainCities.includes(normalizedCity);
+    } else if (cityFilter.toUpperCase() === "CDMX") {
+      matchesCity = normalizedCity === "CDMX" || normalizedCity === "CIUDAD DE MÉXICO" || normalizedCity === "CIUDAD DE MEXICO";
+    } else if (cityFilter.toUpperCase() === "QUERÉTARO") {
+      matchesCity = normalizedCity === "QUERÉTARO" || normalizedCity === "QUERETARO";
+    } else {
+      matchesCity = normalizedCity === cityFilter.toUpperCase();
+    }
     const matchesStatus = statusFilter === "TODOS" || lead.estado === statusFilter;
     const matchesAgent = agentFilter === "TODOS" || lead.idUsuarioAsignado === agentFilter;
 
@@ -185,12 +198,11 @@ export default function LeadsPage() {
               className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2 text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all cursor-pointer"
             >
               <option value="TODAS">Todas las ciudades</option>
-              <option value="Ciudad de México">Ciudad de México</option>
-              <option value="Monterrey">Monterrey</option>
-              <option value="Guadalajara">Guadalajara</option>
-              <option value="Madrid">Madrid</option>
-              <option value="Barcelona">Barcelona</option>
-              <option value="Valencia">Valencia</option>
+              <option value="Puebla">Puebla</option>
+              <option value="Xalapa">Xalapa</option>
+              <option value="Querétaro">Querétaro</option>
+              <option value="CDMX">CDMX</option>
+              <option value="OTRAS">Otras</option>
             </select>
           </div>
 
@@ -391,12 +403,11 @@ export default function LeadsPage() {
                     onChange={(e) => setNewLead({ ...newLead, ciudad: e.target.value })}
                     className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-[#026692] outline-none cursor-pointer"
                   >
-                    <option value="Ciudad de México">Ciudad de México</option>
-                    <option value="Monterrey">Monterrey</option>
-                    <option value="Guadalajara">Guadalajara</option>
-                    <option value="Madrid">Madrid</option>
-                    <option value="Barcelona">Barcelona</option>
-                    <option value="Valencia">Valencia</option>
+                    <option value="Puebla">Puebla</option>
+                    <option value="Xalapa">Xalapa</option>
+                    <option value="Querétaro">Querétaro</option>
+                    <option value="CDMX">CDMX</option>
+                    <option value="Otra">Otra</option>
                   </select>
                 </div>
 
