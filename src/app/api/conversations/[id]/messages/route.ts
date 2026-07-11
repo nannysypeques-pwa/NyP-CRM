@@ -165,7 +165,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             if (extractedData.indicacionesIngreso) updates.indicacionesIngreso = extractedData.indicacionesIngreso;
             if (extractedData.listoParaCierre) {
               updates.estado = "GANADO";
-                       // Si se detecta nuevos hijos
+            }
+
+            // Si se detecta nuevos hijos
             if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos) && extractedData.nuevosHijos.length > 0) {
               if (!updates.cantidadHijos && (!currentLead || !currentLead.cantidadHijos)) {
                 updates.cantidadHijos = extractedData.nuevosHijos.length;
@@ -248,7 +250,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
                   }
                 }
               }
-            }    }
+            }
           }
         } catch (err) {
           console.error("Error al extraer información del Lead en chat CRM:", err);

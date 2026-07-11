@@ -742,6 +742,18 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
   }
 }
 
+function parseTextoEdad(textoEdad: string): number | null {
+  if (!textoEdad) return null;
+  const numMatch = textoEdad.match(/\d+/);
+  if (!numMatch) return null;
+  const num = parseInt(numMatch[0], 10);
+  
+  if (textoEdad.toLowerCase().includes("mes")) {
+    return num / 12;
+  }
+  return num;
+}
+
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -797,11 +809,11 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     }
 
     // Validar edad/hijos
-    if (lead?.edadHijo !== undefined && lead?.edadHijo !== null) {
-      datosConocidos.push(`- Edad del Peque: "${lead.edadHijo} años" (YA REGISTRADA. No la preguntes de nuevo. Úsala para confirmar, ej: "Para el cuidado de su peque de ${lead.edadHijo} años...").`);
-    } else if (lead?.hijos && lead.hijos.length > 0) {
+    if (lead?.hijos && lead.hijos.length > 0) {
       const hijosStr = lead.hijos.map(h => `${h.nombre} (${h.textoEdad})`).join(", ");
       datosConocidos.push(`- Hijos Registrados: "${hijosStr}" (YA REGISTRADO. Dirígete a ellos por sus nombres en la conversación).`);
+    } else if (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) {
+      datosConocidos.push(`- Edad del Peque: "${lead.edadHijo} años" (YA REGISTRADA. No la preguntes de nuevo. Úsala para confirmar, ej: "Para el cuidado de su peque de ${lead.edadHijo} años...").`);
     } else {
       datosFaltantes.push(`Edad de su peque (dato clave para calificar el perfil ideal. Nota: Pídelo siempre en singular como "edad de su peque"; si el cliente aclara que son varios peques, pide los datos de todos ellos).`);
     }
@@ -871,11 +883,45 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const tieneCiudad = leadCity && leadCity !== "Por definir" && leadCity !== "No definida" && leadCity !== "";
     const tieneZona = lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "";
     const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
-    const tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) || (lead?.hijos && lead.hijos.length > 0);
+    
+    const numHijosEstimados = lead?.cantidadHijos || (lead?.hijos ? lead.hijos.length : 1);
+    let tieneEdad = false;
+    if (numHijosEstimados === 1) {
+      tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) || !!(lead?.hijos && lead.hijos.length > 0);
+    } else {
+      tieneEdad = lead?.hijos !== undefined && lead.hijos.length >= numHijosEstimados;
+    }
+
     const tieneDias = lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" && numDias > 0;
     const tieneHorario = lead?.horaInicioSolicitada && lead.horaFinSolicitada && lead.horaInicioSolicitada !== "" && lead.horaFinSolicitada !== "" && horasDiarias > 0;
 
     const countAiQuotes = lead?.cotizaciones?.filter((q: any) => q.creadoPor === "Asistente IA" && !q.deleted).length || 0;
+
+    // Verificar si la cotización está permitida de acuerdo con la edad y cantidad de niños
+    let cotizacionPermitida = true;
+    let motivoBloqueoCotizacion = "";
+
+    if (numHijosEstimados >= 3) {
+      cotizacionPermitida = false;
+      motivoBloqueoCotizacion = "Debido a que requiere el servicio para 3 o más niños, un asesor de ventas le generará su cotización personalizada.";
+    } else if (numHijosEstimados === 2) {
+      if (lead?.hijos && lead.hijos.length >= 2) {
+        const ages = lead.hijos.map(h => parseTextoEdad(h.textoEdad)).filter((a): a is number => a !== null);
+        if (ages.length >= 2) {
+          const [age1, age2] = ages;
+          const minAge = Math.min(age1, age2);
+          const ageDiff = Math.abs(age1 - age2);
+
+          if (minAge < 3) {
+            cotizacionPermitida = false;
+            motivoBloqueoCotizacion = "Debido a que al menos uno de los niños es menor de 3 años, un asesor de ventas le generará su cotización personalizada.";
+          } else if (ageDiff > 2) {
+            cotizacionPermitida = false;
+            motivoBloqueoCotizacion = "Debido a que la diferencia de edad entre los niños es mayor a 2 años, un asesor de ventas le generará su cotización personalizada.";
+          }
+        }
+      }
+    }
 
     let reglaPrecotizacionDinamica = "";
     if (countAiQuotes >= 3) {
@@ -885,11 +931,22 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
       if (!tieneZona) faltantesList.push("Zona o Colonia");
       if (!tieneRazon) faltantesList.push("Razón de Contratación");
-      if (!tieneEdad) faltantesList.push("Edad de su peque");
+      if (!tieneEdad) {
+        if (numHijosEstimados > 1) {
+          faltantesList.push("Edades de todos sus peques");
+        } else {
+          faltantesList.push("Edad de su peque");
+        }
+      }
       if (!tieneDias) faltantesList.push("Días de servicio");
       if (!tieneHorario) faltantesList.push("Horario de servicio");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, la edad de su peque, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+    } else if (!cotizacionPermitida) {
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN (REGLAS DE EDAD/CANTIDAD DE HIJOS)**: ${motivoBloqueoCotizacion}
+      * REGLA DE ORO: Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier estimación de precios, tarifas o cotizaciones en tu respuesta, y no debes incluir la etiqueta \`[COTIZACION:...]\`.
+      * Explícale al cliente con mucha calidez, amabilidad y empatía que debido a las condiciones particulares de la edad o cantidad de sus pequeños, un asesor de ventas de Nannys y Peques preparará una cotización a la medida para él.
+      * Continúa de forma muy atenta la conversación y ofrécete a resolver cualquier duda general que tenga sobre el servicio, los filtros de seguridad, la app de reportes diarios, o el respaldo psicopedagógico.`;
     } else {
       const calculatedPrice = calculatePrecotizacion(leadCity, numDias, horasDiarias);
       if (calculatedPrice) {
