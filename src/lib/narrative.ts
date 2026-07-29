@@ -115,7 +115,22 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
     text += ".";
   }
 
-  return `[Extractor IA] ${text}`;
+  // Anexar preguntas/dudas mencionadas por el cliente
+  const questions: string[] = [];
+  if (Array.isArray(data.preguntasMencionadas) && data.preguntasMencionadas.length > 0) {
+    questions.push(...data.preguntasMencionadas);
+  }
+  if (questions.length > 0) {
+    const qText = questions.map(q => q.trim()).filter(Boolean).join(". ");
+    if (qText) {
+      text += ` ${qText}`;
+      if (!text.endsWith(".")) {
+        text += ".";
+      }
+    }
+  }
+
+  return text;
 }
 
 export function renderNoteContent(content: string, leadNombre?: string): string {

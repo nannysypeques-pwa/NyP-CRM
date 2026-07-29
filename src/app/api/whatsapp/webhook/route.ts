@@ -323,14 +323,20 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          if (extractedData.preguntasMencionadas && Array.isArray(extractedData.preguntasMencionadas)) {
+            const prevQuestions = Array.isArray((currentLead as any)?.preguntasMencionadas) ? (currentLead as any).preguntasMencionadas : [];
+            const newQuestions = extractedData.preguntasMencionadas.filter((q: string) => !prevQuestions.includes(q));
+            updates.preguntasMencionadas = [...prevQuestions, ...newQuestions];
+          }
+
           if (Object.keys(updates).length > 0) {
             console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, updates);
             await db.updateLead(conv.idLead, updates);
-            
-            // Agregar una nota de seguimiento interna en el Lead para auditar los datos extraídos
-            const summaryNote = buildNarrativeSummary(currentLead, updates, extractedData.nuevosHijos);
-            await db.addNota(conv.idLead, summaryNote, "Asistente IA");
           }
+
+          // Actualizar la ÚNICA nota narrativa del Asistente IA
+          const summaryNote = buildNarrativeSummary(currentLead, updates, extractedData.nuevosHijos);
+          await db.upsertNotaIA(conv.idLead, summaryNote);
 
           if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos)) {
             const currentLeadForChild = await db.getLeadById(conv.idLead);
@@ -368,9 +374,6 @@ export async function POST(req: NextRequest) {
                     indicacionesNanny: hijo.indicacionesNanny || placeholderHijo.indicacionesNanny || "",
                     necesidades: hijo.necesidades || placeholderHijo.necesidades || ""
                   });
-                  
-                  const renameNota = `[Extractor IA] Peque renombrado: ${placeholderHijo.nombre} ahora es ${hijo.nombre} (${hijo.textoEdad})`;
-                  await db.addNota(conv.idLead, renameNota, "Asistente IA");
                 } else {
                   console.log(`[EXTRACTOR IA] Creando nuevo hijo para Lead ${conv.idLead}:`, hijo);
                   await db.crearHijo({
@@ -384,10 +387,6 @@ export async function POST(req: NextRequest) {
                     indicacionesNanny: hijo.indicacionesNanny || "",
                     necesidades: hijo.necesidades || ""
                   });
-
-                  // Agregar nota de seguimiento para el peque calificado
-                  const hijoNota = `[Extractor IA] Peque calificado: ${hijo.nombre} (${hijo.textoEdad || "edad no especificada"})${hijo.alergias ? `, Alergias: ${hijo.alergias}` : ""}${hijo.condicionMedica ? `, Condición: ${hijo.condicionMedica}` : ""}`;
-                  await db.addNota(conv.idLead, hijoNota, "Asistente IA");
                 }
               }
             }

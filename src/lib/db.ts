@@ -777,6 +777,48 @@ class BaseDeDatos {
     } as unknown as NotaLead;
   }
 
+  async upsertNotaIA(leadId: string, contenido: string): Promise<NotaLead> {
+    clearMemoryCache("leads");
+    // Buscar notas previas del "Asistente IA" para este lead
+    const existingNotes = await prisma.notaLead.findMany({
+      where: { idLead: leadId, nombreAgente: "Asistente IA" },
+      orderBy: { creadoEn: "asc" }
+    });
+
+    if (existingNotes.length > 0) {
+      const primary = existingNotes[0];
+      const updated = await prisma.notaLead.update({
+        where: { id: primary.id },
+        data: { contenido }
+      });
+
+      // Eliminar cualquier nota duplicada previa de IA para conservar estrictamente solo 1
+      if (existingNotes.length > 1) {
+        const extraIds = existingNotes.slice(1).map(n => n.id);
+        await prisma.notaLead.deleteMany({
+          where: { id: { in: extraIds } }
+        });
+      }
+
+      return {
+        ...updated,
+        creadoEn: updated.creadoEn.toISOString()
+      } as unknown as NotaLead;
+    } else {
+      const note = await prisma.notaLead.create({
+        data: {
+          idLead: leadId,
+          contenido,
+          nombreAgente: "Asistente IA"
+        }
+      });
+      return {
+        ...note,
+        creadoEn: note.creadoEn.toISOString()
+      } as unknown as NotaLead;
+    }
+  }
+
   async addSeguimiento(leadId: string, data: { titulo: string; descripcion?: string; fechaVencimiento: string }): Promise<Seguimiento> {
     const followUp = await prisma.seguimiento.create({
       data: {
