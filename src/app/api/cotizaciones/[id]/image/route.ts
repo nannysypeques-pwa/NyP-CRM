@@ -25,7 +25,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const cotizacion = await prisma.cotizacion.findUnique({
       where: { id },
-      include: { lead: true }
+      include: { 
+        lead: {
+          include: {
+            hijos: true
+          }
+        } 
+      }
     });
 
     if (!cotizacion || cotizacion.deleted) {
@@ -44,7 +50,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     const fecha = escapeXml(rawFecha.replace(/[\u200e\u200f\u202a-\u202e]/g, ""));
     const cliente = escapeXml(cotizacion.lead.nombreCompleto);
-    const edadPeque = escapeXml(cotizacion.lead.edadHijo ? `${cotizacion.lead.edadHijo} años` : "Por definir");
+    
+    // Obtener edad del peque desde lead.edadHijo o lead.hijos
+    let rawEdad = "";
+    if (cotizacion.lead.edadHijo !== null && cotizacion.lead.edadHijo !== undefined && cotizacion.lead.edadHijo > 0) {
+      rawEdad = `${cotizacion.lead.edadHijo} ${cotizacion.lead.edadHijo === 1 ? "año" : "años"}`;
+    } else if (cotizacion.lead.hijos && cotizacion.lead.hijos.length > 0) {
+      const hijoConEdad = cotizacion.lead.hijos.find(h => h.textoEdad && h.textoEdad.trim() !== "");
+      if (hijoConEdad) {
+        rawEdad = hijoConEdad.textoEdad;
+      } else if (cotizacion.lead.hijos[0].nombre) {
+        rawEdad = cotizacion.lead.hijos[0].nombre;
+      }
+    }
+    if (!rawEdad) {
+      rawEdad = "Por definir";
+    }
+    const edadPeque = escapeXml(rawEdad);
+
     const horario = escapeXml(`${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`);
     const zona = escapeXml(cotizacion.lead.zona || "Por definir");
     const precio = escapeXml(`$${cotizacion.total.toLocaleString("es-MX")} MXN`);
@@ -52,30 +75,31 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const nota = escapeXml(cotizacion.tipoServicio || "Por definir");
     const notaDetalle = escapeXml("Las horas extra tienen un costo de $100 pesos c/u.");
 
+    // Ajuste de coordenadas Y para que el texto descanse perfectamente sobre las líneas rosas del formato
     const svgOverlay = `
       <svg width="791" height="1024" xmlns="http://www.w3.org/2000/svg">
         <!-- Fecha -->
-        <text x="120" y="200" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${fecha}</text>
+        <text x="145" y="210" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${fecha}</text>
         
         <!-- Nombre del cliente -->
-        <text x="350" y="340" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${cliente}</text>
+        <text x="345" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${cliente}</text>
         
         <!-- Edad del peque -->
-        <text x="310" y="390" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${edadPeque}</text>
+        <text x="305" y="400" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${edadPeque}</text>
         
         <!-- Horario -->
-        <text x="210" y="440" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${horario}</text>
+        <text x="210" y="450" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="600" fill="#3A3A3C">${horario}</text>
         
         <!-- Zona -->
-        <text x="180" y="490" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${zona}</text>
+        <text x="180" y="507" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${zona}</text>
         
         <!-- Precio -->
-        <text x="200" y="565" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#D53F8C">${precio}</text>
-        <text x="200" y="615" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500" fill="#718096" font-style="italic">${precioDetalle}</text>
+        <text x="200" y="575" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#D53F8C">${precio}</text>
+        <text x="200" y="605" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500" fill="#718096" font-style="italic">${precioDetalle}</text>
         
         <!-- Nota -->
-        <text x="170" y="670" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${nota}</text>
-        <text x="200" y="730" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="500" fill="#718096" font-style="italic">${notaDetalle}</text>
+        <text x="170" y="683" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${nota}</text>
+        <text x="200" y="712" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500" fill="#718096" font-style="italic">${notaDetalle}</text>
       </svg>
     `;
 
