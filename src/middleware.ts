@@ -44,18 +44,28 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 3. CORS & Rate Limiting for API routes
-  if (path.startsWith("/api")) {
-    // CORS Checks
-    const origin = request.headers.get("origin");
+  // Helper function to validate allowed CORS origins (includes local dev ports)
+  const origin = request.headers.get("origin");
+  const isAllowedOrigin = (org: string | null): boolean => {
+    if (!org) return true;
     const allowedOrigins = [
       "https://nyp-crm.vercel.app",
       "https://nannysypeques.com",
       "http://localhost:3000",
-      "http://localhost:3005"
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3005",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001"
     ];
+    if (allowedOrigins.includes(org)) return true;
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(org)) return true;
+    return false;
+  };
 
-    if (origin && !allowedOrigins.includes(origin)) {
+  // 3. CORS & Rate Limiting for API routes
+  if (path.startsWith("/api")) {
+    if (origin && !isAllowedOrigin(origin)) {
       return new NextResponse(JSON.stringify({ error: "CORS origin blocked" }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
@@ -63,7 +73,7 @@ export function middleware(request: NextRequest) {
     }
 
     // Responder a solicitudes OPTIONS (preflight CORS)
-    if (request.method === "OPTIONS" && origin && allowedOrigins.includes(origin)) {
+    if (request.method === "OPTIONS" && origin && isAllowedOrigin(origin)) {
       return new NextResponse(null, {
         status: 200,
         headers: {
@@ -80,11 +90,9 @@ export function middleware(request: NextRequest) {
     const now = Date.now();
     const windowMs = 60000;
 
-    let limit = 60;
+    let limit = 600;
     if (isWhatsAppWebhook) {
-      limit = 120;
-    } else if (path.includes("/messages") || path.includes("/leads")) {
-      limit = 30;
+      limit = 300;
     }
 
     const trackerKey = `${ip}:${path}`;
@@ -142,15 +150,7 @@ export function middleware(request: NextRequest) {
   response.headers.set("Content-Security-Policy", cspHeader);
   
   // 2. Agregar cabeceras CORS a las respuestas de la API si el origen es válido
-  const origin = request.headers.get("origin");
-  const allowedOrigins = [
-    "https://nyp-crm.vercel.app",
-    "https://nannysypeques.com",
-    "http://localhost:3000",
-    "http://localhost:3005"
-  ];
-  
-  if (path.startsWith("/api") && origin && allowedOrigins.includes(origin)) {
+  if (path.startsWith("/api") && origin && isAllowedOrigin(origin)) {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");

@@ -31,9 +31,12 @@ interface User {
   creadoEn: string;
 }
 
+import { clientCache } from "@/lib/clientCache";
+
 export default function UsersAdminPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedUsers = clientCache.get<User[]>("users");
+  const [users, setUsers] = useState<User[]>(cachedUsers || []);
+  const [loading, setLoading] = useState(!cachedUsers);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,11 +49,12 @@ export default function UsersAdminPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Form states
+  const AVAILABLE_CITIES = ["CDMX", "Puebla", "Querétaro", "Xalapa"];
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [formRol, setFormRol] = useState("VENDEDOR");
-  const [formCiudad, setFormCiudad] = useState("CDMX");
+  const [formRol, setFormRol] = useState("VENDEDORA");
+  const [formCiudades, setFormCiudades] = useState<string[]>(["CDMX"]);
   const [formAvatar, setFormAvatar] = useState("");
   const [formEstado, setFormEstado] = useState("ACTIVE");
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -58,11 +62,12 @@ export default function UsersAdminPage() {
   // Load users list
   const fetchUsers = async () => {
     try {
-      setLoading(true);
+      if (!cachedUsers) setLoading(true);
       const res = await fetch("/api/users");
       if (res.ok) {
         const data = await res.json();
         setUsers(data);
+        clientCache.set("users", data);
       } else {
         const err = await res.json();
         setErrorMsg((err.error || "No tienes permisos para ver esta sección.") + " Redirigiendo al Dashboard...");
@@ -87,8 +92,8 @@ export default function UsersAdminPage() {
     setFormName("");
     setFormEmail("");
     setFormPassword("");
-    setFormRol("VENDEDOR");
-    setFormCiudad("CDMX");
+    setFormRol("VENDEDORA");
+    setFormCiudades(["CDMX"]);
     setFormAvatar("");
     setFormEstado("ACTIVE");
     setErrorMsg(null);
@@ -100,7 +105,12 @@ export default function UsersAdminPage() {
     setFormName(user.nombre);
     setFormEmail(user.email);
     setFormRol(user.rol);
-    setFormCiudad(user.ciudad || "CDMX");
+    if (user.ciudad) {
+      const split = user.ciudad.split(",").map(c => c.trim()).filter(Boolean);
+      setFormCiudades(split.length > 0 ? split : ["CDMX"]);
+    } else {
+      setFormCiudades([...AVAILABLE_CITIES]);
+    }
     setFormAvatar(user.urlAvatar || "");
     setFormEstado(user.estado);
     setEditModalOpen(true);
@@ -111,6 +121,11 @@ export default function UsersAdminPage() {
     setSelectedUser(user);
     setFormPassword("");
     setPassModalOpen(true);
+  };
+
+  const getCiudadPayload = () => {
+    if (formCiudades.length === 0 || formCiudades.length === AVAILABLE_CITIES.length) return "Todas";
+    return formCiudades.join(", ");
   };
 
   // Handle Create Submit
@@ -130,7 +145,7 @@ export default function UsersAdminPage() {
         email: formEmail,
         password: formPassword,
         rol: formRol,
-        ciudad: formRol === "GERENTE" ? null : formCiudad,
+        ciudad: getCiudadPayload(),
         urlAvatar: formAvatar || null
       };
 
@@ -174,7 +189,7 @@ export default function UsersAdminPage() {
         nombre: formName,
         email: formEmail,
         rol: formRol,
-        ciudad: formRol === "GERENTE" ? null : formCiudad,
+        ciudad: getCiudadPayload(),
         estado: formEstado,
         urlAvatar: formAvatar || null
       };
@@ -278,8 +293,8 @@ export default function UsersAdminPage() {
   // Role stats counters
   const totalCount = users.length;
   const activeCount = users.filter(u => u.estado === "ACTIVE").length;
-  const coordinateCount = users.filter(u => u.rol === "COORDINADOR").length;
-  const sellerCount = users.filter(u => u.rol === "VENDEDOR").length;
+  const coordinateCount = users.filter(u => u.rol === "COORDINADORA").length;
+  const sellerCount = users.filter(u => u.rol === "VENDEDORA").length;
 
   return (
     <div className="p-8 h-full overflow-y-auto custom-scrollbar bg-[#f3f8fc] space-y-6">
@@ -338,14 +353,14 @@ export default function UsersAdminPage() {
         <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
           <div className="p-3.5 bg-purple-50 text-purple-600 rounded-xl"><UserCheck className="w-5 h-5" /></div>
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Coordinadores</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">Coordinadoras</span>
             <p className="text-2xl font-black text-slate-800 leading-none mt-1">{coordinateCount}</p>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
           <div className="p-3.5 bg-sky-50 text-[#026692] rounded-xl"><Building className="w-5 h-5" /></div>
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Asesores Ventas</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">Vendedoras</span>
             <p className="text-2xl font-black text-slate-800 leading-none mt-1">{sellerCount}</p>
           </div>
         </div>
@@ -377,8 +392,8 @@ export default function UsersAdminPage() {
           >
             <option value="TODOS">Todos los roles</option>
             <option value="GERENTE">Gerente</option>
-            <option value="COORDINADOR">Coordinador</option>
-            <option value="VENDEDOR">Vendedor</option>
+            <option value="COORDINADORA">Coordinadora</option>
+            <option value="VENDEDORA">Vendedora</option>
           </select>
         </div>
       </div>
@@ -408,22 +423,14 @@ export default function UsersAdminPage() {
               </thead>
               <tbody className="divide-y divide-[#f0f7fc]">
                 {filteredUsers.map((user) => {
-                  const initialName = user.nombre.split(" ").map(n => n[0]).join("").slice(0,2);
+                  const initialName = user.nombre ? user.nombre.split(" ").filter(Boolean).map(n => n[0]).join("").slice(0, 2).toUpperCase() : "U";
                   return (
                     <tr key={user.id} className="hover:bg-[#fcfdfd] transition-all text-xs font-medium text-slate-700">
                       {/* User card info */}
                       <td className="py-4 px-6 flex items-center space-x-3">
-                        {user.urlAvatar ? (
-                          <img 
-                            src={user.urlAvatar} 
-                            alt={user.nombre} 
-                            className="w-9 h-9 rounded-full object-cover border border-[#b2d4e7] flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-[#026692]/10 text-[#026692] flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase">
-                            {initialName}
-                          </div>
-                        )}
+                        <div className="w-9 h-9 rounded-full bg-[#026692]/10 text-[#026692] flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-[#026692]/20">
+                          {initialName}
+                        </div>
                         <div>
                           <p className="font-extrabold text-slate-800 text-sm leading-tight">{user.nombre}</p>
                           <p className="text-[10px] text-slate-400 mt-0.5">{user.email}</p>
@@ -434,7 +441,7 @@ export default function UsersAdminPage() {
                       <td className="py-4 px-6">
                         <span className={`px-2.5 py-1 rounded-xl text-[9px] font-extrabold uppercase inline-flex items-center gap-1 ${
                           user.rol === "GERENTE" ? "bg-sky-50 text-[#026692]" :
-                          user.rol === "COORDINADOR" ? "bg-purple-50 text-purple-600" :
+                          user.rol === "COORDINADORA" ? "bg-purple-50 text-purple-600" :
                           "bg-emerald-50 text-emerald-600"
                         }`}>
                           <Shield className="w-3 h-3" /> {user.rol}
@@ -443,14 +450,19 @@ export default function UsersAdminPage() {
 
                       {/* City */}
                       <td className="py-4 px-6">
-                        {user.rol === "GERENTE" ? (
+                        {user.rol === "GERENTE" || !user.ciudad || user.ciudad === "Todas" ? (
                           <span className="text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1">
                             🌎 Toda la República
                           </span>
                         ) : (
-                          <span className="font-bold flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" /> {user.ciudad || "Sin cobertura asignada"}
-                          </span>
+                          <div className="flex flex-wrap gap-1 items-center">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            {user.ciudad.split(",").map(c => c.trim()).map((city, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded-md bg-[#026692]/10 text-[#026692] font-extrabold text-[10px] uppercase border border-[#026692]/20">
+                                {city}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </td>
 
@@ -555,8 +567,8 @@ export default function UsersAdminPage() {
                 />
               </div>
 
-              {/* Role & City row */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Role & Multi-City row */}
+              <div className="space-y-3">
                 <div className="space-y-1">
                   <label className="text-slate-500 flex items-center gap-1"><Shield className="w-3.5 h-3.5 text-slate-400" /> Rol asignado *</label>
                   <select 
@@ -564,39 +576,62 @@ export default function UsersAdminPage() {
                     onChange={(e) => setFormRol(e.target.value)}
                     className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] cursor-pointer"
                   >
-                    <option value="VENDEDOR">Vendedor</option>
-                    <option value="COORDINADOR">Coordinador</option>
+                    <option value="VENDEDORA">Vendedora</option>
+                    <option value="COORDINADORA">Coordinadora</option>
                     <option value="GERENTE">Gerente</option>
                   </select>
                 </div>
 
-                {formRol !== "GERENTE" && (
-                  <div className="space-y-1">
-                    <label className="text-slate-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400" /> Ciudad Cobertura *</label>
-                    <select 
-                      value={formCiudad}
-                      onChange={(e) => setFormCiudad(e.target.value)}
-                      className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] cursor-pointer"
+                <div className="space-y-1.5 bg-[#f4f8fc] p-3 rounded-2xl border border-[#e2edf6]">
+                  <label className="text-slate-600 flex items-center justify-between text-xs font-bold">
+                    <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[#026692]" /> Ciudad(es) de Cobertura *</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Puedes elegir varias</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {AVAILABLE_CITIES.map((city) => {
+                      const isSelected = formCiudades.includes(city);
+                      return (
+                        <button
+                          key={city}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setFormCiudades(formCiudades.filter(c => c !== city));
+                            } else {
+                              setFormCiudades([...formCiudades, city]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                            isSelected
+                              ? "bg-[#026692] text-white border-[#026692] shadow-xs"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-[#026692]/40"
+                          }`}
+                        >
+                          <span className={`w-3.5 h-3.5 rounded-md flex items-center justify-center text-[10px] font-extrabold border ${
+                            isSelected ? "bg-white text-[#026692] border-white" : "border-slate-300 bg-white text-transparent"
+                          }`}>
+                            ✓
+                          </span>
+                          {city}
+                        </button>
+                      );
+                    })}
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (formCiudades.length === AVAILABLE_CITIES.length) {
+                          setFormCiudades([]);
+                        } else {
+                          setFormCiudades([...AVAILABLE_CITIES]);
+                        }
+                      }}
+                      className="px-2 py-1 text-[11px] font-bold text-[#026692] hover:underline cursor-pointer"
                     >
-                      <option value="CDMX">CDMX</option>
-                      <option value="Puebla">Puebla</option>
-                      <option value="Querétaro">Querétaro</option>
-                      <option value="Xalapa">Xalapa</option>
-                    </select>
+                      {formCiudades.length === AVAILABLE_CITIES.length ? "Desmarcar todas" : "Seleccionar todas"}
+                    </button>
                   </div>
-                )}
-              </div>
-
-              {/* Avatar URL */}
-              <div className="space-y-1">
-                <label className="text-slate-500">URL Foto de Perfil (Opcional)</label>
-                <input 
-                  type="url" 
-                  placeholder="https://images.unsplash.com/..."
-                  value={formAvatar}
-                  onChange={(e) => setFormAvatar(e.target.value)}
-                  className="w-full bg-[#f4f8fc] border-0 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692]"
-                />
+                </div>
               </div>
 
               {/* Buttons */}
@@ -672,7 +707,7 @@ export default function UsersAdminPage() {
                 />
               </div>
 
-              {/* Role & City row */}
+              {/* Role & Status row */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-slate-500 flex items-center gap-1"><Shield className="w-3.5 h-3.5 text-slate-400" /> Rol asignado *</label>
@@ -681,31 +716,12 @@ export default function UsersAdminPage() {
                     onChange={(e) => setFormRol(e.target.value)}
                     className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] cursor-pointer"
                   >
-                    <option value="VENDEDOR">Vendedor</option>
-                    <option value="COORDINADOR">Coordinador</option>
+                    <option value="VENDEDORA">Vendedora</option>
+                    <option value="COORDINADORA">Coordinadora</option>
                     <option value="GERENTE">Gerente</option>
                   </select>
                 </div>
 
-                {formRol !== "GERENTE" && (
-                  <div className="space-y-1">
-                    <label className="text-slate-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400" /> Ciudad Cobertura *</label>
-                    <select 
-                      value={formCiudad}
-                      onChange={(e) => setFormCiudad(e.target.value)}
-                      className="w-full bg-[#f4f8fc] border-0 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] cursor-pointer"
-                    >
-                      <option value="CDMX">CDMX</option>
-                      <option value="Puebla">Puebla</option>
-                      <option value="Querétaro">Querétaro</option>
-                      <option value="Xalapa">Xalapa</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* Status & Avatar row */}
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-slate-500">Estado de la cuenta *</label>
                   <select 
@@ -717,17 +733,70 @@ export default function UsersAdminPage() {
                     <option value="INACTIVE">Inactivo / Bloqueado</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-slate-500">URL Foto de Perfil</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://images.unsplash.com/..."
-                    value={formAvatar}
-                    onChange={(e) => setFormAvatar(e.target.value)}
-                    className="w-full bg-[#f4f8fc] border-0 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692]"
-                  />
+              {/* Multi-City row */}
+              <div className="space-y-1.5 bg-[#f4f8fc] p-3 rounded-2xl border border-[#e2edf6]">
+                <label className="text-slate-600 flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[#026692]" /> Ciudad(es) de Cobertura *</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Puedes elegir varias</span>
+                </label>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {AVAILABLE_CITIES.map((city) => {
+                    const isSelected = formCiudades.includes(city);
+                    return (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setFormCiudades(formCiudades.filter(c => c !== city));
+                          } else {
+                            setFormCiudades([...formCiudades, city]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                          isSelected
+                            ? "bg-[#026692] text-[#ffffff] border-[#026692] shadow-xs"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-[#026692]/40"
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-md flex items-center justify-center text-[10px] font-extrabold border ${
+                          isSelected ? "bg-white text-[#026692] border-white" : "border-slate-300 bg-white text-transparent"
+                        }`}>
+                          ✓
+                        </span>
+                        {city}
+                      </button>
+                    );
+                  })}
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (formCiudades.length === AVAILABLE_CITIES.length) {
+                        setFormCiudades([]);
+                      } else {
+                        setFormCiudades([...AVAILABLE_CITIES]);
+                      }
+                    }}
+                    className="px-2 py-1 text-[11px] font-bold text-[#026692] hover:underline cursor-pointer"
+                  >
+                    {formCiudades.length === AVAILABLE_CITIES.length ? "Desmarcar todas" : "Seleccionar todas"}
+                  </button>
                 </div>
+              </div>
+
+              {/* URL Foto de Perfil */}
+              <div className="space-y-1">
+                <label className="text-slate-500">URL Foto de Perfil (Opcional)</label>
+                <input 
+                  type="url" 
+                  placeholder="https://images.unsplash.com/..."
+                  value={formAvatar}
+                  onChange={(e) => setFormAvatar(e.target.value)}
+                  className="w-full bg-[#f4f8fc] border-0 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692]"
+                />
               </div>
 
               {/* Buttons */}

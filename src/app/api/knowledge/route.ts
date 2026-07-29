@@ -15,6 +15,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    if (user.rol !== "GERENTE") {
+      return NextResponse.json({ error: "Acceso denegado. Se requieren permisos de Gerente." }, { status: 403 });
+    }
+
     const docs = await prisma.documentoConocimiento.findMany({
       orderBy: { creadoEn: "desc" }
     });
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    if (user.rol !== "GERENTE" && user.rol !== "COORDINADOR") {
+    if (user.rol !== "GERENTE") {
       return NextResponse.json({ error: "No autorizado para modificar la base de conocimientos" }, { status: 403 });
     }
 

@@ -16,7 +16,7 @@ model Usuario {
   nombre         String
   email          String         @unique
   contrasenaHash String
-  rol            String         // "GERENTE" | "COORDINADOR" | "VENDEDOR"
+  rol            String         // "GERENTE" | "COORDINADORA" | "VENDEDORA"
   estado         String         // "ACTIVE" | "INACTIVE"
   urlAvatar      String?
   ciudad         String?        // Puebla, CDMX, Querétaro, Xalapa

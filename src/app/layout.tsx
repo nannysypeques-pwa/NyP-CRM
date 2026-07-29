@@ -9,6 +9,7 @@ import { decryptSession } from "@/lib/session";
 import CitySelector from "@/components/CitySelector";
 import LogoutButton from "@/components/LogoutButton";
 import AlertsBanner from "@/components/AlertsBanner";
+import HeaderNotifications from "@/components/HeaderNotifications";
 import { 
   LayoutDashboard, 
   Users, 
@@ -63,7 +64,8 @@ export default function RootLayout({
   // Determine active city filter
   const activeCity = cookies().get("activeCity")?.value || "Todas";
   const userRole = user.rol;
-  const isVendedor = userRole === "VENDEDOR";
+  const hasAssignedCity = Boolean(user.ciudad && user.ciudad.trim() !== "" && user.ciudad.toUpperCase() !== "TODAS" && user.ciudad.toUpperCase() !== "TODAS LAS CIUDADES");
+  const userInitials = user.nombre ? user.nombre.split(" ").filter(Boolean).map(n => n[0]).join("").slice(0, 2).toUpperCase() : "U";
 
   return (
     <html lang="es" className="h-full overflow-hidden">
@@ -87,14 +89,14 @@ export default function RootLayout({
           <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4 space-y-4 custom-scrollbar">
             {/* Selector de Ciudad */}
             <div>
-              {!isVendedor ? (
+              {!hasAssignedCity ? (
                 <CitySelector activeCity={activeCity} />
               ) : (
                 <div className="flex items-center space-x-2.5 bg-white/70 px-3.5 py-2.5 rounded-xl border border-[#d4e6f4] shadow-sm">
                   <Building className="w-4 h-4 text-[#026692] flex-shrink-0" />
                   <div>
                     <span className="text-[9px] font-bold text-[#5caad0] uppercase tracking-wider block leading-none">Ciudad Asignada</span>
-                    <span className="text-xs font-extrabold text-[#026692] uppercase block mt-1">{user.ciudad || "No asignada"}</span>
+                    <span className="text-xs font-extrabold text-[#026692] uppercase block mt-1">{user.ciudad}</span>
                   </div>
                 </div>
               )}
@@ -111,9 +113,11 @@ export default function RootLayout({
               <SidebarLink href="/inbox" icon={<Inbox className="w-5 h-5" />} label="Inbox" />
               <SidebarLink href="/follow-ups" icon={<CalendarCheck className="w-5 h-5" />} label="Seguimientos" />
               <SidebarLink href="/quotes" icon={<FileText className="w-5 h-5" />} label="Cotizaciones" />
-              <SidebarLink href="/knowledge" icon={<BookOpen className="w-5 h-5" />} label="Base de Conocimiento" />
               {userRole === "GERENTE" && (
-                <SidebarLink href="/users" icon={<Users className="w-5 h-5" />} label="Usuarios" />
+                <>
+                  <SidebarLink href="/knowledge" icon={<BookOpen className="w-5 h-5" />} label="Base de Conocimiento" />
+                  <SidebarLink href="/users" icon={<Users className="w-5 h-5" />} label="Usuarios" />
+                </>
               )}
             </nav>
 
@@ -124,11 +128,9 @@ export default function RootLayout({
           <div className="p-4 border-t border-[#d4e6f4] flex-shrink-0 bg-[#e8f4fd]">
             {/* Widget de Perfil */}
             <div className="flex items-center space-x-3 p-2 bg-white/50 rounded-xl border border-white/20">
-              <img 
-                src={user.urlAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} 
-                alt={user.nombre} 
-                className="w-10 h-10 rounded-full object-cover border border-[#b2d4e7]"
-              />
+              <div className="w-10 h-10 rounded-full bg-[#026692] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-[#b2d4e7] shadow-sm">
+                {userInitials}
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-slate-800 truncate">{user.nombre}</p>
                 <p className="text-[9px] text-[#5caad0] font-bold uppercase truncate">{user.rol}</p>
@@ -141,30 +143,14 @@ export default function RootLayout({
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Top Header */}
-          <header className="h-16 bg-white border-b border-[#e2edf6] flex items-center justify-between px-8 flex-shrink-0">
-            {/* Global Search Bar */}
-            <div className="flex items-center space-x-4">
-              <div className="relative w-64">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Search className="w-4 h-4" />
-                </span>
-                <input 
-                  type="text" 
-                  placeholder="Buscar prospectos..."
-                  className="w-full bg-[#f0f7fc] border-0 rounded-full pl-9 pr-4 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
-                />
-              </div>
-            </div>
+          <header className="h-16 bg-[#ffffff] border-b border-[#e2edf6] flex items-center justify-between px-8 flex-shrink-0">
+            {/* Empty Left Placeholder */}
+            <div></div>
 
             {/* Header Right Actions */}
             <div className="flex items-center space-x-5">
-              <button className="p-2 text-slate-500 hover:text-[#026692] hover:bg-[#f0f7fc] rounded-full transition-all relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-amber-500 rounded-full ring-2 ring-white"></span>
-              </button>
-              <button className="p-2 text-slate-500 hover:text-[#026692] hover:bg-[#f0f7fc] rounded-full transition-all">
-                <History className="w-5 h-5" />
-              </button>
+              <HeaderNotifications />
+
               <div className="h-8 w-px bg-slate-200"></div>
               
               <div className="flex items-center space-x-3">
@@ -172,11 +158,9 @@ export default function RootLayout({
                   <p className="text-xs font-bold text-slate-700">{user.nombre}</p>
                   <p className="text-[10px] text-slate-400 capitalize">{user.rol.toLowerCase()}</p>
                 </div>
-                <img 
-                  src={user.urlAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} 
-                  alt={user.nombre} 
-                  className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                />
+                <div className="w-8 h-8 rounded-full bg-[#026692] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-slate-200 shadow-sm">
+                  {userInitials}
+                </div>
               </div>
             </div>
           </header>

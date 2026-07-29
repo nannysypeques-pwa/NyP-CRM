@@ -58,8 +58,9 @@ export async function POST(req: NextRequest) {
       maxAge: 7 * 24 * 60 * 60 // 7 days
     });
 
-    // Reset selected city to default on login
-    response.cookies.set("activeCity", "Todas", {
+    // Set activeCity cookie based on user's assigned coverage city
+    const initialActiveCity = (user.ciudad && user.ciudad.toUpperCase() !== "TODAS") ? user.ciudad : "Todas";
+    response.cookies.set("activeCity", initialActiveCity, {
       path: "/",
       maxAge: 7 * 24 * 60 * 60
     });

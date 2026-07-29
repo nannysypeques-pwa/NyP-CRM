@@ -58,14 +58,11 @@ export async function PATCH(
     }
     if (rol !== undefined) {
       updateData.rol = rol;
-      // Gerentes no tienen ciudad
-      if (rol === "GERENTE") {
-        updateData.ciudad = null;
-      } else if (ciudad !== undefined) {
+      if (ciudad !== undefined) {
         updateData.ciudad = ciudad || null;
       }
     } else if (ciudad !== undefined) {
-      updateData.ciudad = targetUser.rol === "GERENTE" ? null : (ciudad || null);
+      updateData.ciudad = ciudad || null;
     }
     if (estado !== undefined) updateData.estado = estado;
     if (urlAvatar !== undefined) updateData.urlAvatar = urlAvatar || null;

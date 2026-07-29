@@ -70,8 +70,8 @@ export function calculatePrecotizacion(ciudad: string, dias: number, horas: numb
   const daysTable = cityTable[normalizedDays];
   if (!daysTable) return null;
 
-  // Normalizar horas (3 a 10)
-  const normalizedHours = Math.max(3, Math.min(10, Math.round(horas)));
+  // Normalizar horas (3 a 10) — redondear SIEMPRE hacia arriba (regla de negocio)
+  const normalizedHours = Math.max(3, Math.min(10, Math.ceil(horas)));
   const price = daysTable[normalizedHours];
 
   return price || null;

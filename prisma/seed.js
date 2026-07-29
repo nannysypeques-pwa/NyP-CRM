@@ -39,7 +39,6 @@ async function main() {
       contrasenaHash: hashPassword(gerentePassword),
       rol: 'GERENTE',
       estado: 'ACTIVE',
-      urlAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
     }
   });
 
@@ -49,9 +48,8 @@ async function main() {
       nombre: 'Ana Beltrán',
       email: 'ana@nannysypeques.com',
       contrasenaHash: hashPassword(coordinadorPassword),
-      rol: 'COORDINADOR',
+      rol: 'COORDINADORA',
       estado: 'ACTIVE',
-      urlAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150',
     }
   });
 
@@ -61,10 +59,9 @@ async function main() {
       nombre: 'Laura Méndez',
       email: 'laura@nannysypeques.com',
       contrasenaHash: hashPassword(vendedorLauraPassword),
-      rol: 'VENDEDOR',
+      rol: 'VENDEDORA',
       ciudad: 'Puebla',
       estado: 'ACTIVE',
-      urlAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
     }
   });
 
@@ -74,10 +71,9 @@ async function main() {
       nombre: 'Carlos Ruiz',
       email: 'carlos@nannysypeques.com',
       contrasenaHash: hashPassword(vendedorCarlosPassword),
-      rol: 'VENDEDOR',
+      rol: 'VENDEDORA',
       ciudad: 'CDMX',
       estado: 'ACTIVE',
-      urlAvatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150',
     }
   });
 

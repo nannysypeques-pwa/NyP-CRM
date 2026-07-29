@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    if (user.rol !== "GERENTE" && user.rol !== "COORDINADOR") {
+    if (user.rol !== "GERENTE") {
       return NextResponse.json({ error: "No autorizado para modificar la base de conocimientos" }, { status: 403 });
     }
 
@@ -54,7 +54,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    if (user.rol !== "GERENTE" && user.rol !== "COORDINADOR") {
+    if (user.rol !== "GERENTE") {
       return NextResponse.json({ error: "No autorizado para modificar la base de conocimientos" }, { status: 403 });
     }
 

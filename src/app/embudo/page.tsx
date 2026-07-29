@@ -33,6 +33,7 @@ import {
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import { renderNoteContent } from "@/lib/narrative";
 import confetti from "canvas-confetti";
+import { formatPhoneNumber } from "@/lib/format";
 
 interface Hijo {
   id: string;
@@ -130,11 +131,15 @@ interface Conversation {
   ultimoMensajeEn: string;
 }
 
+import { clientCache } from "@/lib/clientCache";
+
 export default function KanbanPage() {
   const router = useRouter();
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedLeads = clientCache.get<Lead[]>("leads");
+  const cachedConvs = clientCache.get<Conversation[]>("conversations");
+  const [leads, setLeads] = useState<Lead[]>(cachedLeads || []);
+  const [conversations, setConversations] = useState<Conversation[]>(cachedConvs || []);
+  const [loading, setLoading] = useState(!cachedLeads);
   
   // Scopes & Filters
   const [selectedCity, setSelectedCity] = useState("TODAS");
@@ -208,6 +213,10 @@ export default function KanbanPage() {
       .then(data => {
         if (data && data.user) {
           setCurrentUser(data.user);
+          if (data.user.ciudad && data.user.ciudad.toUpperCase() !== "TODAS") {
+            const finalCity = data.user.ciudad === "Queretaro" ? "Querétaro" : data.user.ciudad;
+            setSelectedCity(finalCity);
+          }
         }
       })
       .catch(err => console.error("Error loading current user:", err));
@@ -228,35 +237,46 @@ export default function KanbanPage() {
     }
   }, []);
 
-  // Poll leads and conversations every 3 seconds to keep Kanban board up to date, unless dragging a card
+  // Poll leads and conversations to keep Kanban board up to date (pauses when tab is hidden)
   useEffect(() => {
     if (draggedLeadId !== null) return;
 
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       fetchLeadsAndConversations();
-    }, 3000);
+    }, 6000);
 
     return () => clearInterval(interval);
   }, [draggedLeadId]);
 
-  // Poll chat messages in Drawer if open
+  // Poll chat messages in Drawer if open (pauses when tab is hidden)
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (drawerOpen && activeConv) {
       fetchMessages(activeConv.id);
       interval = setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) return;
         fetchMessages(activeConv.id);
-      }, 1500);
+      }, 3000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [drawerOpen, activeConv]);
 
-  // Reset scroll ref and clear old messages when active conversation changes
+  // Reset scroll ref and load cached messages when active conversation changes
   useEffect(() => {
     hasScrolledForActiveConvRef.current = false;
-    setChatMessages([]);
+    if (activeConv?.id) {
+      const cached = clientCache.get<any[]>(`messages_${activeConv.id}`);
+      if (cached) {
+        setChatMessages(cached);
+      } else {
+        setChatMessages([]);
+      }
+    } else {
+      setChatMessages([]);
+    }
   }, [activeConv?.id]);
 
   // Scroll chat to bottom
@@ -303,6 +323,8 @@ export default function KanbanPage() {
         ]);
         setLeads(leadsData);
         setConversations(convsData);
+        clientCache.set("leads", leadsData);
+        clientCache.set("conversations", convsData);
 
         // Sincronizar selectedLead si el drawer está abierto
         setSelectedLead(current => {
@@ -330,10 +352,12 @@ export default function KanbanPage() {
   };
 
   const fetchMessages = async (convId: string) => {
+    if (!convId) return;
     try {
       const res = await fetch(`/api/conversations/${convId}/messages`);
       if (res.ok) {
         const data = await res.json();
+        clientCache.set(`messages_${convId}`, data);
         setChatMessages(prev => {
           if (
             prev.length === data.length &&
@@ -351,15 +375,33 @@ export default function KanbanPage() {
 
   const handleUpdateLeadStatus = async (leadId: string, newStatus: string) => {
     try {
+      let agentId: string | undefined = undefined;
+      if (newStatus === "CONTACTADO") {
+        const meRes = await fetch("/api/auth/me");
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.user?.userId) {
+            agentId = meData.user.userId;
+          }
+        }
+      }
+
       const res = await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: newStatus }),
+        body: JSON.stringify({ 
+          estado: newStatus,
+          ...(agentId ? { idUsuarioAsignado: agentId } : {})
+        }),
       });
       if (res.ok) {
         // Refresh local state
-        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: newStatus } : l));
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: newStatus, ...(agentId ? { idUsuarioAsignado: agentId } : {}) } : l));
         
+        if (selectedLead && selectedLead.id === leadId) {
+          setSelectedLead(prev => prev ? { ...prev, estado: newStatus, ...(agentId ? { idUsuarioAsignado: agentId } : {}) } : null);
+        }
+
         // If won, fire confetti
         if (newStatus === "GANADO") {
           confetti({
@@ -700,7 +742,7 @@ export default function KanbanPage() {
 
                 <div className="flex justify-between items-center text-[10px] pt-1">
                   <span className="text-slate-400 font-bold uppercase">{lead.origen}</span>
-                  <span className="text-[#026692] font-semibold bg-[#e1eff8] px-2 py-0.5 rounded-md">{lead.telefono}</span>
+                  <span className="text-[#026692] font-semibold bg-[#e1eff8] px-2 py-0.5 rounded-md">{formatPhoneNumber(lead.telefono)}</span>
                 </div>
               </div>
             ))}
@@ -747,7 +789,7 @@ export default function KanbanPage() {
                   <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-0.5 border border-emerald-100">
                     <Bot className="w-3.5 h-3.5" /> IA ACTIVA
                   </span>
-                  <span className="text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-md text-[10px]">{lead.telefono}</span>
+                  <span className="text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-md text-[10px]">{formatPhoneNumber(lead.telefono)}</span>
                 </div>
               </div>
             ))}
@@ -794,7 +836,7 @@ export default function KanbanPage() {
                   <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 border border-blue-100">
                     <FileText className="w-3.5 h-3.5" /> Cotizado
                   </span>
-                  <span className="text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded-md text-[10px]">{lead.telefono}</span>
+                  <span className="text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded-md text-[10px]">{formatPhoneNumber(lead.telefono)}</span>
                 </div>
               </div>
             ))}
@@ -841,7 +883,7 @@ export default function KanbanPage() {
                   <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-extrabold flex items-center gap-0.5 border border-emerald-100">
                     <CheckCircle className="w-3.5 h-3.5" /> Ganado
                   </span>
-                  <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md text-[10px]">{lead.telefono}</span>
+                  <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md text-[10px]">{formatPhoneNumber(lead.telefono)}</span>
                 </div>
               </div>
             ))}
@@ -888,7 +930,7 @@ export default function KanbanPage() {
                   <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded flex items-center gap-0.5 border border-indigo-100">
                     <User className="w-3.5 h-3.5" /> SOPORTE MANUAL
                   </span>
-                  <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md text-[10px]">{lead.telefono}</span>
+                  <span className="text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md text-[10px]">{formatPhoneNumber(lead.telefono)}</span>
                 </div>
               </div>
             ))}
@@ -915,6 +957,11 @@ export default function KanbanPage() {
                 </div>
                 <div>
                   <h2 className="font-extrabold text-slate-800 text-sm leading-tight">{selectedLead.nombreCompleto}</h2>
+                  {selectedLead.telefono && (
+                    <p className="text-[11px] font-semibold text-slate-500 leading-none my-0.5">
+                      📞 {formatPhoneNumber(selectedLead.telefono)}
+                    </p>
+                  )}
                   <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
                   </span>
@@ -1094,6 +1141,11 @@ export default function KanbanPage() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="font-extrabold text-slate-800 text-base leading-tight">{selectedLead.nombreCompleto}</h3>
+                    {selectedLead.telefono && (
+                      <p className="text-xs font-extrabold text-[#026692] flex items-center justify-center gap-1 my-1">
+                        📞 {formatPhoneNumber(selectedLead.telefono)}
+                      </p>
+                    )}
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide inline-block ${
                       selectedLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
                       selectedLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
@@ -1318,13 +1370,13 @@ export default function KanbanPage() {
                         </div>
                       )}
 
-                      {selectedLead.estado !== "PERDIDO" && (
+                      {selectedLead.estado !== "CONTACTADO" && (
                         <button 
                           type="button"
-                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "PERDIDO")}
-                          className="w-full text-slate-400 hover:text-rose-500 py-2 text-xs font-bold text-center transition-all block"
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
+                          className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] border border-[#cbdfe9] py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
                         >
-                          Mover a Perdidos
+                          <UserCheck className="w-4 h-4" /> Contactado
                         </button>
                       )}
                     </div>

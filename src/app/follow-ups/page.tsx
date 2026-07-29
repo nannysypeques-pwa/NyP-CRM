@@ -23,9 +23,12 @@ interface Seguimiento {
   estado: string;
 }
 
+import { clientCache } from "@/lib/clientCache";
+
 export default function FollowUpsPage() {
-  const [tasks, setTasks] = useState<Seguimiento[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedTasks = clientCache.get<Seguimiento[]>("tasks");
+  const [tasks, setTasks] = useState<Seguimiento[]>(cachedTasks || []);
+  const [loading, setLoading] = useState(!cachedTasks);
 
   const fetchTasks = async () => {
     try {
@@ -49,6 +52,7 @@ export default function FollowUpsPage() {
         // Sort by date ascending
         allTasks.sort((a, b) => new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime());
         setTasks(allTasks);
+        clientCache.set("tasks", allTasks);
       }
     } catch (err) {
       console.error(err);

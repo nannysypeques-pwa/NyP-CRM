@@ -45,6 +45,13 @@ export default function KnowledgePage() {
       setLoading(true);
       setError(null);
       const res = await fetch("/api/knowledge");
+      if (res.status === 403) {
+        setError("Acceso Denegado: La pestaña de Base de Conocimiento está restringida únicamente para el rol Gerente. Redirigiendo al Dashboard...");
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 2500);
+        return;
+      }
       if (!res.ok) {
         throw new Error("Error al obtener los documentos");
       }

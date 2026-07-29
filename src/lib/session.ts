@@ -23,7 +23,7 @@ export interface SessionData {
   userId: string;
   email: string;
   nombre: string;
-  rol: "GERENTE" | "COORDINADOR" | "VENDEDOR";
+  rol: "GERENTE" | "COORDINADORA" | "VENDEDORA";
   ciudad?: string; // Puebla, Xalapa, Querétaro, CDMX
   urlAvatar?: string;
 }

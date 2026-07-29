@@ -24,9 +24,12 @@ interface QuoteItem {
   validoHasta: string;
 }
 
+import { clientCache } from "@/lib/clientCache";
+
 export default function QuotesPage() {
-  const [quotes, setQuotes] = useState<QuoteItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedQuotes = clientCache.get<QuoteItem[]>("quotes");
+  const [quotes, setQuotes] = useState<QuoteItem[]>(cachedQuotes || []);
+  const [loading, setLoading] = useState(!cachedQuotes);
 
   useEffect(() => {
     const fetchQuotes = async () => {
@@ -49,6 +52,7 @@ export default function QuotesPage() {
           });
           
           setQuotes(allQuotes);
+          clientCache.set("quotes", allQuotes);
         }
       } catch (err) {
         console.error(err);

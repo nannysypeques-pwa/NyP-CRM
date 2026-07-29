@@ -152,9 +152,13 @@ interface Lead {
   cantidadHijos?: number;
 }
 
+import { clientCache } from "@/lib/clientCache";
+import { formatPhoneNumber } from "@/lib/format";
+
 export default function InboxPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string>("");
+  const cachedConvs = clientCache.get<Conversation[]>("conversations");
+  const [conversations, setConversations] = useState<Conversation[]>(cachedConvs || []);
+  const [activeConvId, setActiveConvId] = useState<string>(cachedConvs && cachedConvs.length > 0 ? cachedConvs[0].id : "");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   
@@ -163,7 +167,7 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("");
   
   // Loading & interactive UI states
-  const [loadingChats, setLoadingChats] = useState(true);
+  const [loadingChats, setLoadingChats] = useState(!cachedConvs);
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -353,34 +357,59 @@ export default function InboxPage() {
 
   const EMOJIS = ["😀", "😊", "😍", "👍", "🙌", "❤️", "✨", "👋", "👶", "👩", "📅", "⏰", "📍", "💲"];
 
-  // Poll messages and conversations every 1.5 seconds for real-time updates
+  // Poll conversations list in background
   useEffect(() => {
     fetchConversations();
-    if (activeConvId) {
-      fetchMessages(activeConvId);
-    }
-    
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       fetchConversations();
-      if (activeConvId) {
-        fetchMessages(activeConvId);
-      }
-    }, 1500);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeConvId]);
+  }, []);
 
-  // Load active lead and reset scroll ref when active conversation changes
+  // Instant switching of active conversation, loading cached messages/lead immediately
   useEffect(() => {
-    hasScrolledForActiveConvRef.current = false;
-    setMessages([]); // Clear messages immediately for immediate screen transition
+    if (!activeConvId) {
+      setMessages([]);
+      setActiveLead(null);
+      return;
+    }
 
+    hasScrolledForActiveConvRef.current = false;
+
+    // 1. Populate messages instantly from clientCache if available
+    const cachedMsgs = clientCache.get<Message[]>(`messages_${activeConvId}`);
+    if (cachedMsgs) {
+      setMessages(cachedMsgs);
+    } else {
+      setMessages([]);
+    }
+
+    // 2. Populate active lead instantly from clientCache if available, or reset to null
     const activeConv = conversations.find(c => c.id === activeConvId);
     if (activeConv?.idLead) {
+      const cachedLead = clientCache.get<Lead>(`lead_${activeConv.idLead}`);
+      if (cachedLead) {
+        setActiveLead(cachedLead);
+      } else {
+        setActiveLead(null); // Limpiar lead anterior inmediatamente para prevenir congelamientos
+      }
       fetchLeadDetails(activeConv.idLead);
     } else {
       setActiveLead(null);
     }
+
+    // 3. Fetch latest messages from server
+    fetchMessages(activeConvId);
+
+    // Poll messages for active conversation
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchMessages(activeConvId);
+    }, 3500);
+
+    return () => clearInterval(interval);
   }, [activeConvId]);
 
   // Scroll to bottom when messages update
@@ -410,6 +439,7 @@ export default function InboxPage() {
         // Sort by ultimoMensajeEn descending
         const sorted = data.sort((a: any, b: any) => new Date(b.ultimoMensajeEn).getTime() - new Date(a.ultimoMensajeEn).getTime());
         setConversations(sorted);
+        clientCache.set("conversations", sorted);
         
         // Auto select first conversation if none is active
         setActiveConvId(prev => {
@@ -427,10 +457,12 @@ export default function InboxPage() {
   };
 
   const fetchMessages = async (convId: string) => {
+    if (!convId) return;
     try {
       const res = await fetch(`/api/conversations/${convId}/messages`);
       if (res.ok) {
         const data = await res.json();
+        clientCache.set(`messages_${convId}`, data);
         setMessages(prev => {
           if (
             prev.length === data.length &&
@@ -447,10 +479,12 @@ export default function InboxPage() {
   };
 
   const fetchLeadDetails = async (leadId: string) => {
+    if (!leadId) return;
     try {
       const res = await fetch(`/api/leads/${leadId}`);
       if (res.ok) {
         const data = await res.json();
+        clientCache.set(`lead_${leadId}`, data);
         setActiveLead(data);
       }
     } catch (err) {
@@ -526,14 +560,26 @@ export default function InboxPage() {
     }
   };
 
-  // Mover a perdidos
-  const handleCloseLost = async () => {
+  // Marcar como Contactado
+  const handleMarkContacted = async () => {
     if (!activeLead) return;
     try {
+      let agentId: string | undefined = undefined;
+      const meRes = await fetch("/api/auth/me");
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        if (meData.user?.userId) {
+          agentId = meData.user.userId;
+        }
+      }
+
       const res = await fetch(`/api/leads/${activeLead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: "PERDIDO", motivoPerdida: "Tarifa no autorizada" }),
+        body: JSON.stringify({ 
+          estado: "CONTACTADO",
+          ...(agentId ? { idUsuarioAsignado: agentId } : {})
+        }),
       });
       if (res.ok) {
         fetchLeadDetails(activeLead.id);
@@ -639,10 +685,17 @@ export default function InboxPage() {
         <div className="h-16 border-b border-[#e2edf6] bg-white px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
           <div className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-full bg-[#026692] text-white flex items-center justify-center font-bold">
-              {activeLead ? activeLead.nombreCompleto.split(' ').map(n=>n[0]).join('') : "NP"}
+              {getActiveConv() ? (getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono || "NP").split(' ').filter(Boolean).map(n=>n[0]).join('').slice(0,2).toUpperCase() : (activeLead ? activeLead.nombreCompleto.split(' ').map(n=>n[0]).join('') : "NP")}
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-sm">{activeLead ? activeLead.nombreCompleto : "Conversación"}</h3>
+              <h3 className="font-bold text-slate-800 text-sm">
+                {getActiveConv() ? (getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono) : (activeLead ? activeLead.nombreCompleto : "Conversación")}
+              </h3>
+              {(getActiveConv()?.telefono || activeLead?.telefono) && (
+                <p className="text-[11px] font-semibold text-slate-500 leading-none my-0.5">
+                  📞 {formatPhoneNumber(getActiveConv()?.telefono || activeLead?.telefono)}
+                </p>
+              )}
               <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
               </span>
@@ -676,7 +729,7 @@ export default function InboxPage() {
         </div>
 
         {/* Message Stream */}
-        <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
+        <div key={activeConvId} ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
           
           {messages.length === 0 ? (
             <p className="text-center text-xs text-slate-400 my-8">Sin mensajes previos en esta conversación.</p>
@@ -796,8 +849,8 @@ export default function InboxPage() {
       </div>
 
       {/* COLUMN 3: Lead Details Card on Right */}
-      <div className="w-80 border-l border-[#e2edf6] flex flex-col flex-shrink-0 bg-white overflow-y-auto custom-scrollbar p-6 space-y-6">
-        {activeLead ? (
+      <div key={activeConvId} className="w-80 border-l border-[#e2edf6] flex flex-col flex-shrink-0 bg-white overflow-y-auto custom-scrollbar p-6 space-y-6">
+        {activeLead && getActiveConv()?.idLead && activeLead.id === getActiveConv()?.idLead ? (
           <>
             {/* Top Avatar & Name */}
             <div className="text-center space-y-3 pb-6 border-b border-[#f0f7fc]">
@@ -806,6 +859,11 @@ export default function InboxPage() {
               </div>
               <div className="space-y-1">
                 <h3 className="font-extrabold text-slate-800 text-lg leading-tight">{activeLead.nombreCompleto}</h3>
+                {(activeLead.telefono || getActiveConv()?.telefono) && (
+                  <p className="text-xs font-extrabold text-[#026692] flex items-center justify-center gap-1 my-1">
+                    📞 {formatPhoneNumber(activeLead.telefono || getActiveConv()?.telefono)}
+                  </p>
+                )}
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block ${
                   activeLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
                   activeLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
@@ -959,16 +1017,26 @@ export default function InboxPage() {
                 </div>
               )}
 
-              {activeLead.estado !== "GANADO" && activeLead.estado !== "PERDIDO" && (
+              {activeLead.estado !== "CONTACTADO" && (
                 <button
-                  onClick={handleCloseLost}
-                  className="w-full text-slate-400 hover:text-rose-500 text-xs font-bold text-center transition-all block mt-2"
+                  onClick={handleMarkContacted}
+                  className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] border border-[#cbdfe9] py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 mt-2 cursor-pointer"
                 >
-                  Mover a Perdidos
+                  <UserCheck className="w-4 h-4" /> Contactado
                 </button>
               )}
             </div>
           </>
+        ) : getActiveConv() ? (
+          <div className="text-center space-y-3 py-8 animate-pulse">
+            <div className="w-20 h-20 mx-auto rounded-full bg-[#026692]/10 text-[#026692] border border-[#e2edf6] flex items-center justify-center text-2xl font-extrabold shadow-sm">
+              {(getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono || "NP").split(' ').filter(Boolean).map(n=>n[0]).join('').slice(0,2).toUpperCase()}
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-800 text-base leading-tight">{getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono}</h3>
+              <p className="text-[11px] text-slate-400 font-bold">Sincronizando información...</p>
+            </div>
+          </div>
         ) : (
           <p className="text-xs text-slate-400 text-center py-8">Selecciona un chat para ver su ficha comercial.</p>
         )}
