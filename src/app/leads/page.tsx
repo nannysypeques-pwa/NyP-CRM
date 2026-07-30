@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Sparkles,
   Building,
-  RotateCcw
+  RotateCcw,
+  X
 } from "lucide-react";
 import { clientCache } from "@/lib/clientCache";
 import { formatPhoneNumber } from "@/lib/format";
@@ -132,6 +133,21 @@ export default function LeadsPage() {
     if (id === "agent-ana") return "Ana Beltrán";
     if (id === "gerente-gerardo") return "Gerardo Pineda";
     return "Sin asignar";
+  };
+
+  const handleMarkLost = async (leadId: string) => {
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "PERDIDO" }),
+      });
+      if (res.ok) {
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: "PERDIDO" } : l));
+      }
+    } catch (err) {
+      console.error("Error marking lead as lost:", err);
+    }
   };
 
   const clearFilters = () => {
@@ -455,12 +471,27 @@ export default function LeadsPage() {
 
                     {/* Actions */}
                     <td className="px-6 py-4 text-right">
-                      <Link 
-                        href={`/inbox?leadId=${lead.id}`}
-                        className="bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] px-3 py-1.5 rounded-xl transition-all text-xs font-bold inline-flex items-center gap-1"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" /> Chat
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link 
+                          href={`/inbox?leadId=${lead.id}`}
+                          className="bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] px-3 py-1.5 rounded-xl transition-all text-xs font-bold inline-flex items-center gap-1"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> Chat
+                        </Link>
+                        {lead.estado !== "PERDIDO" ? (
+                          <button
+                            onClick={() => handleMarkLost(lead.id)}
+                            title="Marcar como Perdido"
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2.5 py-1.5 rounded-xl transition-all text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" /> Perdido
+                          </button>
+                        ) : (
+                          <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded-xl text-[10px] font-extrabold uppercase">
+                            Perdido
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

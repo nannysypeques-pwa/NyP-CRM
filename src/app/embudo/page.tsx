@@ -1370,6 +1370,20 @@ export default function KanbanPage() {
                         </div>
                       )}
 
+                      {selectedLead.estado !== "PERDIDO" ? (
+                        <button 
+                          type="button"
+                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "PERDIDO")}
+                          className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm mt-2"
+                        >
+                          <X className="w-4 h-4 text-rose-500" /> Marcar como Perdido
+                        </button>
+                      ) : (
+                        <div className="w-full bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 mt-2">
+                          <X className="w-4 h-4 text-rose-500" /> Lead Cerrado (Perdido)
+                        </div>
+                      )}
+
                       {selectedLead.estado !== "CONTACTADO" && (
                         <button 
                           type="button"

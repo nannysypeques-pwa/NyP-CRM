@@ -645,6 +645,24 @@ function InboxContent() {
     }
   };
 
+  // Close lead as PERDIDO
+  const handleCloseLost = async () => {
+    if (!activeLead) return;
+    try {
+      const res = await fetch(`/api/leads/${activeLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "PERDIDO" }),
+      });
+      if (res.ok) {
+        fetchLeadDetails(activeLead.id);
+        fetchConversations();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Marcar como Contactado
   const handleMarkContacted = async () => {
     if (!activeLead) return;
@@ -1099,6 +1117,19 @@ function InboxContent() {
               ) : (
                 <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
                   <CheckCircle className="w-4 h-4" /> ¡Deal Ganado! (Cliente)
+                </div>
+              )}
+
+              {activeLead.estado !== "PERDIDO" ? (
+                <button
+                  onClick={handleCloseLost}
+                  className="w-full bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-300 hover:border-rose-400 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 mt-2"
+                >
+                  <X className="w-4 h-4 text-rose-500" /> Marcar como Perdido
+                </button>
+              ) : (
+                <div className="w-full bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 mt-2">
+                  <X className="w-4 h-4 text-rose-500" /> Lead Cerrado (Perdido)
                 </div>
               )}
 
