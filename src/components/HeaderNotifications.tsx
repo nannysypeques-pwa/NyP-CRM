@@ -52,12 +52,19 @@ export default function HeaderNotifications() {
   // IDs que conocíamos antes del último polling — para detectar IDs verdaderamente nuevas
   const knownIdsRef = useRef<Set<string>>(new Set());
 
+  // Flag para saber si es la primera llamada al servidor (no detectar nuevas en el primer fetch)
+  const isFirstFetchRef = useRef<boolean>(true);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   // Cargar readIds desde localStorage al montar
+  // También inicializar knownIdsRef con los IDs ya leídos para que en el primer fetch no se consideren nuevos
   useEffect(() => {
-    setReadIdsState(loadReadIds());
+    const stored = loadReadIds();
+    setReadIdsState(stored);
+    // Pre-poblar knownIdsRef con los IDs leídos para que el primer fetch no los marque como nuevos
+    // (se re-poblará con todos los IDs reales en el primer fetch)
   }, []);
 
   const setReadIds = (ids: string[]) => {
@@ -70,24 +77,31 @@ export default function HeaderNotifications() {
       const res = await fetch("/api/notifications");
       if (res.ok) {
         const data: NotificationItem[] = await res.json();
-
-        setNotifications(data);
-
-        // Solo agregar al badget IDs que sean NUEVAS (no las que ya conocíamos)
         const incomingIds = data.map(n => n.id);
-        const genuinelyNew = incomingIds.filter(id => !knownIdsRef.current.has(id));
 
-        if (genuinelyNew.length > 0) {
-          // Hay notificaciones que no existían antes → quitar de readIds para que aparezcan como no leídas
-          setReadIdsState(prev => {
-            const updated = prev.filter(id => !genuinelyNew.includes(id));
-            saveReadIds(updated);
-            return updated;
-          });
+        if (isFirstFetchRef.current) {
+          // Primera carga: registrar IDs existentes como "ya conocidas" SIN tocar readIds.
+          // Esto evita que notificaciones ya leídas vuelvan a aparecer como no leídas.
+          knownIdsRef.current = new Set(incomingIds);
+          isFirstFetchRef.current = false;
+          setNotifications(data);
+        } else {
+          // Fetches posteriores: detectar solo IDs genuinamente nuevas
+          const genuinelyNew = incomingIds.filter(id => !knownIdsRef.current.has(id));
+
+          if (genuinelyNew.length > 0) {
+            // Nuevas notificaciones que aparecieron DESPUÉS de la primera carga → marcarlas como no leídas
+            setReadIdsState(prev => {
+              const updated = prev.filter(id => !genuinelyNew.includes(id));
+              saveReadIds(updated);
+              return updated;
+            });
+          }
+
+          // Actualizar el conjunto de IDs conocidas
+          knownIdsRef.current = new Set(incomingIds);
+          setNotifications(data);
         }
-
-        // Actualizar el conjunto de IDs conocidas
-        knownIdsRef.current = new Set(incomingIds);
       }
     } catch (err) {
       console.error("Error al cargar notificaciones:", err);
