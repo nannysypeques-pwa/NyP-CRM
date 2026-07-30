@@ -217,6 +217,20 @@ function InboxContent() {
   const [savingNote, setSavingNote] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // Global AI switch — afecta TODAS las conversaciones y las que lleguen nuevas
+  const [globalIA, setGlobalIA] = useState<boolean>(true);
+  const [togglingGlobalIA, setTogglingGlobalIA] = useState(false);
+
+  useEffect(() => {
+    // Cargar el estado global de IA al montar
+    fetch("/api/ia-global")
+      .then(res => res.json())
+      .then(data => {
+        if (typeof data.iaGlobal === "boolean") setGlobalIA(data.iaGlobal);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/auth/me")
       .then(res => res.json())
@@ -545,7 +559,7 @@ function InboxContent() {
     }
   };
 
-  // Toggle AI switch
+  // Toggle AI switch para conversación individual
   const handleToggleAI = async (currentVal: boolean) => {
     try {
       const res = await fetch(`/api/conversations/${activeConvId}`, {
@@ -558,6 +572,29 @@ function InboxContent() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Toggle AI global — aplica a TODOS los leads y nuevos que lleguen
+  const handleToggleGlobalIA = async () => {
+    if (togglingGlobalIA) return;
+    setTogglingGlobalIA(true);
+    const newVal = !globalIA;
+    try {
+      const res = await fetch("/api/ia-global", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ iaGlobal: newVal }),
+      });
+      if (res.ok) {
+        setGlobalIA(newVal);
+        // Refrescar conversaciones para reflejar el nuevo estado en la lista
+        fetchConversations();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTogglingGlobalIA(false);
     }
   };
 
@@ -715,6 +752,32 @@ function InboxContent() {
           <h2 className="text-xl font-extrabold text-[#026692]">Mensajes</h2>
           <button className="p-1.5 bg-[#026692] text-white hover:bg-[#1d4359] rounded-xl transition-all shadow-sm">
             <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Global AI Toggle */}
+        <div className={`px-4 py-2.5 flex items-center justify-between border-b ${
+          globalIA ? "bg-blue-50 border-blue-100" : "bg-slate-50 border-[#e2edf6]"
+        } transition-colors`}>
+          <div className="flex items-center gap-2">
+            <Bot className={`w-3.5 h-3.5 ${globalIA ? "text-blue-600" : "text-slate-400"}`} />
+            <span className={`text-[10px] font-extrabold uppercase tracking-wide ${
+              globalIA ? "text-blue-700" : "text-slate-400"
+            }`}>
+              IA Global {globalIA ? "Activa" : "Inactiva"}
+            </span>
+          </div>
+          <button
+            onClick={handleToggleGlobalIA}
+            disabled={togglingGlobalIA}
+            title={globalIA ? "Desactivar IA para todos los leads" : "Activar IA para todos los leads"}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+              globalIA ? "bg-[#026692]" : "bg-slate-300"
+            } ${togglingGlobalIA ? "opacity-60 cursor-wait" : "cursor-pointer"}`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+              globalIA ? "translate-x-4.5" : "translate-x-0.5"
+            }`} />
           </button>
         </div>
 

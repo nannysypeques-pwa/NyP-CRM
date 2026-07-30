@@ -627,11 +627,18 @@ class BaseDeDatos {
     }
 
     if (matchedLead) {
+      // Leer el estado global de IA para aplicarlo a la nueva conversación
+      let iaActivaDefault = true;
+      try {
+        const { getGlobalIA } = await import("@/app/api/ia-global/route");
+        iaActivaDefault = getGlobalIA();
+      } catch (_) {}
+
       const newConv = await prisma.conversacion.create({
         data: {
           idLead: matchedLead.id,
           telefono: matchedLead.telefono,
-          iaActiva: true,
+          iaActiva: iaActivaDefault,
           estado: "ABIERTA"
         }
       });
@@ -653,11 +660,18 @@ class BaseDeDatos {
       }
     });
 
+    // Leer el estado global de IA para aplicarlo a la nueva conversación
+    let iaActivaForNew = true;
+    try {
+      const { getGlobalIA } = await import("@/app/api/ia-global/route");
+      iaActivaForNew = getGlobalIA();
+    } catch (_) {}
+
     const newConv = await prisma.conversacion.create({
       data: {
         idLead: newLead.id,
         telefono: newLead.telefono,
-        iaActiva: true,
+        iaActiva: iaActivaForNew,
         estado: "NUEVA"
       }
     });
