@@ -19,21 +19,75 @@ interface NotificationItem {
   link: string;
 }
 
+const LOCAL_STORAGE_KEY = "nyp_read_notification_ids";
+
+function loadReadIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReadIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
 export default function HeaderNotifications() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"ALL" | "LISTO_CIERRE" | "ATENCION_HUMANA">("ALL");
-  const [readIds, setReadIds] = useState<string[]>([]);
+
+  // Persistir IDs leídas en localStorage para sobrevivir recargas y polling
+  const [readIds, setReadIdsState] = useState<string[]>([]);
+
+  // IDs que conocíamos antes del último polling — para detectar IDs verdaderamente nuevas
+  const knownIdsRef = useRef<Set<string>>(new Set());
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Cargar readIds desde localStorage al montar
+  useEffect(() => {
+    setReadIdsState(loadReadIds());
+  }, []);
+
+  const setReadIds = (ids: string[]) => {
+    setReadIdsState(ids);
+    saveReadIds(ids);
+  };
 
   const fetchNotifications = async () => {
     try {
       const res = await fetch("/api/notifications");
       if (res.ok) {
-        const data = await res.json();
+        const data: NotificationItem[] = await res.json();
+
         setNotifications(data);
+
+        // Solo agregar al badget IDs que sean NUEVAS (no las que ya conocíamos)
+        const incomingIds = data.map(n => n.id);
+        const genuinelyNew = incomingIds.filter(id => !knownIdsRef.current.has(id));
+
+        if (genuinelyNew.length > 0) {
+          // Hay notificaciones que no existían antes → quitar de readIds para que aparezcan como no leídas
+          setReadIdsState(prev => {
+            const updated = prev.filter(id => !genuinelyNew.includes(id));
+            saveReadIds(updated);
+            return updated;
+          });
+        }
+
+        // Actualizar el conjunto de IDs conocidas
+        knownIdsRef.current = new Set(incomingIds);
       }
     } catch (err) {
       console.error("Error al cargar notificaciones:", err);
@@ -44,7 +98,7 @@ export default function HeaderNotifications() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000); // Polling cada 15 segundos
+    const interval = setInterval(fetchNotifications, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -69,8 +123,14 @@ export default function HeaderNotifications() {
 
   const markAsRead = (id: string) => {
     if (!readIds.includes(id)) {
-      setReadIds(prev => [...prev, id]);
+      const updated = [...readIds, id];
+      setReadIds(updated);
     }
+  };
+
+  const markAllAsRead = () => {
+    const allIds = notifications.map(n => n.id);
+    setReadIds(allIds);
   };
 
   const handleNotificationClick = (n: NotificationItem) => {
@@ -155,7 +215,7 @@ export default function HeaderNotifications() {
                 <Bell className="w-8 h-8 text-slate-300 mx-auto" />
                 <p className="text-xs font-bold text-slate-600">Sin notificaciones pendientes</p>
                 <p className="text-[11px] text-slate-400">
-                  Aparecerán alertas cuando los leads lleguen a "Listos para Cierre" o "Atención Humana".
+                  Aparecerán alertas cuando los leads lleguen a &quot;Listos para Cierre&quot; o &quot;Atención Humana&quot;.
                 </p>
               </div>
             ) : (
@@ -184,6 +244,11 @@ export default function HeaderNotifications() {
                       )}
                     </div>
 
+                    {/* Indicador de no leído */}
+                    {!isRead && (
+                      <span className="absolute top-4 right-10 w-2 h-2 bg-emerald-500 rounded-full"></span>
+                    )}
+
                     {/* Contenido */}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
@@ -201,7 +266,7 @@ export default function HeaderNotifications() {
                         </span>
                       </div>
 
-                      <h4 className="text-xs font-bold text-slate-800 mt-1 truncate group-hover:text-[#026692] transition-colors">
+                      <h4 className={`text-xs font-bold mt-1 truncate group-hover:text-[#026692] transition-colors ${isRead ? "text-slate-500" : "text-slate-800"}`}>
                         {item.nombreCompleto}
                       </h4>
                       <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed mt-0.5 font-medium">
@@ -232,7 +297,7 @@ export default function HeaderNotifications() {
             </Link>
             {unreadCount > 0 && (
               <button
-                onClick={() => setReadIds(notifications.map(n => n.id))}
+                onClick={markAllAsRead}
                 className="text-slate-400 hover:text-slate-600 font-bold px-2 py-1 hover:bg-slate-100 rounded-lg transition-all"
               >
                 Marcar leídas
