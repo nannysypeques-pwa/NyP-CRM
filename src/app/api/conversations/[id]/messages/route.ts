@@ -125,6 +125,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
+    // Si llega un mensaje de cliente (INBOUND) y el lead está PERDIDO, reactivarlo automáticamente
+    if (direccion === "INBOUND" && conv?.idLead) {
+      const currentLead = await db.getLeadById(conv.idLead);
+      if (currentLead && currentLead.estado === "PERDIDO") {
+        const hasQuotes = currentLead.cotizaciones && currentLead.cotizaciones.length > 0;
+        const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
+        const reactivatedStatus = hasQuotes ? "COTIZADO" : (hasCity ? "CONTACTADO" : "NUEVO");
+        console.log(`[REACTIVACIÓN LEAD] Lead ${conv.idLead} estaba PERDIDO y envió mensaje. Reactivando a estado: ${reactivatedStatus}`);
+        await db.updateLead(conv.idLead, { estado: reactivatedStatus });
+      }
+    }
+
     // Si el mensaje viene del cliente (INBOUND) y la IA está activada en la conversación,
     // generamos una respuesta inteligente con OpenAI.
     if (direccion === "INBOUND" && conv?.iaActiva) {

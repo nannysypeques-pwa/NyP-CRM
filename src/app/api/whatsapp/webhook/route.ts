@@ -249,6 +249,18 @@ export async function POST(req: NextRequest) {
     // Get or create conversation in db
     const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
 
+    // Si el lead estaba en estado PERDIDO y el cliente vuelve a escribir, reactivarlo al estado correspondiente
+    if (conv.idLead) {
+      const currentLead = await db.getLeadById(conv.idLead);
+      if (currentLead && currentLead.estado === "PERDIDO") {
+        const hasQuotes = currentLead.cotizaciones && currentLead.cotizaciones.length > 0;
+        const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
+        const reactivatedStatus = hasQuotes ? "COTIZADO" : (hasCity ? "CONTACTADO" : "NUEVO");
+        console.log(`[REACTIVACIÓN LEAD] Lead ${conv.idLead} estaba PERDIDO y volvió a escribir. Reactivando a estado: ${reactivatedStatus}`);
+        await db.updateLead(conv.idLead, { estado: reactivatedStatus });
+      }
+    }
+
     // Auto-detect city and update lead
     if (conv.idLead) {
       const detectedCity = detectCityFromText(content);

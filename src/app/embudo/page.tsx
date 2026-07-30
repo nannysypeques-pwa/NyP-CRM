@@ -1307,33 +1307,36 @@ export default function KanbanPage() {
                   )}
                 </div>
 
-                {/* Acciones Comerciales */}
-                <div className="space-y-3 pt-4 border-t border-[#f0f7fc]">
-                  <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px]">Acciones Comerciales</h4>
-                  
-                  {selectedLead.ciudad === "Por definir" || selectedLead.ciudad === "" || !selectedLead.ciudad ? (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left">
-                      <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                        <span>Falta Asignar Ciudad</span>
+                  {/* Acciones Comerciales */}
+                  <div className="space-y-3 pt-4 border-t border-[#f0f7fc]">
+                    <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px]">Acciones Comerciales</h4>
+                    
+                    {(selectedLead.ciudad === "Por definir" || selectedLead.ciudad === "" || !selectedLead.ciudad) && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left mb-3">
+                        <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <span>Falta Asignar Ciudad</span>
+                        </div>
+                        <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
+                          Este lead aún no tiene una ciudad asignada. El chatbot la detectará o puedes actualizarla en Leads.
+                        </p>
                       </div>
-                      <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-                        Este lead aún no tiene una ciudad asignada. El chatbot la detectará o puedes actualizarla en Leads.
-                      </p>
-                    </div>
-                  ) : (
+                    )}
+
                     <div className="space-y-3">
                       {/* Quote action trigger */}
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          setQuoteForm(q => ({ ...q, ciudad: selectedLead.ciudad, tipoServicio: selectedLead.interesServicio }));
-                          setQuoteBuilderOpen(true);
-                        }}
-                        className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                      >
-                        <FileText className="w-4 h-4 text-[#026692]" /> Crear Cotización
-                      </button>
+                      {selectedLead.ciudad && selectedLead.ciudad !== "Por definir" && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setQuoteForm(q => ({ ...q, ciudad: selectedLead.ciudad, tipoServicio: selectedLead.interesServicio }));
+                            setQuoteBuilderOpen(true);
+                          }}
+                          className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] border border-[#e2edf6] text-[#026692] py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <FileText className="w-4 h-4 text-[#026692]" /> Crear Cotización
+                        </button>
+                      )}
 
                       {/* Close Won trigger */}
                       {selectedLead.estado !== "ATENCION_HUMANA" && selectedLead.estado !== "GANADO" && (
@@ -1394,8 +1397,7 @@ export default function KanbanPage() {
                         </button>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
 
               </div>
 
