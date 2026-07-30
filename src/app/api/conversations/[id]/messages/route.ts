@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, extractLeadInfo, parseNumDias } from "@/lib/openai";
+import { generateAIResponse, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
 import prisma from "@/lib/prisma";
 import { buildNarrativeSummary } from "@/lib/narrative";
 
@@ -381,7 +381,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             updatedMissing = updatedMissing.filter(item => !item.toLowerCase().includes("edad"));
           }
 
-          // Detectar si el cliente está listo para el cierre / contratación o handoff de la IA
+          // Evaluar la intención del cliente basándose en el análisis del contexto de la conversación
           const lowerAiResponse = aiResponseText.toLowerCase();
           const esHandoffText = lowerAiResponse.includes("canalizar") || 
                                 lowerAiResponse.includes("canalizaré") || 
@@ -389,16 +389,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
                                 lowerAiResponse.includes("paso con un asesor") || 
                                 lowerAiResponse.includes("transferir") || 
                                 lowerAiResponse.includes("equipo de asesoría");
+
+          const isClosingIntent = Boolean(extractedData?.listoParaCierre) || hasBuyingIntent(contenido);
+          const isHumanRequested = detectHumanAttentionRequest(contenido) || 
+                                   Boolean(extractedData?.requiereAtencionHumana) || 
+                                   esHandoffText;
           
           let nuevoEstado = lead.estado;
-          if (esHandoffText || (extractedData && extractedData.listoParaCierre)) {
+
+          // Prioridad 1: Si la INTENCIÓN PRINCIPAL es cerrar o contratar (pago, agendar, formalizar) -> GANADO ("Listos para el Cierre")
+          if (isClosingIntent) {
             nuevoEstado = "GANADO";
-          } else {
+            console.log(`[INTENCIÓN DE CIERRE] Lead ${conv.idLead} tiene intención de contratación -> GANADO (Listo para cierre).`);
+          }
+          // Prioridad 2: Si la INTENCIÓN PRINCIPAL es atención humana por dudas/soporte sin intención directa de pago/cierre -> ATENCION_HUMANA
+          else if (isHumanRequested) {
+            nuevoEstado = "ATENCION_HUMANA";
+            await db.updateConversation(conv.id, { iaActiva: false });
+            console.log(`[ATENCIÓN HUMANA DETECTADA] Lead ${conv.idLead} cambió a estado ATENCION_HUMANA e IA fue pausada.`);
+          }
+          // Prioridad 3: Cotización enviada -> COTIZADO
+          else {
             const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
                                         lowerAiResponse.includes("cotización") || 
                                         /\$\d+/.test(aiResponseText);
             
-            if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO") {
+            if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO" && lead.estado !== "ATENCION_HUMANA") {
               nuevoEstado = "COTIZADO";
             }
           }
@@ -406,7 +422,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           await db.updateLead(conv.idLead, {
             estado: nuevoEstado,
             datosFaltantes: updatedMissing,
-            resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente proporcionó más detalles en el chat." : "Cliente interesado en servicios de cuidado infantil."
+            resumenIA: updatedAiSummary ? updatedAiSummary + " Actualización: Cliente comunicó su intención en el chat." : "Cliente interesado en servicios de cuidado infantil."
           });
         }
       }

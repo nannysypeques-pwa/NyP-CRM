@@ -61,6 +61,62 @@ export function parseNumDias(diasText: string): number {
   return 0;
 }
 
+export function detectHumanAttentionRequest(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // strip accents
+
+  const keywords = [
+    "humano",
+    "humana",
+    "persona",
+    "agente",
+    "asesor",
+    "asesora",
+    "atencion humana",
+    "hablar con alguien",
+    "hablar con persona",
+    "hablar con humano",
+    "persona real",
+    "alguien real",
+    "carne y hueso",
+    "no quiero ia",
+    "no quiero bot",
+    "no quiero robot",
+    "quiero un humano",
+    "quiero una persona",
+    "pasame con",
+    "comunicame con",
+    "transfere con",
+    "transferir con",
+    "llamar a un humano",
+    "llamar con alguien"
+  ];
+
+  return keywords.some(k => lower.includes(k));
+}
+
+export function hasBuyingIntent(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const keywords = [
+    "contratar",
+    "contratacion",
+    "pagar",
+    "pago",
+    "transferencia",
+    "ficha de pago",
+    "cuenta de banco",
+    "cerrar",
+    "agendar niñera",
+    "agendar nanny",
+    "aceptar cotizacion",
+    "acepto la cotizacion",
+    "acepto el presupuesto",
+    "listo para contratar"
+  ];
+  return keywords.some(k => lower.includes(k));
+}
+
 const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia especializada en el cuidado y desarrollo infantil en Puebla, Xalapa, Querétaro y CDMX.
 
 Tu objetivo principal es atender por WhatsApp a madres, padres o tutores interesados en nuestros servicios, responder sus dudas con amabilidad, resaltar los beneficios reales de contratar Nannys y Peques, recopilar la información necesaria para el CRM y facilitar que un asesor comercial pueda cerrar la venta.
@@ -1532,8 +1588,9 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - razonContratacion: Motivo, necesidad o razón principal por la que busca o contrata el servicio (ej: 'necesito quien cuide a mi hijo mientras trabajo', 'trabajo por las tardes', 'apoyo después de la escuela', 'salir de viaje', etc.). Extrae siempre una frase corta y descriptiva resumida que represente esta razón si el cliente menciona para qué o por qué requiere el servicio. No lo dejes vacío si el cliente responde a la pregunta de por qué requiere el servicio.
 - mascotas: Mascotas en el hogar (ej: "2 perros", "1 gato"). Solo si se menciona de forma explícita. Si no se menciona o no está claro, NO extraigas este campo (no pongas "Ninguna").
 - indicacionesIngreso: Indicaciones de ingreso. Solo si se mencionan explícitamente.
-- preguntasMencionadas: Un arreglo de cadenas de texto en tercera persona resumiendo las preguntas clave, dudas u objeciones particulares expresadas por el cliente en el mensaje o conversación (ej: ["Ha preguntado por qué tendría que contratarnos a nosotros y no a otra agencia", "preguntó si la niñera puede cocinar"]). Si no hay preguntas particulares nuevas, deja este campo fuera del JSON o vacío.
-- listoParaCierre: boolean (true si el cliente acepta avanzar a la contratación, muestra interés definitivo en contratar el servicio, responde afirmativamente a la propuesta de verificar disponibilidad de niñera para el cierre, o solicita de forma explícita que lo contacte un asesor para realizar el pago/contrato/cierre).
+- preguntasMencionadas: Un arreglo de cadenas de texto en tercera persona resumiendo las preguntas clave, dudas u objeciones particulares expresadas por el cliente en el mensaje o conversación (ej: ["Ha preguntado por qué tendría que contratarnos a nosotros y no a otra agencia", "preguntó si la niñera puede cocinar"]). Si no hay preguntas particulares mevas, deja este campo fuera del JSON o vacío.
+- listoParaCierre: boolean (true si la INTENCIÓN PRINCIPAL del cliente es cerrar o avanzar a la contratación del servicio, pagar, hacer transferencia o agendar la niñera. Ejemplo: "Quiero contratar", "Acepto la cotización", "¿Dónde pago?", "Pásame a un asesor para pagar y contratar ya").
+- requiereAtencionHumana: boolean (true si la INTENCIÓN PRINCIPAL del cliente es pedir hablar con un humano por dudas específicas, explicaciones detalladas, soporte o quejas, SIN que su intención sea ya cerrar la contratación. Ejemplo: "Necesito hablar con una persona para que me explique bien", "No entiendo esto, pásame a un humano", "Prefiero hablar con alguien real antes de decidir").
 - nuevosHijos: Un arreglo de objetos para cada uno de los peques que se mencionen o identifiquen en el mensaje, donde cada objeto tenga:
   * nombre: Nombre del peque (si el cliente no menciona el nombre del peque, debes generar un nombre genérico secuencial como "Peque 1", "Peque 2", etc.).
   * textoEdad: Edad del niño de forma descriptiva (ej: "1 año", "3 años", "7 años").

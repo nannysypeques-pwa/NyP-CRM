@@ -616,14 +616,19 @@ export default function KanbanPage() {
       const matchesSearch = l.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || l.telefono.includes(searchTerm);
       if (!matchesSearch) return false;
 
-      // 1. PENDIENTE (NUEVO): Todos los que escribieron pero aún no sabemos de qué ciudad son
-      // Se muestran todos los que no tienen ciudad definida ("Por definir" o vacía), sin importar la ciudad seleccionada.
+      // 1. Leads marcados como PERDIDO o CONTACTADO desaparecen de todos los embudos
+      // (permanecen guardados en la BD y visibles en la pestaña Leads).
+      if (l.estado === "PERDIDO" || l.estado === "CONTACTADO") {
+        return false;
+      }
+
+      // 2. PENDIENTE (NUEVO sin ciudad): Prospectos que escribieron pero no tienen ciudad asignada
       if (status === "NUEVO") {
         const isPendiente = l.ciudad === "Por definir" || l.ciudad === "" || !l.ciudad;
         return l.estado === "NUEVO" && isPendiente;
       }
 
-      // Para el resto de estados, deben tener una ciudad asignada y coincidir con el filtro
+      // Para las demás columnas del embudo, deben tener una ciudad asignada y coincidir con el filtro de ciudad
       const hasCity = l.ciudad && l.ciudad !== "Por definir" && l.ciudad !== "";
       if (!hasCity) return false;
 
@@ -635,19 +640,20 @@ export default function KanbanPage() {
         (normSelected === "QUERÉTARO" && normLead === "QUERETARO") ||
         (normSelected === "QUERETARO" && normLead === "QUERÉTARO");
 
-      if (status === "COTIZADO") {
-        const hasQuotes = l.cotizaciones && l.cotizaciones.length > 0;
-        const isActuallyCotizado = l.estado === "COTIZADO" || (hasQuotes && l.estado !== "GANADO" && l.estado !== "PERDIDO");
-        return isActuallyCotizado && matchesCity;
-      }
+      if (!matchesCity) return false;
 
+      // 3. EN CONVERSACIÓN: Prospectos nuevos con ciudad que están conversando antes de marcarse como contactados
       if (status === "CONTACTADO") {
-        const hasQuotes = l.cotizaciones && l.cotizaciones.length > 0;
-        const isActuallyContactado = l.estado === "CONTACTADO" && !hasQuotes;
-        return isActuallyContactado && matchesCity;
+        return l.estado === "NUEVO" && hasCity;
       }
 
-      return l.estado === status && matchesCity;
+      // 4. EN COTIZACIÓN: Únicamente prospectos en estado COTIZADO
+      if (status === "COTIZADO") {
+        return l.estado === "COTIZADO";
+      }
+
+      // 5. Demás columnas (GANADO, ATENCION_HUMANA, etc.) coinciden estrictamente con su estado
+      return l.estado === status;
     });
   };
 
