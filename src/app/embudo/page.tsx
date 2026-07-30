@@ -701,14 +701,14 @@ export default function KanbanPage() {
       </div>
 
       {/* Kanban Board Grid */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-6 min-h-0 overflow-hidden">
+      <div className="flex-1 flex lg:grid lg:grid-cols-5 overflow-x-auto lg:overflow-hidden gap-4 lg:gap-6 min-h-0 pb-2 custom-scrollbar snap-x">
         
         {/* COLUMN 1: PENDIENTES */}
         <div 
           onDragOver={(e) => handleDragOver(e, "NUEVO")}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, "NUEVO")}
-          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+          className={`w-[82vw] sm:w-80 lg:w-auto flex-shrink-0 snap-center rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
             activeDropCol === "NUEVO" ? "bg-sky-50 border-2 border-dashed border-[#026692]/40" : "bg-[#f8fbfe] border border-[#e2edf6]"
           }`}
         >
@@ -754,7 +754,7 @@ export default function KanbanPage() {
           onDragOver={(e) => handleDragOver(e, "CONTACTADO")}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, "CONTACTADO")}
-          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+          className={`w-[82vw] sm:w-80 lg:w-auto flex-shrink-0 snap-center rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
             activeDropCol === "CONTACTADO" ? "bg-amber-50/70 border-2 border-dashed border-amber-500/40" : "bg-[#fdfbf7] border border-[#f5ece0]"
           }`}
         >
@@ -801,7 +801,7 @@ export default function KanbanPage() {
           onDragOver={(e) => handleDragOver(e, "COTIZADO")}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, "COTIZADO")}
-          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+          className={`w-[82vw] sm:w-80 lg:w-auto flex-shrink-0 snap-center rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
             activeDropCol === "COTIZADO" ? "bg-blue-50 border-2 border-dashed border-blue-500/40" : "bg-[#f6faff] border border-[#e2edf6]"
           }`}
         >
@@ -848,7 +848,7 @@ export default function KanbanPage() {
           onDragOver={(e) => handleDragOver(e, "GANADO")}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, "GANADO")}
-          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+          className={`w-[82vw] sm:w-80 lg:w-auto flex-shrink-0 snap-center rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
             activeDropCol === "GANADO" ? "bg-emerald-50 border-2 border-dashed border-emerald-500/40" : "bg-[#f5fbf8] border border-[#e2f3eb]"
           }`}
         >
@@ -895,7 +895,7 @@ export default function KanbanPage() {
           onDragOver={(e) => handleDragOver(e, "ATENCION_HUMANA")}
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, "ATENCION_HUMANA")}
-          className={`rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
+          className={`w-[82vw] sm:w-80 lg:w-auto flex-shrink-0 snap-center rounded-3xl p-4 flex flex-col h-full min-h-0 overflow-hidden transition-all duration-200 ${
             activeDropCol === "ATENCION_HUMANA" ? "bg-indigo-50 border-2 border-dashed border-indigo-500/40" : "bg-[#faf9fe] border border-[#ebe7f5]"
           }`}
         >

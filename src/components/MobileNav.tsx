@@ -56,8 +56,8 @@ export default function MobileNav({ user, activeCity }: MobileNavProps) {
 
   return (
     <>
-      {/* Mobile Top App Bar (Only visible on screens < md) */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-[#e2edf6] flex-shrink-0 z-30 sticky top-0 shadow-sm">
+      {/* Mobile Top App Bar (Only visible on screens < lg) */}
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-[#e2edf6] flex-shrink-0 z-30 sticky top-0 shadow-sm">
         <div className="flex items-center space-x-3">
           <button
             onClick={() => setIsOpen(true)}
@@ -93,7 +93,7 @@ export default function MobileNav({ user, activeCity }: MobileNavProps) {
 
       {/* Mobile Slide-Over Drawer Overlay */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="lg:hidden fixed inset-0 z-50 flex">
           {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in"
@@ -175,7 +175,7 @@ export default function MobileNav({ user, activeCity }: MobileNavProps) {
 
       {/* Mobile Bottom Navigation Dock (Native App Bar for Mobile Phones) */}
       <nav 
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#e2edf6] z-40 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#e2edf6] z-40 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         <Link 

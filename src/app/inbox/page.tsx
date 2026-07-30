@@ -26,7 +26,9 @@ import {
   TrendingUp,
   UserCheck,
   X,
-  Save
+  Save,
+  ArrowLeft,
+  Info
 } from "lucide-react";
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import { renderNoteContent } from "@/lib/narrative";
@@ -186,6 +188,10 @@ function InboxContent() {
   // Loading & interactive UI states
   const [loadingChats, setLoadingChats] = useState(!cachedConvs);
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
+
+  // Mobile view states (lista vs chat vs expediente)
+  const [mobileView, setMobileView] = useState<"list" | "chat">(paramLeadId || paramConvId ? "chat" : "list");
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -746,7 +752,7 @@ function InboxContent() {
     <div className="flex h-full bg-white relative overflow-hidden">
       
       {/* COLUMN 1: Conversation List */}
-      <div className="w-80 border-r border-[#e2edf6] flex flex-col flex-shrink-0 bg-[#f8fbfe]">
+      <div className={`w-full lg:w-80 border-r border-[#e2edf6] ${mobileView === "chat" ? "hidden lg:flex" : "flex"} flex-col flex-shrink-0 bg-[#f8fbfe]`}>
         {/* Messages Header */}
         <div className="p-4 flex items-center justify-between border-b border-[#e2edf6]">
           <h2 className="text-xl font-extrabold text-[#026692]">Mensajes</h2>
@@ -809,7 +815,10 @@ function InboxContent() {
             return (
               <button 
                 key={conv.id}
-                onClick={() => setActiveConvId(conv.id)}
+                onClick={() => {
+                  setActiveConvId(conv.id);
+                  setMobileView("chat");
+                }}
                 className={`w-full text-left p-4 flex items-start space-x-3 transition-all ${
                   isActive ? "bg-[#e8f4fd] border-l-4 border-[#026692]" : "hover:bg-[#f0f7fc]"
                 }`}
@@ -845,50 +854,69 @@ function InboxContent() {
       </div>
 
       {/* COLUMN 2: Chat area */}
-      <div className="flex-1 flex flex-col h-full bg-[#f4f8fc]">
+      <div className={`flex-1 ${mobileView === "list" ? "hidden lg:flex" : "flex"} flex-col h-full bg-[#f4f8fc]`}>
         
         {/* Chat Window Header */}
-        <div className="h-16 border-b border-[#e2edf6] bg-white px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-full bg-[#026692] text-white flex items-center justify-center font-bold">
+        <div className="h-16 border-b border-[#e2edf6] bg-white px-4 md:px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
+          <div className="flex items-center space-x-2.5">
+            {/* Back button on Mobile */}
+            <button
+              onClick={() => setMobileView("list")}
+              className="lg:hidden p-1.5 text-[#026692] hover:bg-[#e8f4fd] rounded-xl flex items-center gap-1 font-bold text-xs"
+              aria-label="Volver a lista de chats"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+
+            <div className="w-9 h-9 rounded-full bg-[#026692] text-white flex items-center justify-center font-bold flex-shrink-0">
               {getActiveConv() ? (getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono || "NP").split(' ').filter(Boolean).map(n=>n[0]).join('').slice(0,2).toUpperCase() : (activeLead ? activeLead.nombreCompleto.split(' ').map(n=>n[0]).join('') : "NP")}
             </div>
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm">
+            <div className="min-w-0">
+              <h3 className="font-bold text-slate-800 text-sm truncate max-w-[160px] md:max-w-none">
                 {getActiveConv() ? (getActiveConv()?.lead?.nombreCompleto || getActiveConv()?.telefono) : (activeLead ? activeLead.nombreCompleto : "Conversación")}
               </h3>
               {(getActiveConv()?.telefono || activeLead?.telefono) && (
-                <p className="text-[11px] font-semibold text-slate-500 leading-none my-0.5">
+                <p className="text-[10px] md:text-[11px] font-semibold text-slate-500 leading-none my-0.5 truncate">
                   📞 {formatPhoneNumber(getActiveConv()?.telefono || activeLead?.telefono)}
                 </p>
               )}
-              <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+              <span className="text-[9px] md:text-[10px] text-emerald-500 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
               </span>
             </div>
           </div>
 
-          {/* AI toggler */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 bg-[#f4f8fc] px-3 py-1.5 rounded-xl border border-[#e8f2fa]">
-              <span className="text-xs font-bold text-slate-500">Asistente IA</span>
+          {/* AI toggler & Lead details trigger for Mobile */}
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <div className="flex items-center space-x-1.5 md:space-x-2 bg-[#f4f8fc] px-2.5 py-1.5 rounded-xl border border-[#e8f2fa]">
+              <span className="text-[10px] md:text-xs font-bold text-slate-500">IA</span>
               <button 
                 onClick={() => handleToggleAI(getActiveConv()?.iaActiva || false)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`relative inline-flex h-5 w-9 md:h-6 md:w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   getActiveConv()?.iaActiva ? "bg-emerald-500" : "bg-slate-300"
                 }`}
               >
                 <span 
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    getActiveConv()?.iaActiva ? "translate-x-5" : "translate-x-0"
+                  className={`pointer-events-none inline-block h-4 w-4 md:h-5 md:w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    getActiveConv()?.iaActiva ? "translate-x-4 md:translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
-              <span className={`text-[10px] font-extrabold uppercase ${getActiveConv()?.iaActiva ? "text-emerald-500" : "text-slate-400"}`}>
+              <span className={`text-[9px] md:text-[10px] font-extrabold uppercase ${getActiveConv()?.iaActiva ? "text-emerald-500" : "text-slate-400"}`}>
                 {getActiveConv()?.iaActiva ? "Activo" : "Pausado"}
               </span>
             </div>
-            <button className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+
+            {/* Info button to open Lead Details Modal on Mobile */}
+            <button
+              onClick={() => setShowMobileDetails(true)}
+              className="lg:hidden p-2 text-[#026692] hover:bg-[#e8f4fd] rounded-xl flex items-center justify-center border border-[#d4e6f4]"
+              title="Ver Ficha del Lead"
+            >
+              <Info className="w-5 h-5" />
+            </button>
+
+            <button className="hidden lg:block p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
               <MoreVertical className="w-5 h-5" />
             </button>
           </div>
@@ -1014,8 +1042,8 @@ function InboxContent() {
 
       </div>
 
-      {/* COLUMN 3: Lead Details Card on Right */}
-      <div key={activeConvId} className="w-80 border-l border-[#e2edf6] flex flex-col flex-shrink-0 bg-white overflow-y-auto custom-scrollbar p-6 space-y-6">
+      {/* COLUMN 3: Lead Details Card on Right (Desktop) */}
+      <div key={activeConvId} className="hidden lg:flex w-80 border-l border-[#e2edf6] flex-col flex-shrink-0 bg-white overflow-y-auto custom-scrollbar p-6 space-y-6">
         {activeLead && getActiveConv()?.idLead && activeLead.id === getActiveConv()?.idLead ? (
           <>
             {/* Top Avatar & Name */}
@@ -1412,6 +1440,136 @@ function InboxContent() {
               >
                 ✓ Enviar al Cliente
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE LEAD DETAILS DRAWER MODAL */}
+      {showMobileDetails && activeLead && (
+        <div className="lg:hidden fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-sm bg-white h-full flex flex-col shadow-2xl overflow-y-auto custom-scrollbar p-6 space-y-6 animate-slide-left">
+            <div className="flex items-center justify-between border-b border-[#e2edf6] pb-4 flex-shrink-0">
+              <h3 className="font-extrabold text-[#026692] text-sm uppercase tracking-wider flex items-center gap-2">
+                <UserCheck className="w-4 h-4" /> Expediente del Lead
+              </h3>
+              <button
+                onClick={() => setShowMobileDetails(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Avatar & Basic Info */}
+            <div className="text-center space-y-3 pb-6 border-b border-[#f0f7fc]">
+              <div className="w-20 h-20 mx-auto rounded-full bg-[#026692]/10 text-[#026692] border border-[#e2edf6] flex items-center justify-center text-2xl font-extrabold shadow-sm">
+                {activeLead.nombreCompleto.split(' ').map(n=>n[0]).join('').slice(0,2)}
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-slate-800 text-base leading-tight">{activeLead.nombreCompleto}</h3>
+                {activeLead.telefono && (
+                  <p className="text-xs font-extrabold text-[#026692] flex items-center justify-center gap-1 my-1">
+                    📞 {formatPhoneNumber(activeLead.telefono)}
+                  </p>
+                )}
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block ${
+                  activeLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
+                  activeLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
+                  activeLead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
+                  activeLead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                }`}>
+                  {activeLead.estado === "GANADO" ? "CLIENTE CERRADO" : "POTENCIAL " + activeLead.estado}
+                </span>
+              </div>
+            </div>
+
+            {/* Profile Info fields */}
+            <div className="space-y-4 text-xs">
+              <h4 className="font-extrabold text-[#026692] uppercase tracking-wider text-[10px]">Información del Lead</h4>
+              <div className="space-y-2.5">
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 font-bold block">Ciudad y Zona</span>
+                    <span className="font-bold text-slate-700">{activeLead.ciudad}, {activeLead.zona}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 font-bold block">Edad del Niño/a</span>
+                    <span className="font-bold text-slate-700">{activeLead.edadHijo ? `${activeLead.edadHijo} años` : "Por definir"}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 bg-[#f4f8fc] rounded-xl text-[#026692] mt-0.5">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 font-bold block">Servicio de interés</span>
+                    <span className="font-bold text-slate-700 uppercase leading-snug">{activeLead.interesServicio}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Intención Comercial */}
+            <FormattedIntencionComercial 
+              lead={activeLead}
+              title={
+                <span className="text-[9px] uppercase font-bold tracking-wider text-[#026692] flex items-center gap-1.5 font-extrabold">
+                  <Bot className="w-3.5 h-3.5" /> Intención Comercial
+                </span>
+              }
+            />
+
+            {/* Action buttons */}
+            <div className="space-y-3 pt-4 border-t border-[#f0f7fc]">
+              <button
+                onClick={() => {
+                  setShowMobileDetails(false);
+                  openQuoteModal();
+                }}
+                className="w-full bg-[#026692] hover:bg-[#1d4359] text-white py-3 rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-sky-200" /> Generar Cotización
+              </button>
+              
+              {activeLead.estado !== "GANADO" ? (
+                <button
+                  onClick={() => {
+                    handleCloseWon();
+                    setShowMobileDetails(false);
+                  }}
+                  className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-500 py-3 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5"
+                >
+                  ✓ Cerrar Ganado
+                </button>
+              ) : (
+                <div className="w-full bg-emerald-50 text-emerald-600 border border-emerald-200 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> ¡Deal Ganado!
+                </div>
+              )}
+
+              {activeLead.estado !== "PERDIDO" && (
+                <button
+                  onClick={() => {
+                    handleCloseLost();
+                    setShowMobileDetails(false);
+                  }}
+                  className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-300 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 mt-2"
+                >
+                  <X className="w-4 h-4 text-rose-500" /> Marcar como Perdido
+                </button>
+              )}
             </div>
 
           </div>
