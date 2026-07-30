@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Link from "next/link";
 import SidebarLink from "@/components/SidebarLink";
@@ -10,6 +10,8 @@ import CitySelector from "@/components/CitySelector";
 import LogoutButton from "@/components/LogoutButton";
 import AlertsBanner from "@/components/AlertsBanner";
 import HeaderNotifications from "@/components/HeaderNotifications";
+import PWAInstaller from "@/components/PWAInstaller";
+import MobileNav from "@/components/MobileNav";
 import { 
   LayoutDashboard, 
   Users, 
@@ -17,19 +19,39 @@ import {
   CalendarCheck, 
   FileText, 
   BookOpen, 
-  Settings, 
-  HelpCircle,
-  Search,
-  Bell,
-  History,
   HeartHandshake,
   Kanban,
   Building
 } from "lucide-react";
 
+export const viewport: Viewport = {
+  themeColor: "#026692",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "NyP CRM - Premium Care CRM",
   description: "Sistema Integral Comercial y Operativo de Nannys y Peques",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "NyP CRM",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" }
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }
+    ]
+  }
 };
 
 export default function RootLayout({
@@ -52,7 +74,13 @@ export default function RootLayout({
   if (!user) {
     return (
       <html lang="es" className="h-full overflow-hidden">
+        <head>
+          <link rel="manifest" href="/manifest.json" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        </head>
         <body className="flex h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
+          <PWAInstaller />
           <main className="flex-1 overflow-hidden relative">
             {children}
           </main>
@@ -69,11 +97,21 @@ export default function RootLayout({
 
   return (
     <html lang="es" className="h-full overflow-hidden">
-      <body className="flex h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+      </head>
+      <body className="flex flex-col md:flex-row h-full bg-[#f3f8fc] text-slate-800 overflow-hidden font-sans">
         <ScrollReset />
+        <PWAInstaller />
         
-        {/* Sidebar */}
-        <aside className="w-64 bg-[#e8f4fd] border-r border-[#d4e6f4] flex flex-col justify-between flex-shrink-0 h-full overflow-hidden">
+        {/* Mobile Navigation Drawer & Bottom Bar */}
+        <MobileNav user={user} activeCity={activeCity} />
+
+        {/* Desktop Sidebar (Only visible on screens >= md) */}
+        <aside className="hidden md:flex w-64 bg-[#e8f4fd] border-r border-[#d4e6f4] flex-col justify-between flex-shrink-0 h-full overflow-hidden">
           {/* Logo - Fijo arriba */}
           <div className="p-6 flex items-center space-x-3 flex-shrink-0">
             <div className="w-10 h-10 bg-[#026692] rounded-xl flex items-center justify-center text-white shadow-md">
@@ -120,8 +158,6 @@ export default function RootLayout({
                 </>
               )}
             </nav>
-
-
           </div>
 
           {/* Pie del Sidebar (Solo Perfil y Logout) - Fijo abajo */}
@@ -141,9 +177,9 @@ export default function RootLayout({
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Top Header */}
-          <header className="h-16 bg-[#ffffff] border-b border-[#e2edf6] flex items-center justify-between px-8 flex-shrink-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-14 md:pb-0">
+          {/* Top Header (Desktop) */}
+          <header className="hidden md:flex h-16 bg-[#ffffff] border-b border-[#e2edf6] items-center justify-between px-8 flex-shrink-0">
             {/* Empty Left Placeholder */}
             <div></div>
 

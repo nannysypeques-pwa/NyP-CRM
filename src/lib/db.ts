@@ -630,7 +630,7 @@ class BaseDeDatos {
       // Leer el estado global de IA para aplicarlo a la nueva conversación
       let iaActivaDefault = true;
       try {
-        const { getGlobalIA } = await import("@/app/api/ia-global/route");
+        const { getGlobalIA } = await import("@/lib/iaGlobal");
         iaActivaDefault = getGlobalIA();
       } catch (_) {}
 
@@ -663,7 +663,7 @@ class BaseDeDatos {
     // Leer el estado global de IA para aplicarlo a la nueva conversación
     let iaActivaForNew = true;
     try {
-      const { getGlobalIA } = await import("@/app/api/ia-global/route");
+      const { getGlobalIA } = await import("@/lib/iaGlobal");
       iaActivaForNew = getGlobalIA();
     } catch (_) {}
 

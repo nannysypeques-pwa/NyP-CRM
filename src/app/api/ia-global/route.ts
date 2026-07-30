@@ -1,23 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-
-// Server-side singleton — persists for the lifetime of the Node process.
-// Defaults to true (AI on by default for all new conversations).
-declare global {
-  // eslint-disable-next-line no-var
-  var __nyp_ia_global: boolean | undefined;
-}
-
-function getGlobalIA(): boolean {
-  if (global.__nyp_ia_global === undefined) {
-    global.__nyp_ia_global = true; // Default: IA activa
-  }
-  return global.__nyp_ia_global;
-}
-
-function setGlobalIA(value: boolean) {
-  global.__nyp_ia_global = value;
-}
+import { getGlobalIA, setGlobalIA } from "@/lib/iaGlobal";
 
 /** GET /api/ia-global — Devuelve el estado actual del switch global de IA */
 export async function GET() {
@@ -47,6 +30,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
-
-/** Exportar el getter para usarlo en el webhook al crear nuevas conversaciones */
-export { getGlobalIA };
