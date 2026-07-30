@@ -408,7 +408,7 @@ export default function LeadsPage() {
                   <tr key={lead.id} className="hover:bg-[#f8fbfe] transition-all group font-medium text-slate-700">
                     {/* Name */}
                     <td className="px-6 py-4 font-extrabold text-slate-800">
-                      <Link href={`/inbox`} className="hover:text-[#026692] flex items-center gap-1.5">
+                      <Link href={`/inbox?leadId=${lead.id}`} className="hover:text-[#026692] flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-[#026692]"></span>
                         <span>{lead.nombreCompleto}</span>
                       </Link>
@@ -456,7 +456,7 @@ export default function LeadsPage() {
                     {/* Actions */}
                     <td className="px-6 py-4 text-right">
                       <Link 
-                        href="/inbox"
+                        href={`/inbox?leadId=${lead.id}`}
                         className="bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] px-3 py-1.5 rounded-xl transition-all text-xs font-bold inline-flex items-center gap-1"
                       >
                         <MessageSquare className="w-3.5 h-3.5" /> Chat

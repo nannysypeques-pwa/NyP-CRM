@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { 
   Search, 
@@ -30,6 +31,8 @@ import {
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import { renderNoteContent } from "@/lib/narrative";
 import confetti from "canvas-confetti";
+import { clientCache } from "@/lib/clientCache";
+import { formatPhoneNumber } from "@/lib/format";
 
 interface Message {
   id: string;
@@ -152,13 +155,27 @@ interface Lead {
   cantidadHijos?: number;
 }
 
-import { clientCache } from "@/lib/clientCache";
-import { formatPhoneNumber } from "@/lib/format";
+function InboxContent() {
+  const searchParams = useSearchParams();
+  const paramLeadId = searchParams ? searchParams.get("leadId") : null;
+  const paramConvId = searchParams ? searchParams.get("convId") : null;
 
-export default function InboxPage() {
   const cachedConvs = clientCache.get<Conversation[]>("conversations");
   const [conversations, setConversations] = useState<Conversation[]>(cachedConvs || []);
-  const [activeConvId, setActiveConvId] = useState<string>(cachedConvs && cachedConvs.length > 0 ? cachedConvs[0].id : "");
+  const [activeConvId, setActiveConvId] = useState<string>(() => {
+    if (cachedConvs && cachedConvs.length > 0) {
+      if (paramConvId) {
+        const found = cachedConvs.find(c => c.id === paramConvId);
+        if (found) return found.id;
+      }
+      if (paramLeadId) {
+        const found = cachedConvs.find(c => c.idLead === paramLeadId);
+        if (found) return found.id;
+      }
+      return cachedConvs[0].id;
+    }
+    return "";
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   
@@ -357,18 +374,30 @@ export default function InboxPage() {
 
   const EMOJIS = ["😀", "😊", "😍", "👍", "🙌", "❤️", "✨", "👋", "👶", "👩", "📅", "⏰", "📍", "💲"];
 
-  // Poll conversations list in background
+  // Polleo en segundo plano con alta frecuencia (1.5s) + Sincronización instantánea al regresar a la pestaña
   useEffect(() => {
     fetchConversations();
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return;
       fetchConversations();
-    }, 5000);
+    }, 1500);
 
-    return () => clearInterval(interval);
-  }, []);
+    const handleFocus = () => {
+      fetchConversations();
+      if (activeConvId) fetchMessages(activeConvId);
+    };
 
-  // Instant switching of active conversation, loading cached messages/lead immediately
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [activeConvId]);
+
+  // Cambio instantáneo de conversación activa + polleo ultra-rápido de mensajes en pantalla (1.2s)
   useEffect(() => {
     if (!activeConvId) {
       setMessages([]);
@@ -378,7 +407,7 @@ export default function InboxPage() {
 
     hasScrolledForActiveConvRef.current = false;
 
-    // 1. Populate messages instantly from clientCache if available
+    // 1. Cargar mensajes instantáneamente desde caché local
     const cachedMsgs = clientCache.get<Message[]>(`messages_${activeConvId}`);
     if (cachedMsgs) {
       setMessages(cachedMsgs);
@@ -386,28 +415,28 @@ export default function InboxPage() {
       setMessages([]);
     }
 
-    // 2. Populate active lead instantly from clientCache if available, or reset to null
+    // 2. Cargar datos del lead activo instantáneamente desde caché local
     const activeConv = conversations.find(c => c.id === activeConvId);
     if (activeConv?.idLead) {
       const cachedLead = clientCache.get<Lead>(`lead_${activeConv.idLead}`);
       if (cachedLead) {
         setActiveLead(cachedLead);
       } else {
-        setActiveLead(null); // Limpiar lead anterior inmediatamente para prevenir congelamientos
+        setActiveLead(null);
       }
       fetchLeadDetails(activeConv.idLead);
     } else {
       setActiveLead(null);
     }
 
-    // 3. Fetch latest messages from server
+    // 3. Obtener últimos mensajes del servidor
     fetchMessages(activeConvId);
 
-    // Poll messages for active conversation
+    // Polleo ultra-rápido de mensajes para el chat activo (1.2s)
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return;
       fetchMessages(activeConvId);
-    }, 3500);
+    }, 1200);
 
     return () => clearInterval(interval);
   }, [activeConvId]);
@@ -431,6 +460,23 @@ export default function InboxPage() {
     }
   }, [messages]);
 
+  // Sincronizar selección de chat si cambia la URL o se cargan las conversaciones
+  useEffect(() => {
+    if (!conversations || conversations.length === 0) return;
+
+    if (paramConvId) {
+      const matched = conversations.find(c => c.id === paramConvId);
+      if (matched && activeConvId !== matched.id) {
+        setActiveConvId(matched.id);
+      }
+    } else if (paramLeadId) {
+      const matched = conversations.find(c => c.idLead === paramLeadId);
+      if (matched && activeConvId !== matched.id) {
+        setActiveConvId(matched.id);
+      }
+    }
+  }, [paramLeadId, paramConvId, conversations]);
+
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/conversations");
@@ -441,8 +487,15 @@ export default function InboxPage() {
         setConversations(sorted);
         clientCache.set("conversations", sorted);
         
-        // Auto select first conversation if none is active
         setActiveConvId(prev => {
+          if (paramConvId) {
+            const found = sorted.find((c: any) => c.id === paramConvId);
+            if (found) return found.id;
+          }
+          if (paramLeadId) {
+            const found = sorted.find((c: any) => c.idLead === paramLeadId);
+            if (found) return found.id;
+          }
           if (sorted.length > 0 && !prev) {
             return sorted[0].id;
           }
@@ -508,13 +561,35 @@ export default function InboxPage() {
     }
   };
 
-  // Send message as Agent
+  // Enviar mensaje como Agente (Optimistic UI 0ms + Turbo Burst 600ms)
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || !activeConvId) return;
 
-    const text = chatInput;
+    const text = chatInput.trim();
     setChatInput("");
+
+    // 1. OPTIMISTIC UPDATE: Agregar el mensaje a la pantalla de inmediato sin esperar al servidor (0ms)
+    const tempMsg: Message = {
+      id: `temp_${Date.now()}`,
+      idConversacion: activeConvId,
+      direccion: "OUTBOUND",
+      tipoRemitente: "AGENT",
+      contenido: text,
+      creadoEn: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+
+    // Mover la conversación al inicio de la lista lateral de inmediato
+    setConversations(prev => {
+      return prev.map(c => {
+        if (c.id === activeConvId) {
+          return { ...c, ultimoMensajeEn: tempMsg.creadoEn };
+        }
+        return c;
+      }).sort((a, b) => new Date(b.ultimoMensajeEn).getTime() - new Date(a.ultimoMensajeEn).getTime());
+    });
 
     try {
       const res = await fetch(`/api/conversations/${activeConvId}/messages`, {
@@ -523,13 +598,23 @@ export default function InboxPage() {
         body: JSON.stringify({
           direccion: "OUTBOUND",
           tipoRemitente: "AGENT",
-          idRemitente: "agent-laura",
+          idRemitente: currentUser?.userId || "agent-laura",
           contenido: text
         }),
       });
+
       if (res.ok) {
         fetchMessages(activeConvId);
         fetchConversations();
+
+        // 2. RÁFAGA TURBO: Pollear cada 600ms durante 6s para reflejar respuestas de la IA o cliente de forma ultra-rápida
+        let bursts = 0;
+        const burstInterval = setInterval(() => {
+          bursts++;
+          fetchMessages(activeConvId);
+          fetchConversations();
+          if (bursts >= 10) clearInterval(burstInterval);
+        }, 600);
       }
     } catch (err) {
       console.error(err);
@@ -1239,5 +1324,20 @@ export default function InboxPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function InboxPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-full bg-[#f3f8fc]">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 border-4 border-[#026692] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-bold text-[#026692]">Cargando Inbox...</p>
+        </div>
+      </div>
+    }>
+      <InboxContent />
+    </Suspense>
   );
 }
