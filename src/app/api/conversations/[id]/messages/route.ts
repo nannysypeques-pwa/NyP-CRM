@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
 import prisma from "@/lib/prisma";
 import { buildNarrativeSummary } from "@/lib/narrative";
 
@@ -134,6 +134,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const reactivatedStatus = hasQuotes ? "COTIZADO" : (hasCity ? "CONTACTADO" : "NUEVO");
         console.log(`[REACTIVACIÓN LEAD] Lead ${conv.idLead} estaba PERDIDO y envió mensaje. Reactivando a estado: ${reactivatedStatus}`);
         await db.updateLead(conv.idLead, { estado: reactivatedStatus });
+      }
+
+      // Extraer ubicación (ciudad y municipio) y edad del peque determinísticamente
+      const loc = detectLocationFromText(contenido);
+      const detectedAge = detectAgeFromText(contenido);
+      const detUpdates: any = {};
+
+      if (loc.ciudad) {
+        detUpdates.ciudad = loc.ciudad;
+        detUpdates.estado = "CONTACTADO";
+      }
+      if (loc.zona) detUpdates.zona = loc.zona;
+      if (detectedAge !== null) detUpdates.edadHijo = detectedAge;
+
+      if (Object.keys(detUpdates).length > 0) {
+        console.log(`[EXTRACTOR DETERMINISTA - CRM] Actualizando Lead ${conv.idLead} con:`, detUpdates);
+        await db.updateLead(conv.idLead, detUpdates);
       }
     }
 

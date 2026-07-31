@@ -143,6 +143,7 @@ interface Lead {
   edadHijo?: number;
   nivelUrgencia: string;
   estado: string;
+  idUsuarioAsignado?: string;
   resumenIA?: string;
   datosFaltantes?: string[];
   notas?: { id: string; contenido: string; nombreAgente: string; creadoEn: string }[];
@@ -222,6 +223,7 @@ function InboxContent() {
   const [newNoteText, setNewNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [usersList, setUsersList] = useState<any[]>(clientCache.get<any[]>("users_list") || []);
 
   // Global AI switch — afecta TODAS las conversaciones y las que lleguen nuevas
   const [globalIA, setGlobalIA] = useState<boolean>(true);
@@ -235,6 +237,17 @@ function InboxContent() {
         if (typeof data.iaGlobal === "boolean") setGlobalIA(data.iaGlobal);
       })
       .catch(() => {});
+
+    // Cargar lista de usuarios del sistema para mostrar responsable asignado
+    fetch("/api/users")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setUsersList(data);
+          clientCache.set("users_list", data);
+        }
+      })
+      .catch(err => console.error("Error loading users:", err));
   }, []);
 
   useEffect(() => {
@@ -247,6 +260,50 @@ function InboxContent() {
       })
       .catch(err => console.error("Error loading current user:", err));
   }, []);
+
+  const renderStatusBadge = (lead: Lead) => {
+    let text = "";
+    let style = "";
+
+    switch (lead.estado) {
+      case "NUEVO":
+        text = "NUEVO";
+        style = "bg-sky-50 text-[#026692] border border-sky-200/60";
+        break;
+      case "CONTACTADO":
+        const agent = usersList.find(u => u.id === lead.idUsuarioAsignado);
+        const agentName = agent ? agent.nombre : (lead.idUsuarioAsignado ? "Asignado" : "");
+        text = agentName ? `CONTACTADO POR ${agentName.toUpperCase()}` : "CONTACTADO";
+        style = "bg-amber-50 text-amber-700 border border-amber-200/60";
+        break;
+      case "COTIZADO":
+        text = "EN COTIZACIÓN";
+        style = "bg-blue-50 text-blue-700 border border-blue-200/60";
+        break;
+      case "GANADO":
+        text = "CLIENTE GANADO";
+        style = "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
+        break;
+      case "ATENCION_HUMANA":
+        text = "ATENCIÓN HUMANA";
+        style = "bg-indigo-50 text-indigo-700 border border-indigo-200/60";
+        break;
+      case "PERDIDO":
+        text = "PERDIDO";
+        style = "bg-rose-50 text-rose-700 border border-rose-200/60";
+        break;
+      default:
+        text = lead.estado;
+        style = "bg-slate-50 text-slate-700 border border-slate-200";
+        break;
+    }
+
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block shadow-xs ${style}`}>
+        {text}
+      </span>
+    );
+  };
 
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -508,6 +565,9 @@ function InboxContent() {
         clientCache.set("conversations", sorted);
         
         setActiveConvId(prev => {
+          if (prev && sorted.some((c: any) => c.id === prev)) {
+            return prev;
+          }
           if (paramConvId) {
             const found = sorted.find((c: any) => c.id === paramConvId);
             if (found) return found.id;
@@ -516,10 +576,10 @@ function InboxContent() {
             const found = sorted.find((c: any) => c.idLead === paramLeadId);
             if (found) return found.id;
           }
-          if (sorted.length > 0 && !prev) {
+          if (sorted.length > 0) {
             return sorted[0].id;
           }
-          return prev;
+          return "";
         });
       }
     } catch (err) {
@@ -818,6 +878,9 @@ function InboxContent() {
                 onClick={() => {
                   setActiveConvId(conv.id);
                   setMobileView("chat");
+                  if (typeof window !== "undefined" && window.history) {
+                    window.history.replaceState({}, "", "/inbox");
+                  }
                 }}
                 className={`w-full text-left p-4 flex items-start space-x-3 transition-all ${
                   isActive ? "bg-[#e8f4fd] border-l-4 border-[#026692]" : "hover:bg-[#f0f7fc]"
@@ -1058,14 +1121,7 @@ function InboxContent() {
                     📞 {formatPhoneNumber(activeLead.telefono || getActiveConv()?.telefono)}
                   </p>
                 )}
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block ${
-                  activeLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
-                  activeLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
-                  activeLead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
-                  activeLead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                }`}>
-                  {activeLead.estado === "GANADO" ? "CLIENTE CERRADO" : "POTENCIAL " + activeLead.estado}
-                </span>
+                {renderStatusBadge(activeLead)}
               </div>
             </div>
 
@@ -1474,14 +1530,7 @@ function InboxContent() {
                     📞 {formatPhoneNumber(activeLead.telefono)}
                   </p>
                 )}
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block ${
-                  activeLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
-                  activeLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
-                  activeLead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
-                  activeLead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                }`}>
-                  {activeLead.estado === "GANADO" ? "CLIENTE CERRADO" : "POTENCIAL " + activeLead.estado}
-                </span>
+                {renderStatusBadge(activeLead)}
               </div>
             </div>
 

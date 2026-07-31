@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, detectCityFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/prisma";
 import { buildNarrativeSummary } from "@/lib/narrative";
@@ -261,16 +261,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Auto-detect city and update lead
+    // Auto-detect location (city & zone) and age from text and update lead deterministically
     if (conv.idLead) {
-      const detectedCity = detectCityFromText(content);
-      if (detectedCity) {
-        const lead = await db.getLeadById(conv.idLead);
-          console.log(`Detected city "${detectedCity}" from WhatsApp message, updating Lead ${conv.idLead} to CONTACTADO`);
-          await db.updateLead(conv.idLead, { 
-            ciudad: detectedCity,
-            estado: "CONTACTADO"
-          });
+      const loc = detectLocationFromText(content);
+      const detectedAge = detectAgeFromText(content);
+      const detUpdates: any = {};
+
+      if (loc.ciudad) {
+        detUpdates.ciudad = loc.ciudad;
+        detUpdates.estado = "CONTACTADO";
+      }
+      if (loc.zona) detUpdates.zona = loc.zona;
+      if (detectedAge !== null) detUpdates.edadHijo = detectedAge;
+
+      if (Object.keys(detUpdates).length > 0) {
+        console.log(`[EXTRACTOR DETERMINISTA] Actualizando Lead ${conv.idLead} con:`, detUpdates);
+        await db.updateLead(conv.idLead, detUpdates);
       }
     }
 

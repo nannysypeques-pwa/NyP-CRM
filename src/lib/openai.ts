@@ -360,26 +360,26 @@ Reglas de comunicación de Nanny Nocturna:
 * Resaltar que la nanny sigue la rutina propia del peque para no alterar sus hábitos.
 
 ==================================================
-5f. NANNY PARA FIESTAS — ENTRETENIMIENTO Y CUIDADO EN EVENTOS Y CELEBRACIONES
+5f. SERVICIOS PARA EVENTOS Y FIESTAS (REGLA CRÍTICA DE ACLARACIÓN OBLIGATORIA)
 ==================================================
 
-Nanny para Fiestas es el servicio especializado para que los peques estén seguros, supervivados y entretenidos durante eventos y celebraciones, mientras mamá, papá e invitados también disfrutan plenamente.
+CRÍTICO — SI LA FAMILIA MENCIONA QUE REQUIERE SERVICIO PARA UNA FIESTA, EVENTO, BODA, BAUTIZO O CELEBRACIÓN:
+Está TERMINANTEMENTE PROHIBIDO asumir automáticamente que el cliente requiere el "Paquete de Fiestas y Eventos Multi-Niños". Muchas familias únicamente necesitan una niñera que acompañe y cuide a su(s) propio(s) peque(s) durante una fiesta a la que van a asistir.
 
-Características clave:
-- Duración mínima del servicio: 3 horas.
-- La cantidad de nannies se define según las particularidades del evento y el número de niños.
-- La nanny cuida, acompaña y entretiene a los peques durante todo el evento.
-- Actividades opcionales disponibles para hacer el servicio aún más especial:
-  * Decoración de figuras de cerámica.
-  * Experimentos: creación de slime, arena kinética, masa Playdoh.
-  * Creación de pulseras.
-- La cotización de este servicio DEBE realizarse directamente con el asesor de ventas humano (no dar precios por este medio).
+Es OBLIGATORIO que la IA pregunte y aclare la intención real del cliente con la siguiente estructura cordial:
+"Con gusto le apoyamos para su evento. 🎉 Para poder brindarle la información exacta, ¿busca el cuidado de su(s) propio(s) peque(s) para acompañarle(s) durante la fiesta (Servicio Eventual), o requiere un servicio de animación y cuidado para varios peques invitados de la fiesta (Paquete para Fiestas)?"
 
-Reglas de comunicación de Nanny para Fiestas:
-* Comunicar con entusiasmo: los peques seguros, felices y entretenidos mientras todos los adultos disfrutan sin preocupaciones.
-* Mencionar las actividades opcionales para generar entusiasmo e interés adicional.
-* NUNCA dar precio por este medio. Indicar siempre que el asesor de ventas preparará la cotización personalizada.
-* Recopilar antes de canalizar: fecha del evento, ciudad y zona, edades de los peques y número aproximado de niños.
+Diferenciación según la respuesta del cliente:
+1. SI ES ÚNICAMENTE PARA SUS PROPIOS PEQUES DURANTE EL EVENTO:
+   - El servicio es "Servicio Eventual".
+   - Se cotiza y trata como Servicio Eventual por horas o por el evento.
+   - El tipo de servicio en el CRM debe guardarse como "Eventual".
+
+2. SI ES PARA EL CUIDADO DE VARIOS PEQUES INVITADOS A LA FIESTA:
+   - El servicio es "Nanny para Fiestas" (Paquete de Fiestas y Eventos).
+   - Duración mínima del paquete para fiestas: 3 horas.
+   - Se recopilan los datos (fecha, número de peques invitados, ciudad/zona, edades) y se indica que el asesor de ventas preparará la cotización personalizada en PDF. NUNCA dar precio directo por este medio para el paquete de fiestas.
+   - El tipo de servicio en el CRM debe guardarse como "Evento / Fiesta".
 
 ==================================================
 5g. PROCESO DE CONTRATACIÓN — CÓMO FUNCIONA PASO A PASO
@@ -1143,13 +1143,90 @@ Nunca repitas preguntas sobre información que el cliente ya proporcionó o que 
 Responde como una asesora profesional, cercana, cálida y consultiva, nunca como un robot con respuestas de plantilla fijas. Redacta de forma dinámica, usando el nombre del cliente y refiriéndote a sus peques cuando dispongas de dichos datos.`;
 
 
+export function detectLocationFromText(text: string): { ciudad: string | null; zona: string | null } {
+  if (!text) return { ciudad: null, zona: null };
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // 1. XALAPA & Suburbs / Towns
+  if (lower.includes("banderilla")) return { ciudad: "Xalapa", zona: "Banderilla" };
+  if (lower.includes("coatepec")) return { ciudad: "Xalapa", zona: "Coatepec" };
+  if (lower.includes("emiliano zapata")) return { ciudad: "Xalapa", zona: "Emiliano Zapata" };
+  if (lower.includes("las trancas") || lower.includes("trancas")) return { ciudad: "Xalapa", zona: "Las Trancas" };
+  if (lower.includes("xalapa 2000")) return { ciudad: "Xalapa", zona: "Xalapa 2000" };
+  if (lower.includes("monte magno")) return { ciudad: "Xalapa", zona: "Monte Magno" };
+  if (lower.includes("animas") || lower.includes("las animas")) return { ciudad: "Xalapa", zona: "Las Ánimas" };
+  if (lower.includes("xalapa") || lower.includes("jalapa")) return { ciudad: "Xalapa", zona: null };
+
+  // 2. PUEBLA & Suburbs / Towns
+  if (lower.includes("lomas de angelopolis")) return { ciudad: "Puebla", zona: "Lomas de Angelópolis" };
+  if (lower.includes("sonata")) return { ciudad: "Puebla", zona: "Sonata" };
+  if (lower.includes("angelopolis")) return { ciudad: "Puebla", zona: "Angelópolis" };
+  if (lower.includes("san andres cholula")) return { ciudad: "Puebla", zona: "San Andrés Cholula" };
+  if (lower.includes("san pedro cholula")) return { ciudad: "Puebla", zona: "San Pedro Cholula" };
+  if (lower.includes("cholula")) return { ciudad: "Puebla", zona: "Cholula" };
+  if (lower.includes("cuautlancingo")) return { ciudad: "Puebla", zona: "Cuautlancingo" };
+  if (lower.includes("zavaleta")) return { ciudad: "Puebla", zona: "Zavaleta" };
+  if (lower.includes("la paz")) return { ciudad: "Puebla", zona: "La Paz" };
+  if (lower.includes("huexotitla")) return { ciudad: "Puebla", zona: "Huexotitla" };
+  if (lower.includes("haras")) return { ciudad: "Puebla", zona: "Haras" };
+  if (lower.includes("puebla")) return { ciudad: "Puebla", zona: null };
+
+  // 3. ATLIXCO
+  if (lower.includes("metepec")) return { ciudad: "Atlixco", zona: "Metepec" };
+  if (lower.includes("atlixco")) return { ciudad: "Atlixco", zona: null };
+
+  // 4. QUERÉTARO & Suburbs / Towns
+  if (lower.includes("juriquilla")) return { ciudad: "Querétaro", zona: "Juriquilla" };
+  if (lower.includes("el refugio")) return { ciudad: "Querétaro", zona: "El Refugio" };
+  if (lower.includes("zibata")) return { ciudad: "Querétaro", zona: "Zibatá" };
+  if (lower.includes("corregidora")) return { ciudad: "Querétaro", zona: "Corregidora" };
+  if (lower.includes("jurica")) return { ciudad: "Querétaro", zona: "Jurica" };
+  if (lower.includes("el pueblito")) return { ciudad: "Querétaro", zona: "El Pueblito" };
+  if (lower.includes("milenio")) return { ciudad: "Querétaro", zona: "Milenio III" };
+  if (lower.includes("el marques")) return { ciudad: "Querétaro", zona: "El Marqués" };
+  if (lower.includes("queretaro") || lower.includes("qro")) return { ciudad: "Querétaro", zona: null };
+
+  // 5. CDMX & Suburbs / Towns
+  if (lower.includes("polanco")) return { ciudad: "CDMX", zona: "Polanco" };
+  if (lower.includes("condesa")) return { ciudad: "CDMX", zona: "Condesa" };
+  if (lower.includes("roma")) return { ciudad: "CDMX", zona: "Roma" };
+  if (lower.includes("santa fe")) return { ciudad: "CDMX", zona: "Santa Fe" };
+  if (lower.includes("interlomas")) return { ciudad: "CDMX", zona: "Interlomas" };
+  if (lower.includes("coyoacan")) return { ciudad: "CDMX", zona: "Coyoacán" };
+  if (lower.includes("del valle")) return { ciudad: "CDMX", zona: "Del Valle" };
+  if (lower.includes("naucalpan")) return { ciudad: "CDMX", zona: "Naucalpan" };
+  if (lower.includes("huixquilucan")) return { ciudad: "CDMX", zona: "Huixquilucan" };
+  if (lower.includes("tlalpan")) return { ciudad: "CDMX", zona: "Tlalpan" };
+  if (lower.includes("san angel")) return { ciudad: "CDMX", zona: "San Ángel" };
+  if (lower.includes("cdmx") || lower.includes("ciudad de mexico") || lower.includes("df") || lower.includes("distrito federal")) return { ciudad: "CDMX", zona: null };
+
+  return { ciudad: null, zona: null };
+}
+
 export function detectCityFromText(text: string): string | null {
+  return detectLocationFromText(text).ciudad;
+}
+
+export function detectAgeFromText(text: string): number | null {
+  if (!text) return null;
   const lower = text.toLowerCase();
-  if (lower.includes("puebla")) return "Puebla";
-  if (lower.includes("atlixco")) return "Atlixco";
-  if (lower.includes("xalapa") || lower.includes("jalapa")) return "Xalapa";
-  if (lower.includes("queretaro") || lower.includes("querétaro") || lower.includes("qro")) return "Querétaro";
-  if (lower.includes("cdmx") || lower.includes("ciudad de mexico") || lower.includes("ciudad de méxico") || lower.includes("df") || lower.includes("distrito federal")) return "CDMX";
+  
+  // Match "tiene X años", "de X años", "X anios", "X años", "peque de X"
+  const match = lower.match(/\b(?:tiene|de|peque\s+de|edad\s+de)?\s*([0-1]?[0-9])\s*(?:años|anio|anios|ańos)\b/);
+  if (match) {
+    const age = parseInt(match[1], 10);
+    if (age >= 0 && age <= 17) return age;
+  }
+
+  const wordAges: { [key: string]: number } = {
+    "un": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10
+  };
+  for (const [word, ageVal] of Object.entries(wordAges)) {
+    const regex = new RegExp(`\\b${word}\\s*(?:años|anio|anios|ańos)\\b`);
+    if (regex.test(lower)) return ageVal;
+  }
+
   return null;
 }
 

@@ -162,10 +162,54 @@ export default function KanbanPage() {
   const [clientSimInput, setClientSimInput] = useState("");
   const [isQuickRepliesOpen, setIsQuickRepliesOpen] = useState(false);
   
-  // Drawer note form
   const [newNoteText, setNewNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [usersList, setUsersList] = useState<any[]>(clientCache.get<any[]>("users_list") || []);
+
+  const renderStatusBadge = (lead: Lead) => {
+    let text = "";
+    let style = "";
+
+    switch (lead.estado) {
+      case "NUEVO":
+        text = "NUEVO";
+        style = "bg-sky-50 text-[#026692] border border-sky-200/60";
+        break;
+      case "CONTACTADO":
+        const agent = usersList.find(u => u.id === lead.idUsuarioAsignado);
+        const agentName = agent ? agent.nombre : (lead.idUsuarioAsignado ? "Asignado" : "");
+        text = agentName ? `CONTACTADO POR ${agentName.toUpperCase()}` : "CONTACTADO";
+        style = "bg-amber-50 text-amber-700 border border-amber-200/60";
+        break;
+      case "COTIZADO":
+        text = "EN COTIZACIÓN";
+        style = "bg-blue-50 text-blue-700 border border-blue-200/60";
+        break;
+      case "GANADO":
+        text = "CLIENTE GANADO";
+        style = "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
+        break;
+      case "ATENCION_HUMANA":
+        text = "ATENCIÓN HUMANA";
+        style = "bg-indigo-50 text-indigo-700 border border-indigo-200/60";
+        break;
+      case "PERDIDO":
+        text = "PERDIDO";
+        style = "bg-rose-50 text-rose-700 border border-rose-200/60";
+        break;
+      default:
+        text = lead.estado;
+        style = "bg-slate-50 text-slate-700 border border-slate-200";
+        break;
+    }
+
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block shadow-xs ${style}`}>
+        {text}
+      </span>
+    );
+  };
 
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -206,6 +250,16 @@ export default function KanbanPage() {
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
     fetchLeadsAndConversations();
+
+    fetch("/api/users")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setUsersList(data);
+          clientCache.set("users_list", data);
+        }
+      })
+      .catch(err => console.error("Error loading users:", err));
 
     // Fetch logged in user details for agent notes audit
     fetch("/api/auth/me")
@@ -616,9 +670,8 @@ export default function KanbanPage() {
       const matchesSearch = l.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || l.telefono.includes(searchTerm);
       if (!matchesSearch) return false;
 
-      // 1. Leads marcados como PERDIDO o CONTACTADO desaparecen de todos los embudos
-      // (permanecen guardados en la BD y visibles en la pestaña Leads).
-      if (l.estado === "PERDIDO" || l.estado === "CONTACTADO") {
+      // 1. Únicamente los leads marcados como PERDIDO se ocultan del Embudo
+      if (l.estado === "PERDIDO") {
         return false;
       }
 
@@ -642,9 +695,11 @@ export default function KanbanPage() {
 
       if (!matchesCity) return false;
 
-      // 3. EN CONVERSACIÓN: Prospectos nuevos con ciudad que están conversando antes de marcarse como contactados
+      // 3. EN CONVERSACIÓN: Prospectos en conversación que tienen ciudad (sin agente asignado aún)
       if (status === "CONTACTADO") {
-        return l.estado === "NUEVO" && hasCity;
+        const isAssignedContacted = l.estado === "CONTACTADO" && !!l.idUsuarioAsignado && l.idUsuarioAsignado !== "";
+        if (isAssignedContacted) return false; // Si ya fue asignado a un agente responsable, está en la pestaña Leads (Contactados)
+        return (l.estado === "CONTACTADO" || l.estado === "NUEVO");
       }
 
       // 4. EN COTIZACIÓN: Únicamente prospectos en estado COTIZADO
@@ -652,7 +707,16 @@ export default function KanbanPage() {
         return l.estado === "COTIZADO";
       }
 
-      // 5. Demás columnas (GANADO, ATENCION_HUMANA, etc.) coinciden estrictamente con su estado
+      // 5. LISTOS PARA EL CIERRE: Únicamente prospectos en estado GANADO
+      if (status === "GANADO") {
+        return l.estado === "GANADO";
+      }
+
+      // 6. ATENCIÓN HUMANA: Únicamente prospectos en estado ATENCION_HUMANA
+      if (status === "ATENCION_HUMANA") {
+        return l.estado === "ATENCION_HUMANA";
+      }
+
       return l.estado === status;
     });
   };
@@ -1152,14 +1216,7 @@ export default function KanbanPage() {
                         📞 {formatPhoneNumber(selectedLead.telefono)}
                       </p>
                     )}
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide inline-block ${
-                      selectedLead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
-                      selectedLead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
-                      selectedLead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
-                      selectedLead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                    }`}>
-                      {selectedLead.estado === "GANADO" ? "CLIENTE CERRADO" : "POTENCIAL " + selectedLead.estado}
-                    </span>
+                    {renderStatusBadge(selectedLead)}
                   </div>
                 </div>
 
