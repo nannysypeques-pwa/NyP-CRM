@@ -65,47 +65,54 @@ export function detectHumanAttentionRequest(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // strip accents
 
+  // ATENCIÓN HUMANA: Exclusivamente para quejas, emergencias, frustración o molestia con la IA
   const keywords = [
-    "humano",
-    "humana",
-    "persona",
-    "agente",
-    "asesor",
-    "asesora",
-    "atencion humana",
-    "hablar con alguien",
-    "hablar con persona",
-    "hablar con humano",
-    "persona real",
-    "alguien real",
-    "carne y hueso",
-    "no quiero ia",
+    "tengo una queja",
+    "queja de servicio",
+    "molesto",
+    "molesta",
+    "pesimo servicio",
+    "mal servicio",
+    "no me entiendes",
+    "no entiendo nada",
+    "hablas como robot",
+    "eres una ia",
+    "eres un bot",
     "no quiero bot",
     "no quiero robot",
-    "quiero un humano",
-    "quiero una persona",
-    "pasame con",
-    "comunicame con",
-    "transfere con",
-    "transferir con",
-    "llamar a un humano",
-    "llamar con alguien"
+    "me desespere",
+    "me desesperas",
+    "emergencia",
+    "urgencia medica",
+    "incidencia con mi nanny",
+    "problema con el servicio",
+    "hablar con un humano por queja",
+    "hablar con una persona por reclamo"
   ];
 
   return keywords.some(k => lower.includes(k));
 }
 
-export function hasBuyingIntent(text: string): boolean {
+export function hasBuyingIntent(text: string, historyText?: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // Excluir frases exploratorias de información inicial (ej: "me interesa contratar", "quisiera contratar", "información para contratar")
+  // Excluir preguntas exploratorias iniciales sin intensión directa de avance
   const exploratoryRegex = /(me\s+interesa|quisiera|gustaria|informacion\s+para|saber\s+como|opciones\s+para)\s+contratar/;
-  if (exploratoryRegex.test(lower)) {
+  if (exploratoryRegex.test(lower) && !lower.includes("si") && !lower.includes("adelante") && !lower.includes("busc")) {
     return false;
   }
 
   const explicitClosingKeywords = [
+    "buscame niñera",
+    "busqueme niñera",
+    "buscanos niñera",
+    "buscame nanny",
+    "busqueme nanny",
+    "busquen niñera",
+    "busquen nanny",
+    "asignen niñera",
+    "asigname nanny",
     "ya quiero contratar",
     "listo para contratar",
     "lista para contratar",
@@ -132,7 +139,27 @@ export function hasBuyingIntent(text: string): boolean {
     "firmar contrato"
   ];
 
-  return explicitClosingKeywords.some(k => lower.includes(k));
+  if (explicitClosingKeywords.some(k => lower.includes(k))) {
+    return true;
+  }
+
+  // Si la IA le ofreció canalizar con un asesor comercial para formalizar la contratación y el cliente responde afirmativamente
+  if (historyText) {
+    const lowerHist = historyText.toLowerCase();
+    const iaOfferedClosing = lowerHist.includes("asesor comercial") || 
+                             lowerHist.includes("canalizar") || 
+                             lowerHist.includes("formalizar su solicitud") ||
+                             lowerHist.includes("validará los detalles finales");
+    
+    if (iaOfferedClosing) {
+      const positiveReplies = ["si", "claro", "adelante", "perfecto", "me parece bien", "si por favor", "si me gustaria", "si me interesa", "avanzar", "avancemos", "ok", "esta bien"];
+      if (positiveReplies.some(r => lower === r || lower.startsWith(r + " ") || lower.endsWith(" " + r))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia especializada en el cuidado y desarrollo infantil en Puebla, Xalapa, Querétaro y CDMX.
@@ -1783,8 +1810,8 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - mascotas: Mascotas en el hogar (ej: "2 perros", "1 gato"). Solo si se menciona de forma explícita. Si no se menciona o no está claro, NO extraigas este campo (no pongas "Ninguna").
 - indicacionesIngreso: Indicaciones de ingreso. Solo si se mencionan explícitamente.
 - preguntasMencionadas: Un arreglo de cadenas de texto en tercera persona resumiendo las preguntas clave, dudas u objeciones particulares expresadas por el cliente en el mensaje o conversación (ej: ["Ha preguntado por qué tendría que contratarnos a nosotros y no a otra agencia", "preguntó si la niñera puede cocinar"]). Si no hay preguntas particulares mevas, deja este campo fuera del JSON o vacío.
-- listoParaCierre: boolean (true ÚNICAMENTE si ya se le presentó una cotización previa al cliente Y el cliente responde expresando su intención explícita de contratar, pagar o agendar la niñera tras haber revisado la cotización. Ejemplo: "Acepto la cotización", "Quiero pagar", "¿Dónde transfiero?", "Quiero agendar la niñera con ese precio").
-- requiereAtencionHumana: boolean (true si la INTENCIÓN PRINCIPAL del cliente es pedir hablar con un humano por dudas específicas, explicaciones detalladas, soporte o quejas, SIN que su intención sea ya cerrar la contratación. Ejemplo: "Necesito hablar con una persona para que me explique bien", "No entiendo esto, pásame a un humano", "Prefiero hablar con alguien real antes de decidir").
+- listoParaCierre: boolean (true cuando el cliente muestra interés claro en contratar, pide que le busquen niñera/nanny, o si responde afirmativamente cuando la IA propone canalizarlo con un asesor comercial para formalizar su servicio. Ejemplo: "Sí, adelante", "Búscame niñera", "Me gustaría avanzar con el asesor", "Acepto la cotización", "Quiero pagar", "¿Dónde transfiero?", "Sí por favor").
+- requiereAtencionHumana: boolean (true EXCLUSIVAMENTE si el cliente presenta quejas, emergencias, frustración/molestia con la IA ("no entiendes nada", "hablas como robot"), o si solicita atención humana por problemas de servicio/reclamos. NUNCA marques true si el cliente acepta hablar con el asesor comercial para avanzar en su contratación o si responde sí a canalizar con ventas (eso es listoParaCierre)).
 - nuevosHijos: Un arreglo de objetos para cada uno de los peques que se mencionen o identifiquen en el mensaje, donde cada objeto tenga:
   * nombre: Nombre del peque (si el cliente no menciona el nombre del peque, debes generar un nombre genérico secuencial como "Peque 1", "Peque 2", etc.).
   * textoEdad: Edad del niño de forma descriptiva (ej: "1 año", "3 años", "7 años").

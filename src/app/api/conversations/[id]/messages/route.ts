@@ -495,12 +495,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
           // Evaluar la intención del cliente basándose en el análisis del contexto de la conversación
           const lowerAiResponse = aiResponseText.toLowerCase();
-          const esHandoffText = lowerAiResponse.includes("canalizar") || 
-                                lowerAiResponse.includes("canalizaré") || 
-                                lowerAiResponse.includes("pasar con un asesor") || 
-                                lowerAiResponse.includes("paso con un asesor") || 
-                                lowerAiResponse.includes("transferir") || 
-                                lowerAiResponse.includes("equipo de asesoría");
+          const esHandoffText = lowerAiResponse.includes("te he canalizado") || 
+                                lowerAiResponse.includes("te canalizo con") || 
+                                lowerAiResponse.includes("te paso con un asesor") || 
+                                lowerAiResponse.includes("te transfiero") || 
+                                lowerAiResponse.includes("un asesor tomará tu solicitud");
 
           // Requisitos estrictos para "Listo para Cierre" (GANADO):
           // 1. Contar con toda la información necesaria para cotizar
@@ -517,8 +516,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             lead.estado === "COTIZADO" || (lead.cotizaciones && lead.cotizaciones.length > 0)
           );
 
-          // 3. El cliente muestra interés en contratar después de cotizar
-          const expresoInteresEnContratar = Boolean(extractedData?.listoParaCierre) || hasBuyingIntent(contenido);
+          // 3. El cliente muestra interés en contratar o acepta avanzar con el asesor
+          const chatHistoryForCheck = await db.getMessagesByConversationId(conv.id);
+          const recentHistoryStr = chatHistoryForCheck.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
+          const expresoInteresEnContratar = Boolean(extractedData?.listoParaCierre) || hasBuyingIntent(contenido, recentHistoryStr);
 
           // Solo es Listo para Cierre si se cumplen los 3 requisitos al mismo tiempo
           const isClosingIntent = tieneInfoCompletaParaCotizar && yaFueCotizado && expresoInteresEnContratar;
