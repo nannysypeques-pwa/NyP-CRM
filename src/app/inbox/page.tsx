@@ -34,7 +34,7 @@ import FormattedIntencionComercial from "@/components/FormattedIntencionComercia
 import { renderNoteContent } from "@/lib/narrative";
 import confetti from "canvas-confetti";
 import { clientCache } from "@/lib/clientCache";
-import { formatPhoneNumber } from "@/lib/format";
+import { formatPhoneNumber, formatLeadAges } from "@/lib/format";
 
 interface Message {
   id: string;
@@ -1148,7 +1148,7 @@ function InboxContent() {
                 <div className="space-y-0.5">
                   <span className="text-slate-400 font-bold block">Edad del Niño/a</span>
                   <span className="font-bold text-slate-700">
-                    {activeLead.edadHijo ? `${activeLead.edadHijo} años` : "Por definir"}
+                    {formatLeadAges(activeLead)}
                   </span>
                 </div>
               </div>
@@ -1554,7 +1554,7 @@ function InboxContent() {
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-slate-400 font-bold block">Edad del Niño/a</span>
-                    <span className="font-bold text-slate-700">{activeLead.edadHijo ? `${activeLead.edadHijo} años` : "Por definir"}</span>
+                    <span className="font-bold text-slate-700">{formatLeadAges(activeLead)}</span>
                   </div>
                 </div>
 

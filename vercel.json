@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/remarketing",
+      "schedule": "0 8-20 * * *"
+    }
+  ]
+}

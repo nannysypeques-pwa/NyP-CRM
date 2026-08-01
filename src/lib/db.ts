@@ -308,7 +308,7 @@ class BaseDeDatos {
         cotizaciones: { orderBy: { creadoEn: 'desc' } }
       },
       orderBy: {
-        ultimoContactoEn: 'desc'
+        creadoEn: 'desc'
       }
     });
 

@@ -1,7 +1,7 @@
 export function formatIntencionComercial(lead: any): string {
   if (!lead) return "";
   
-  const primerHijo = lead.hijos && lead.hijos.length > 0 ? lead.hijos[0] : null;
+  const hijos = lead.hijos && lead.hijos.length > 0 ? lead.hijos : [];
   
   let preCotizacion = "";
   if (lead.cotizaciones && lead.cotizaciones.length > 0) {
@@ -12,6 +12,41 @@ export function formatIntencionComercial(lead: any): string {
     if (ultimaCotizacion) {
       preCotizacion = `$${ultimaCotizacion.total.toLocaleString()} MXN`;
     }
+  }
+
+  let pequesSection = "";
+  if (hijos.length > 0) {
+    pequesSection = hijos.map((hijo: any, index: number) => {
+      const label = hijos.length > 1 ? ` (Peque ${index + 1})` : "";
+      return `👫 *Nombre del peque${label}:*
+${hijo.nombre || `Peque ${index + 1}`}
+👶🏻 *Edad/Fecha de nacimiento:*
+${hijo.textoEdad || (hijo.fechaNacimiento ? hijo.fechaNacimiento : "")}
+🗣 *Alergias:*
+${hijo.alergias || ""}
+🫀 *Condición médica o especificaciones adicionales:*
+${hijo.condicionMedica || ""}
+🩺 *Estado de salud actual:*
+${hijo.estadoSalud || ""}
+🌈 *Preferencias o actividades favoritas:*
+${hijo.preferencias || ""}
+❤️ *Indicaciones generales para la nanny:*
+${hijo.indicacionesNanny || hijo.instrucciones || ""}`;
+    }).join("\n\n");
+  } else {
+    pequesSection = `👫 *Nombre del peque:*
+
+👶🏻 *Edad/Fecha de nacimiento:*
+${lead.edadHijo ? `${lead.edadHijo} años` : ""}
+🗣 *Alergias:*
+
+🫀 *Condición médica o especificaciones adicionales:*
+
+🩺 *Estado de salud actual:*
+
+🌈 *Preferencias o actividades favoritas:*
+
+❤️ *Indicaciones generales para la nanny:*`;
   }
 
   return `*Tipo de servicio*
@@ -30,20 +65,7 @@ ${lead.linkUbicacion || ""}
 ${lead.razonContratacion || ""}
 📲Contacto:
 ${lead.telefono || ""}
-👫 *Nombre del peque:* 
-${primerHijo?.nombre || ""}
-👶🏻 *Edad/Fecha de nacimiento:*
-${primerHijo?.textoEdad || (primerHijo?.fechaNacimiento ? primerHijo.fechaNacimiento : (lead.edadHijo ? `${lead.edadHijo} años` : ""))}
-🗣 *Alergias:*
-${primerHijo?.alergias || ""}
-🫀 *Condición médica o especificaciones adicionales:*
-${primerHijo?.condicionMedica || ""}
-🩺 *Estado de salud actual:*
-${primerHijo?.estadoSalud || ""}
-🌈 *Preferencias o actividades favoritas:*
-${primerHijo?.preferencias || ""}
+${pequesSection}
 🐶🐱 *No de mascotas:* 
-${lead.mascotas || ""}
-❤️ *Indicaciones generales para la nanny* 
-${primerHijo?.indicacionesNanny || primerHijo?.instrucciones || ""}`;
+${lead.mascotas || ""}`;
 }

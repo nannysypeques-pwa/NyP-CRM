@@ -170,6 +170,9 @@ model Cotizacion {
   id            String   @id @default(uuid())
   idLead        String
   lead          Lead     @relation(fields: [idLead], references: [id], onDelete: Cascade)
+  nombreCliente String?
+  edadPeque     String?
+  zona          String?
   tipoServicio  String
   ciudad        String
   dias          String
@@ -183,6 +186,7 @@ model Cotizacion {
   estado        String   @default("BORRADOR") // "BORRADOR" | "ENVIADA" | "ACEPTADA" | "RECHAZADA"
   validoHasta   DateTime
   notas         String?
+  imagenUrl     String?  // Ruta permanente al PNG congelado en el momento del envío. NULL = cotización antigua (fallback dinámico).
   creadoPor     String
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt

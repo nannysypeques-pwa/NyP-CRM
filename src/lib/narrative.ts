@@ -115,11 +115,24 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
     text += ".";
   }
 
-  // Anexar preguntas/dudas mencionadas por el cliente
-  const questions: string[] = [];
-  if (Array.isArray(data.preguntasMencionadas) && data.preguntasMencionadas.length > 0) {
-    questions.push(...data.preguntasMencionadas);
+  // Anexar preguntas/dudas/detalles expresados por el cliente
+  let questions: string[] = [];
+  if (data.preguntasMencionadas) {
+    if (Array.isArray(data.preguntasMencionadas)) {
+      questions = data.preguntasMencionadas;
+    } else if (typeof data.preguntasMencionadas === "string") {
+      try {
+        const parsed = JSON.parse(data.preguntasMencionadas);
+        if (Array.isArray(parsed)) questions = parsed;
+        else if (parsed) questions = [String(parsed)];
+      } catch (e) {
+        if (data.preguntasMencionadas.trim()) {
+          questions = [data.preguntasMencionadas.trim()];
+        }
+      }
+    }
   }
+
   if (questions.length > 0) {
     const qText = questions.map(q => q.trim()).filter(Boolean).join(". ");
     if (qText) {

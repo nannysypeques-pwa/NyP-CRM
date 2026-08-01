@@ -205,7 +205,7 @@ export default function LeadsPage() {
         : lead.idUsuarioAsignado === agentFilter;
 
     return matchesSearch && matchesCity && matchesStatus && matchesAgent;
-  });
+  }).sort((a, b) => new Date(b.creadoEn).getTime() - new Date(a.creadoEn).getTime());
 
   // Render badge helper for exact names
   const getStatusBadge = (lead: Lead) => {

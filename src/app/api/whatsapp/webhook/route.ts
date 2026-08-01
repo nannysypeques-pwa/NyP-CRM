@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, detectMultipleAgesFromText, detectServiceFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/prisma";
 import { buildNarrativeSummary } from "@/lib/narrative";
+import { calculatePrecotizacion } from "@/lib/pricing";
+import { generateAndSaveQuoteImage } from "@/lib/generate-quote-image";
 
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
   const secret = process.env.META_APP_SECRET;
@@ -261,10 +263,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Auto-detect location (city & zone) and age from text and update lead deterministically
+    // Auto-detect location (city & zone), service of interest, and age from text and update lead deterministically
     if (conv.idLead) {
       const loc = detectLocationFromText(content);
-      const detectedAge = detectAgeFromText(content);
+      const multipleAges = detectMultipleAgesFromText(content);
+      const detectedService = detectServiceFromText(content);
       const detUpdates: any = {};
 
       if (loc.ciudad) {
@@ -272,11 +275,35 @@ export async function POST(req: NextRequest) {
         detUpdates.estado = "CONTACTADO";
       }
       if (loc.zona) detUpdates.zona = loc.zona;
-      if (detectedAge !== null) detUpdates.edadHijo = detectedAge;
+      if (detectedService) detUpdates.interesServicio = detectedService;
+      if (multipleAges.length > 0) {
+        detUpdates.cantidadHijos = multipleAges.length;
+        detUpdates.edadHijo = Math.round(multipleAges[0].numAnios);
+      }
 
       if (Object.keys(detUpdates).length > 0) {
         console.log(`[EXTRACTOR DETERMINISTA] Actualizando Lead ${conv.idLead} con:`, detUpdates);
         await db.updateLead(conv.idLead, detUpdates);
+      }
+
+      if (multipleAges.length > 0) {
+        const leadCurrent = await db.getLeadById(conv.idLead);
+        for (let i = 0; i < multipleAges.length; i++) {
+          const item = multipleAges[i];
+          const nombrePeque = `Peque ${i + 1}`;
+          const existingHijo = leadCurrent?.hijos?.find((h: any) => h.nombre === nombrePeque);
+          if (existingHijo) {
+            await db.actualizarHijo(existingHijo.id, {
+              textoEdad: item.textoEdad
+            });
+          } else {
+            await db.crearHijo({
+              idLead: conv.idLead,
+              nombre: nombrePeque,
+              textoEdad: item.textoEdad,
+            });
+          }
+        }
       }
     }
 
@@ -347,25 +374,32 @@ export async function POST(req: NextRequest) {
             updates.preguntasMencionadas = [...prevQuestions, ...newQuestions];
           }
 
-          if (Object.keys(updates).length > 0) {
-            console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, updates);
-            await db.updateLead(conv.idLead, updates);
+          // Generar la nota narrativa del Asistente IA con todas las preguntas y datos capturados
+          const summaryNote = buildNarrativeSummary(currentLead, updates, extractedData.nuevosHijos);
+
+          // Filtrar campos que no pertenecen a la tabla Prisma Lead antes de db.updateLead
+          const dbUpdates = { ...updates };
+          delete dbUpdates.preguntasMencionadas;
+
+          if (Object.keys(dbUpdates).length > 0) {
+            console.log(`[EXTRACTOR IA] Actualizando Lead ${conv.idLead} con:`, dbUpdates);
+            await db.updateLead(conv.idLead, dbUpdates);
           }
 
-          // Actualizar la ÚNICA nota narrativa del Asistente IA
-          const summaryNote = buildNarrativeSummary(currentLead, updates, extractedData.nuevosHijos);
-          await db.upsertNotaIA(conv.idLead, summaryNote);
+          if (summaryNote) {
+            await db.upsertNotaIA(conv.idLead, summaryNote);
+          }
 
           if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos)) {
             const currentLeadForChild = await db.getLeadById(conv.idLead);
             for (const hijo of extractedData.nuevosHijos) {
               if (!hijo.nombre) continue;
               
-              const existeHijo = currentLeadForChild?.hijos?.some(
+              const existingHijo = currentLeadForChild?.hijos?.find(
                 h => h.nombre.toLowerCase().trim() === hijo.nombre.toLowerCase().trim()
               );
               
-              if (!existeHijo) {
+              if (!existingHijo) {
                 // Intentar buscar si hay un "Peque X" con la misma edad para renombrarlo
                 const matchesNueva = hijo.textoEdad ? hijo.textoEdad.match(/\d+/) : null;
                 const edadNueva = matchesNueva ? parseInt(matchesNueva[0], 10) : null;
@@ -406,6 +440,17 @@ export async function POST(req: NextRequest) {
                     necesidades: hijo.necesidades || ""
                   });
                 }
+              } else if (hijo.textoEdad && hijo.textoEdad !== existingHijo.textoEdad) {
+                console.log(`[EXTRACTOR IA] Actualizando textoEdad de hijo existente ${existingHijo.nombre} a ${hijo.textoEdad}`);
+                await db.actualizarHijo(existingHijo.id, {
+                  textoEdad: hijo.textoEdad || existingHijo.textoEdad,
+                  alergias: hijo.alergias || existingHijo.alergias || "",
+                  condicionMedica: hijo.condicionMedica || existingHijo.condicionMedica || "",
+                  estadoSalud: hijo.estadoSalud || existingHijo.estadoSalud || "",
+                  preferencias: hijo.preferencias || existingHijo.preferencias || "",
+                  indicacionesNanny: hijo.indicacionesNanny || existingHijo.indicacionesNanny || "",
+                  necesidades: hijo.necesidades || existingHijo.necesidades || ""
+                });
               }
             }
           }
@@ -427,10 +472,9 @@ export async function POST(req: NextRequest) {
         let imageUrl = "";
 
         if (conv.idLead) {
-          const tagRegex = /\[COTIZACION:(\d+)\]/;
+          const tagRegex = /\[COTIZACION:(\d+(?:\.\d+)?)\]/;
           const match = aiResponseText.match(tagRegex);
           if (match) {
-            const price = parseFloat(match[1]);
             finalResponseText = aiResponseText.replace(tagRegex, "").trim();
 
             const lead = await db.getLeadById(conv.idLead);
@@ -451,6 +495,16 @@ export async function POST(req: NextRequest) {
                 } catch (e) {}
               }
 
+              // CRÍTICO: Siempre usar el precio del tabulador oficial, nunca el precio que la IA haya escrito en el tag.
+              // Esto evita que la IA invente o interpole un precio incorrecto.
+              const serverPrice = calculatePrecotizacion(lead.ciudad, numDias, horasDiarias);
+              const price = serverPrice ?? parseFloat(match[1]);
+              if (!serverPrice) {
+                console.warn(`[COTIZACION] Precio del tabulador no encontrado para ${lead.ciudad}, ${numDias} días, ${horasDiarias} hrs. Usando precio de la IA: ${match[1]}`);
+              } else if (serverPrice !== parseFloat(match[1])) {
+                console.warn(`[COTIZACION] ⚠️ La IA propuso precio ${match[1]} pero el tabulador oficial indica $${serverPrice}. Usando $${serverPrice}.`);
+              }
+
               // Reuse an existing quote if it was created recently by AI and has the same total
               const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
               const existingQuote = await prisma.cotizacion.findFirst({
@@ -467,10 +521,23 @@ export async function POST(req: NextRequest) {
               if (existingQuote) {
                 quoteCreated = existingQuote;
               } else {
+                let snapshotEdad = "";
+                if (lead.hijos && lead.hijos.length > 0) {
+                  const h = lead.hijos.find((x: any) => x.textoEdad && x.textoEdad.trim() !== "");
+                  if (h) snapshotEdad = h.textoEdad;
+                }
+                if (!snapshotEdad && lead.edadHijo !== null && lead.edadHijo !== undefined) {
+                  snapshotEdad = lead.edadHijo === 0 ? "Menor a 1 año" : `${lead.edadHijo} ${lead.edadHijo === 1 ? "año" : "años"}`;
+                }
+                if (!snapshotEdad) snapshotEdad = "Por definir";
+
                 // Create a new Quote in the database
                 quoteCreated = await prisma.cotizacion.create({
                   data: {
                     idLead: conv.idLead,
+                    nombreCliente: lead.nombreCompleto || "Por definir",
+                    edadPeque: snapshotEdad,
+                    zona: lead.zona || "Por definir",
                     tipoServicio: lead.interesServicio || "Por horas",
                     ciudad: lead.ciudad,
                     dias: lead.diasSolicitados || "Por definir",
@@ -487,6 +554,32 @@ export async function POST(req: NextRequest) {
                     notas: `${numDias} días, ${horasDiarias} horas por día.`
                   }
                 });
+
+                // INMUTABILIDAD: Generar y guardar la imagen PNG congelada ahora mismo.
+                // La imagen refleja los datos exactos del momento del envío y NO se puede modificar después.
+                const savedImageUrl = await generateAndSaveQuoteImage({
+                  id: quoteCreated.id,
+                  creadoEn: quoteCreated.creadoEn,
+                  nombreCliente: lead.nombreCompleto || "Por definir",
+                  edadPeque: snapshotEdad,
+                  dias: lead.diasSolicitados || "Por definir",
+                  horaInicio: lead.horaInicioSolicitada || "09:00",
+                  horaFin: lead.horaFinSolicitada || "17:00",
+                  horasPorDia: horasDiarias || 8,
+                  zona: lead.zona || "Por definir",
+                  total: price,
+                  notas: `${numDias} días, ${horasDiarias} horas por día.`,
+                  tipoServicio: lead.interesServicio || "Por horas"
+                });
+
+                if (savedImageUrl) {
+                  // Guardar la ruta permanente en la BD para que no sea regenerable
+                  await prisma.cotizacion.update({
+                    where: { id: quoteCreated.id },
+                    data: { imagenUrl: savedImageUrl }
+                  });
+                  quoteCreated = { ...quoteCreated, imagenUrl: savedImageUrl };
+                }
               }
             }
           }
@@ -496,7 +589,13 @@ export async function POST(req: NextRequest) {
           const host = req.headers.get("host") || "localhost:3000";
           const protocol = req.headers.get("x-forwarded-proto") || "http";
           const appUrl = `${protocol}://${host}`;
-          imageUrl = `${appUrl}/api/cotizaciones/${quoteCreated.id}/image`;
+
+          // Preferir la imagen estática congelada; fallback al endpoint dinámico para cotizaciones antiguas
+          if ((quoteCreated as any).imagenUrl) {
+            imageUrl = `${appUrl}${(quoteCreated as any).imagenUrl}`;
+          } else {
+            imageUrl = `${appUrl}/api/cotizaciones/${quoteCreated.id}/image`;
+          }
         }
 
         await db.addMessage({
@@ -538,17 +637,37 @@ export async function POST(req: NextRequest) {
                                   lowerAiResponse.includes("transferir") || 
                                   lowerAiResponse.includes("equipo de asesoría");
 
-            const isClosingIntent = Boolean(extractedData?.listoParaCierre) || hasBuyingIntent(content);
+            // Requisitos estrictos para "Listo para Cierre" (GANADO):
+            // 1. Contar con toda la información necesaria para cotizar
+            const tieneInfoCompletaParaCotizar = Boolean(
+              lead.ciudad && lead.ciudad !== "Por definir" && lead.ciudad !== "" &&
+              lead.zona && lead.zona !== "Por definir" && lead.zona !== "" &&
+              ((lead.hijos && lead.hijos.length > 0) || (lead.edadHijo !== undefined && lead.edadHijo !== null && lead.edadHijo !== 0)) &&
+              lead.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" &&
+              lead.horaInicioSolicitada && lead.horaFinSolicitada
+            );
+
+            // 2. Ya debió haber cotizado por lo menos una vez
+            const yaFueCotizado = Boolean(
+              lead.estado === "COTIZADO" || (lead.cotizaciones && lead.cotizaciones.length > 0)
+            );
+
+            // 3. El cliente muestra interés en contratar después de cotizar
+            const expresoInteresEnContratar = Boolean(extractedData?.listoParaCierre) || hasBuyingIntent(content);
+
+            // Solo es Listo para Cierre si se cumplen los 3 requisitos al mismo tiempo
+            const isClosingIntent = tieneInfoCompletaParaCotizar && yaFueCotizado && expresoInteresEnContratar;
+
             const isHumanRequested = detectHumanAttentionRequest(content) || 
                                      Boolean(extractedData?.requiereAtencionHumana) || 
                                      esHandoffText;
             
             let nuevoEstado = lead.estado;
 
-            // Prioridad 1: Si la INTENCIÓN PRINCIPAL es cerrar o contratar (pago, agendar, formalizar) -> GANADO ("Listos para el Cierre")
+            // Prioridad 1: Si se cumplen los 3 requisitos estrictos de cierre -> GANADO ("Listos para el Cierre")
             if (isClosingIntent) {
               nuevoEstado = "GANADO";
-              console.log(`[INTENCIÓN DE CIERRE] Lead ${conv.idLead} tiene intención de contratación -> GANADO (Listo para cierre).`);
+              console.log(`[INTENCIÓN DE CIERRE VÁLIDA] Lead ${conv.idLead} cumple los 3 requisitos -> GANADO (Listo para cierre).`);
             }
             // Prioridad 2: Si la INTENCIÓN PRINCIPAL es atención humana por dudas/soporte sin intención directa de pago/cierre -> ATENCION_HUMANA
             else if (isHumanRequested) {

@@ -33,7 +33,7 @@ import {
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import { renderNoteContent } from "@/lib/narrative";
 import confetti from "canvas-confetti";
-import { formatPhoneNumber } from "@/lib/format";
+import { formatPhoneNumber, formatLeadAges } from "@/lib/format";
 
 interface Hijo {
   id: string;
@@ -246,6 +246,26 @@ export default function KanbanPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasScrolledForActiveConvRef = useRef<boolean>(false);
+
+  const [isExecutingRemarketing, setIsExecutingRemarketing] = useState(false);
+
+  const handleTriggerRemarketing = async () => {
+    setIsExecutingRemarketing(true);
+    try {
+      const res = await fetch("/api/cron/remarketing", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✨ Remarketing IA ejecutado con éxito. Se enviaron ${data.processedLeadsCount} mensajes de seguimiento por WhatsApp.`);
+        fetchLeadsAndConversations();
+      } else {
+        alert(`Error al ejecutar remarketing: ${data.error || "Ocurrió un error inesperado."}`);
+      }
+    } catch (err) {
+      alert("Error de conexión al ejecutar el seguimiento de remarketing.");
+    } finally {
+      setIsExecutingRemarketing(false);
+    }
+  };
 
   // Carga inicial y sincronización de cookies de ciudad
   useEffect(() => {
@@ -879,9 +899,20 @@ export default function KanbanPage() {
             <h3 className="font-extrabold text-blue-700 text-sm uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> En cotización
             </h3>
-            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {getLeadsByStatus("COTIZADO").length}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTriggerRemarketing}
+                disabled={isExecutingRemarketing}
+                title="Enviar seguimiento automático por WhatsApp con IA a leads en cotización sin respuesta"
+                className="text-[10px] font-extrabold bg-[#026692] hover:bg-[#024d6e] text-white px-2.5 py-1 rounded-full flex items-center gap-1 transition-all shadow-sm disabled:opacity-50"
+              >
+                <Sparkles className="w-3 h-3 text-amber-300" />
+                {isExecutingRemarketing ? "Enviando..." : "Remarketing IA"}
+              </button>
+              <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                {getLeadsByStatus("COTIZADO").length}
+              </span>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
@@ -1243,7 +1274,7 @@ export default function KanbanPage() {
                     <div className="space-y-0.5">
                       <span className="text-slate-400 font-bold block">Edad del Niño/a</span>
                       <span className="font-bold text-slate-700">
-                        {selectedLead.edadHijo ? `${selectedLead.edadHijo} años` : "Por definir"}
+                        {formatLeadAges(selectedLead)}
                       </span>
                     </div>
                   </div>

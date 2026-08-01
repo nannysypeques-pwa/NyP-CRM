@@ -98,23 +98,41 @@ export function detectHumanAttentionRequest(text: string): boolean {
 export function hasBuyingIntent(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const keywords = [
-    "contratar",
-    "contratacion",
-    "pagar",
-    "pago",
-    "transferencia",
+
+  // Excluir frases exploratorias de información inicial (ej: "me interesa contratar", "quisiera contratar", "información para contratar")
+  const exploratoryRegex = /(me\s+interesa|quisiera|gustaria|informacion\s+para|saber\s+como|opciones\s+para)\s+contratar/;
+  if (exploratoryRegex.test(lower)) {
+    return false;
+  }
+
+  const explicitClosingKeywords = [
+    "ya quiero contratar",
+    "listo para contratar",
+    "lista para contratar",
+    "deseo contratar ya",
+    "quiero pagar",
+    "donde pago",
+    "donde se paga",
+    "como pago",
+    "datos de pago",
+    "datos para pagar",
     "ficha de pago",
     "cuenta de banco",
-    "cerrar",
-    "agendar niñera",
-    "agendar nanny",
-    "aceptar cotizacion",
+    "numero de cuenta",
+    "clabe interbancaria",
+    "transferencia",
     "acepto la cotizacion",
     "acepto el presupuesto",
-    "listo para contratar"
+    "aceptamos la cotizacion",
+    "aceptamos el presupuesto",
+    "envienme el contrato",
+    "enviame el contrato",
+    "mandame el contrato",
+    "mandenme el contrato",
+    "firmar contrato"
   ];
-  return keywords.some(k => lower.includes(k));
+
+  return explicitClosingKeywords.some(k => lower.includes(k));
 }
 
 const SYSTEM_PROMPT = `Eres Sofía, el Asistente Comercial Inteligente de "Nannys y Peques", una agencia especializada en el cuidado y desarrollo infantil en Puebla, Xalapa, Querétaro y CDMX.
@@ -590,6 +608,19 @@ REGLAS DE COMUNICACIÓN PARA PREGUNTAS SOBRE COCINAR O ASEO:
   - Responde con amabilidad: "Nuestra nanny apoya manteniendo limpia y ordenada el área que ocupa con el peque y lavando sus mamilas y platitos. Sin embargo, no realiza labores domésticas generales como barrer o trapear toda la casa, para dedicar su atención al cuidado del peque ✨"
 
 ==================================================
+5h. POLÍTICA DE SEGURIDAD EN TRASLADOS Y SALIDAS DE LA ESCUELA (CRÍTICO)
+==================================================
+
+CRÍTICO — SI EL CLIENTE SOLICITA QUE LA NANNY RECOJA AL PEQUE EN LA ESCUELA, GUARDERÍA O LO TRASLADE SOLA:
+Está TERMINANTEMENTE PROHIBIDO indicar que la nanny puede ir sola a recoger al peque o trasladarlo sin la presencia de un familiar. Por políticas estrictas de seguridad de Nannys y Peques, nuestras nannies NO viajan ni se trasladan solas con los niños.
+
+Explicación amigable y alternativa comercial obligatoria:
+* Explica con mucha empatía, amabilidad y profesionalismo que, por la propia seguridad y protección de su peque, nuestras nannies no realizan traslados a solas ni viajan en transporte/vehículo sin la compañía de un familiar responsable.
+* Oportunidad / Alternativa Comercial: Indícale que con mucho gusto la nanny puede acompañar al peque SIEMPRE Y CUANDO vaya en compañía de un familiar responsable (ej: mamá, papá, abuelo, tío o tutor), o bien recibir al peque en el domicilio una vez que el familiar lo entregue en casa.
+
+==================================================
+6. TABLA DE PRECIOS Y TARIFAS VIGENTES DE NANNYS Y PEQUES (PUEBLA, XALAPA, QUERÉTARO Y CDMX)
+===========================================================================
 5q. RECLUTAMIENTO — INTERESADAS EN TRABAJAR COMO NANNY
 ==================================================
 
@@ -1207,8 +1238,78 @@ export function detectCityFromText(text: string): string | null {
   return detectLocationFromText(text).ciudad;
 }
 
+export function detectServiceFromText(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  if (lower.includes("neuronanny") || lower.includes("neuro nanny") || lower.includes("neuro-nanny")) {
+    return "Neuronanny";
+  }
+  if (lower.includes("miss nanny") || lower.includes("missnanny")) {
+    return "Miss Nanny";
+  }
+  if (lower.includes("nocturna") || lower.includes("noche")) {
+    return "Nanny Nocturna";
+  }
+  if (lower.includes("fiesta") || lower.includes("boda") || lower.includes("bautizo") || lower.includes("cumpleanos")) {
+    return "Evento / Fiesta";
+  }
+  if (lower.includes("eventual") || lower.includes("particular") || lower.includes("por horas") || lower.includes("por hora") || lower.includes("ocasional")) {
+    return "Servicio Eventual";
+  }
+  if (lower.includes("fijo") || lower.includes("fija") || lower.includes("semanal") || lower.includes("tiempo completo") || lower.includes("medio tiempo")) {
+    return "Servicio Fijo";
+  }
+
+  return null;
+}
+
+export function detectMultipleAgesFromText(text: string): { textoEdad: string; numAnios: number }[] {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  const results: { textoEdad: string; numAnios: number }[] = [];
+
+  // Match pattern: "X año(s) [y/con] Y mes(es)" (e.g. "1 año 6 meses", "1 año y 6 meses") or "X mes(es)"
+  const regexYearsMonths = /\b([0-1]?[0-9])\s*(?:años|anio|anios|ańos|año)(?:\s*(?:y|con|,)?\s*([0-1]?[0-9])\s*(?:meses|mes))?/gi;
+
+  let match;
+  while ((match = regexYearsMonths.exec(lower)) !== null) {
+    const years = parseInt(match[1], 10);
+    const months = match[2] ? parseInt(match[2], 10) : 0;
+    
+    let textoEdad = "";
+    if (months > 0) {
+      textoEdad = `${years} ${years === 1 ? 'año' : 'años'} y ${months} ${months === 1 ? 'mes' : 'meses'}`;
+    } else {
+      textoEdad = `${years} ${years === 1 ? 'año' : 'años'}`;
+    }
+
+    const numAnios = years + (months / 12);
+    results.push({ textoEdad, numAnios });
+  }
+
+  // If no years matched, check solo months (e.g. "9 meses")
+  if (results.length === 0) {
+    const regexSoloMonths = /\b([0-1]?[0-9])\s*(?:meses|mes)\b/gi;
+    while ((match = regexSoloMonths.exec(lower)) !== null) {
+      const months = parseInt(match[1], 10);
+      results.push({
+        textoEdad: `${months} ${months === 1 ? 'mes' : 'meses'}`,
+        numAnios: months / 12
+      });
+    }
+  }
+
+  return results;
+}
+
 export function detectAgeFromText(text: string): number | null {
   if (!text) return null;
+  const multiple = detectMultipleAgesFromText(text);
+  if (multiple.length > 0) {
+    return Math.round(multiple[0].numAnios);
+  }
+
   const lower = text.toLowerCase();
   
   // Match "tiene X años", "de X años", "X anios", "X años", "peque de X"
@@ -1346,11 +1447,12 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     }
 
     // Validar edad/hijos
-    if (lead?.hijos && lead.hijos.length > 0) {
-      const hijosStr = lead.hijos.map(h => `${h.nombre} (${h.textoEdad})`).join(", ");
+    if (lead?.hijos && lead.hijos.length > 0 && lead.hijos.some((h: any) => h.textoEdad && h.textoEdad.trim() !== "")) {
+      const hijosStr = lead.hijos.map(h => `${h.nombre} (${h.textoEdad || 'Por definir'})`).join(", ");
       datosConocidos.push(`- Hijos Registrados: "${hijosStr}" (YA REGISTRADO. Dirígete a ellos por sus nombres en la conversación).`);
-    } else if (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) {
-      datosConocidos.push(`- Edad del Peque: "${lead.edadHijo} años" (YA REGISTRADA. No la preguntes de nuevo. Úsala para confirmar, ej: "Para el cuidado de su peque de ${lead.edadHijo} años...").`);
+    } else if (lead?.edadHijo !== undefined && lead?.edadHijo !== null) {
+      const edadLabel = lead.edadHijo === 0 ? "menor a 1 año" : `${lead.edadHijo} años`;
+      datosConocidos.push(`- Edad del Peque: "${edadLabel}" (YA REGISTRADA. No la preguntes de nuevo. Úsala para confirmar, ej: "Para el cuidado de su peque de ${edadLabel}...").`);
     } else {
       datosFaltantes.push(`Edad de su peque (dato clave para calificar el perfil ideal. Nota: Pídelo siempre en singular como "edad de su peque"; si el cliente aclara que son varios peques, pide los datos de todos ellos).`);
     }
@@ -1423,10 +1525,11 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     
     const numHijosEstimados = lead?.cantidadHijos || (lead?.hijos ? lead.hijos.length : 1);
     let tieneEdad = false;
+    const hasHijoWithEdad = !!(lead?.hijos && lead.hijos.length > 0 && lead.hijos.some((h: any) => h.textoEdad && h.textoEdad.trim() !== ""));
     if (numHijosEstimados === 1) {
-      tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null && lead?.edadHijo !== 0) || !!(lead?.hijos && lead.hijos.length > 0);
+      tieneEdad = (lead?.edadHijo !== undefined && lead?.edadHijo !== null) || hasHijoWithEdad;
     } else {
-      tieneEdad = lead?.hijos !== undefined && lead.hijos.length >= numHijosEstimados;
+      tieneEdad = (lead?.hijos !== undefined && lead.hijos.length >= numHijosEstimados && lead.hijos.every((h: any) => h.textoEdad && h.textoEdad.trim() !== "")) || (lead?.edadHijo !== undefined && lead?.edadHijo !== null);
     }
 
     const tieneDias = lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" && numDias > 0;
@@ -1488,16 +1591,18 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       const calculatedPrice = calculatePrecotizacion(leadCity, numDias, horasDiarias);
       if (calculatedPrice) {
         reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave y el sistema ha calculado la tarifa.
-        * TARIFA DETERMINADA POR EL SISTEMA: **$${calculatedPrice.toLocaleString("es-MX")} MXN por semana** (basada en ${numDias} día(s) a la semana, ${horasDiarias} horas al día en ${leadCity}).
-        * ⚠️ REGLA CRÍTICA ANTICONFUSIÓN (TIPO DE SERVICIO vs DÍAS): El tipo de servicio registrado en el CRM (ej. "Eventual", "Fijo", "Por horas") NO cambia la tarifa ya calculada por el sistema. El precio correcto ya está calculado arriba y considera exactamente ${numDias} día(s) a la semana y ${horasDiarias} horas al día. Tienes ESTRICTAMENTE PROHIBIDO buscar en ninguna tabla de precios por tu cuenta, hacer interpolaciones, ni usar la tabla "Eventual/1 día" si el número de días registrados en el CRM es ${numDias}. El precio es exactamente **$${calculatedPrice.toLocaleString("es-MX")}** sin importar nada más.
-        * REGLA DE OBLIGATORIEDAD DE PRECIO: Tienes ABSOLUTAMENTE PROHIBIDO inventar, calcular, interpolar o mencionar cualquier otro monto. El precio es exactamente **$${calculatedPrice.toLocaleString("es-MX")}**.
-        * REGLA DE RETORNO DE TAG DE COTIZACIÓN (CRÍTICO):
-          - Para que el CRM genere la imagen de la cotización y se envíe de manera automática al cliente, DEBES finalizar o incluir en tu respuesta la siguiente etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
-          - Queda ESTRICTAMENTE PROHIBIDO escribir el precio o detalles numéricos del costo en texto plano fuera de esa etiqueta en tu mensaje. El cliente NO debe ver la cantidad monetaria en el texto plano (ej: no escribas "el precio es de $1,800").
-          - En su lugar, debes decirle al cliente con mucha calidez y trato de "usted" que le compartes su precotización estimada en formato de imagen a continuación, y cerrar obligatoriamente haciendo labor de venta y con una propuesta consultiva activa de valor, de la siguiente manera:
-            "Con mucho gusto, ${lead?.nombreCompleto ? lead.nombreCompleto.split(" ")[0] : 'señora/señor'} 😊💛 A continuación le comparto la imagen con el detalle de su precotización estimada. Esta tarifa estimada es una referencia rápida de base de conocimientos y, por supuesto, una asesora comercial le validará los detalles finales en un PDF formal y revisará la disponibilidad de nannies si gusta. Mientras tanto, me encantaría seguir platicándole sobre nuestro servicio. Por ejemplo, ¿le gustaría conocer cómo seleccionamos a nuestras nannies bajo rigurosos filtros de seguridad, o qué funciones tiene nuestra app exclusiva de reportes diarios? 😊✨ [COTIZACION:${calculatedPrice}]"
-        * REGLA DE ORO DE VENTA (OBLIGATORIA): Antes del cierre y de la etiqueta de la cotización, debes hacer labor de venta: valida empáticamente la necesidad del cliente ("${lead?.razonContratacion || 'apoyo con su peque'}"), y resalta cómo el servicio de Nannys y Peques (procesos de selección, capacitación, bitácoras de cuidado, app y respaldo) le resolverá su problema y le dará tranquilidad.
-        * REGLA DE CIERRE ACTIVO DE CONVERSACIÓN (CRÍTICO): Tienes TERMINANTEMENTE PROHIBIDO terminar tu mensaje de manera pasiva diciendo únicamente "Quedo a sus órdenes por si tiene alguna otra duda" o similar. Tu objetivo es mantener viva la conversación, generar valor y guiar al cliente de manera fluida y consultiva hacia el asesor de ventas. Siempre finaliza formulando una pregunta abierta sobre nuestro valor agregado (seguridad, app, psicopedagogía) o el paso con el asesor.`;
+        * TARIFA DETERMINADA POR EL SISTEMA: **$${calculatedPrice.toLocaleString("es-MX")} MXN** (basada en ${numDias} día(s), ${horasDiarias} horas al día en ${leadCity}).
+        * ⚠️ REGLA CRÍTICA ANTICONFUSIÓN (TIPO DE SERVICIO vs DÍAS): El precio es exactamente **$${calculatedPrice.toLocaleString("es-MX")}**. Tienes ESTRICTAMENTE PROHIBIDO inventar, calcular, interpolar o mencionar cualquier otro monto numérico.
+        * ⛔ PROHIBICIÓN ABSOLUTA DE REPETICIÓN O MENSAJES DUPLICADOS (CRÍTICO): Redacta UN SOLO MENSAJE continuo y natural. Queda TERMINANTEMENTE PROHIBIDO repetir frases como "A continuación le comparto la imagen...", ni saludar dos veces, ni escribir párrafos redundantes que digan lo mismo.
+        * ESTRUCTURA OBLIGATORIA DE TU RESPUESTA (EN UN SOLO TEXTO SIN DUPLICACIONES):
+          1) LABOR DE VENTA OBLIGATORIA (MÍNIMO 2 BENEFICIOS ESPECÍFICOS Y PERSONALIZADOS): Antes de mencionar la imagen o el precio, DEBES hacer labor de venta real. NO uses frases genéricas. Personaliza los beneficios con el contexto del lead:
+             - Si el peque es bebé o muy pequeño (como 3 meses): menciona el cuidado especializado para bebés, estimulación temprana apropiada para su edad, y la tranquilidad que tendrá la mamá/papá.
+             - Si el servicio es de lunes a sábado o más de 5 días: destaca la confiabilidad y estabilidad de la nanny asignada y cómo conocerá a fondo las rutinas del peque.
+             - Siempre: menciona nuestro riguroso proceso de selección (solo 1 de cada 10 candidatas pasa), el respaldo psicopedagógico especializado, o la App Nannys y Peques según el contexto.
+          2) Menciona UNA SOLA VEZ de forma cálida que le compartes su precotización estimada en formato de imagen a continuación, aclarando brevemente que es una tarifa estimada de referencia y que una asesora comercial le validará los detalles finales en un PDF formal.
+          3) Cierra formulando una pregunta abierta sobre nuestro valor (filtros de seguridad, estimulación del peque, app, etc.) para continuar la conversación.
+          4) Finaliza obligatoriamente tu respuesta con la etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
+        * REGLA DE NO MOSTRAR PRECIO EN TEXTO PLANO: No escribas la cifra monetaria en el texto plano de tu mensaje; únicamente incluye la etiqueta \`[COTIZACION:${calculatedPrice}]\` al final para que el CRM genere la imagen automáticamente.`;
       } else {
         reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN PERSONALIZADA POR ASESOR**: Debido a que los horarios o días solicitados son variables, inestables o están fuera de los límites de la tabla de precios, debes indicarle de manera sumamente atenta y cálida que el asesor de ventas oficial se encargará de prepararle una cotización a la medida para confirmar la disponibilidad y el precio exacto. Mientras tanto, ofrécete a seguir aclarando cualquier duda general sobre el servicio y nannies.`;
       }
@@ -1538,7 +1643,19 @@ ${reglaPrecotizacionDinamica}
    - **PREGUNTA DE CLARIFICACIÓN OBLIGATORIA SI HAY DUDA**: Si la intención del cliente respecto al evento es confusa o no especifica explícitamente si el cuidado es solo para su peque o para un grupo de niños en la fiesta, **DEBES PREGUNTAR PRIMERO PARA ASEGURARTE**:
      *"Para ofrecerle el servicio adecuado, ¿requiere el apoyo de una nanny exclusivamente para cuidar a su(s) peque(s) durante la boda/evento (servicio eventual), o busca contratar un paquete para fiestas con un grupo de niñeras para cuidar y entretener a los niños de la fiesta en general? 😊💛"*
    - Solo si el cliente confirma explícitamente que busca cuidar a un grupo de varios niños en la fiesta, ofrece la información de *"Nanny para Fiestas"* aclarando que este servicio grupal lo cotiza en PDF un asesor comercial.
-13. **REFUERZO DE VALOR DE MARCA ADAPTATIVO AL CONTEXTO (CRÍTICO - PROHIBIDO INVENTAR INFORMACIÓN)**: No actúes como un formulario frío de recopilación. Tu rol es persuadir y educar con psicología de ventas. Analiza el contexto actual del chat y el dolor de la familia para destacar el valor de marca más oportuno de manera fluida (no los digas todos juntos, menciona solo 1 o máximo 2 de forma natural por respuesta):
+13. **MÚLTIPLES DÍAS EVENTUALES: COTIZACIÓN SEPARADA POR CADA DÍA (CRÍTICO)**:
+   - **PROHIBICIÓN DE COMBINAR DÍAS EN UNA SOLA TARIFA**: Si el cliente solicita servicio eventual en más de un día (ej. martes 4 de agosto Y domingo), tienes TERMINANTEMENTE PROHIBIDO combinar ambos días en una única tarifa global o decir "$X por semana para ambos días". Eso genera confusión.
+   - **OBLIGACIÓN DE COTIZAR POR SEPARADO**: Cada día solicitado debe presentarse como una precotización individual independiente. Menciona explícitamente el desglose así:
+     *"Para el martes 4 de agosto (5pm a 10pm, 5 hrs): $695 MXN\nPara el domingo (11:30am a 4:30pm, 5 hrs): $695 MXN"*
+   - **ETIQUETA DE COTIZACION**: Sigue incluyendo la etiqueta [COTIZACION:precio] para el primer servicio que ya fue cotizado. Si el cliente pide una segunda cotizacion, genera tambien una segunda imagen con otra etiqueta. Si el sistema solo permite una imagen a la vez, menciona el desglose textual claro y luego incluye la etiqueta.
+   - **NUNCA uses "por semana"** para servicios eventuales de un solo dia. La frase "por semana" solo aplica cuando el lead tiene dias recurrentes por semana (ej. 3 dias/semana en servicio fijo). Para eventuales de 1 dia, el precio es **por ese dia especifico**.
+14. **CUANDO EL CLIENTE HACE SU PROPIO CÁLCULO DE PRECIO POR HORA (MODERADOR - CRÍTICO)**:
+   - Si el cliente hace sus propias matemáticas y calcula el precio por hora (ej. $695 ÷ 5 horas = $139/hora), tienes que actuar como moderador empático, NO corregirle ni decirle que está mal.
+   - **PASO 1 - VALIDA EL CÁLCULO**: Primero verifica mentalmente si el cálculo es correcto dividiendo el precio de la cotización entre el número de horas del servicio cotizado. Si es correcto, reconócelo.
+   - **PASO 2 - MODERA CON EDUCACIÓN**: Explica de forma cálida que en Nannys y Peques los servicios se cotizan según el paquete completo (número de horas, días y tipo de servicio), no por hora suelta. Pero cuando el cliente lo calcula, el resultado matemático por hora es válido para su caso específico.
+   - **EJEMPLO DE RESPUESTA MODERADORA**: *"¡Exactamente, Juls! 😊 Su cálculo es correcto: para su servicio de 5 horas, el precio por hora equivale aproximadamente a $139. Nuestros servicios se cotizan como paquete completo según las horas, días y tipo de servicio, lo que garantiza disponibilidad exclusiva y cobertura profesional durante todo ese tiempo. En su caso particular, esa equivalencia es precisa 🌸"*
+   - **NUNCA digas** que el cálculo del cliente está mal si matemáticamente es correcto. NUNCA ignores ni invalides sus números si cuadran con la cotización emitida.
+15. **REFUERZO DE VALOR DE MARCA ADAPTATIVO AL CONTEXTO (CRÍTICO - PROHIBIDO INVENTAR INFORMACIÓN)**: No actúes como un formulario frío de recopilación. Tu rol es persuadir y educar con psicología de ventas. Analiza el contexto actual del chat y el dolor de la familia para destacar el valor de marca más oportuno de manera fluida (no los digas todos juntos, menciona solo 1 o máximo 2 de forma natural por respuesta):
        - **Si el cliente muestra preocupación por la seguridad, confianza o el cuidado**: Resalta nuestro **proceso de selección riguroso** (pruebas psicométricas, verificación de referencias, y estudio socioeconómico o visita domiciliaria, donde solo ingresan alrededor de 10 de cada 100 candidatas) y nuestros **más de 6 años de experiencia** respaldados por más de 5,000 familias.
        - **Si pregunta por actividades, estimulación o desarrollo del peque**: Menciona el **respaldo psicopedagógico especializado** (equipo de psicólogas que revisan y auditan las planeaciones de actividades orientadas a las 5 áreas de desarrollo: cognitiva, lenguaje, motriz, socioemocional y sensorial).
        - **Si busca un servicio fijo o pregunta sobre el seguimiento**: Destaca nuestra **App Nannys y Peques**, que permite a la familia tener mayor control y visibilidad en su celular sobre servicios programados, horarios, saldos, planeaciones y bitácoras (actividades, higiene, rutina y alimentación).
@@ -1654,19 +1771,19 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - nombreCompleto: Nombre del cliente (tutor/padre/madre).
 - ciudad: Ciudad del servicio. Solo puede ser una de estas: "Puebla", "CDMX", "Atlixco", "Querétaro" o "Xalapa".
 - zona: Zona, colonia o fraccionamiento (ej: "Angelópolis", "Lomas de Angelópolis", "Sonata").
-- interesServicio: Tipo de servicio solicitado. Intenta normalizarlo a: "Fijo", "Por horas" o "Eventual" (o el término específico usado).
-- edadHijo: Edad del hijo (número entero). Si menciona que tiene 4 años, extrae 4.
+- interesServicio: Tipo de servicio solicitado. Intenta normalizarlo a: "Servicio Fijo", "Por horas" o "Servicio Eventual" (o el término específico usado). Si el cliente menciona "Fija" o "Fijo", normalízalo como "Servicio Fijo". Si menciona "eventual", "particular" o "fecha particular", normalízalo como "Servicio Eventual".
+- edadHijo: Edad del hijo (número entero). Si menciona que tiene 4 años, extrae 4. Si es de meses (ej: "2 meses"), extrae 0 en edadHijo e incluye la descripción exacta "2 meses" en el arreglo nuevosHijos.
 - cantidadHijos: Cantidad de hijos a cuidar (número entero).
 - diasSolicitados: Días de la semana o cantidad de días requerida (ej: "Lunes a Viernes", "3 días a la semana"). CRÍTICO: Si el cliente indica una cantidad de días (ej: "3 días") pero NO menciona qué días de la semana específicos quiere, debes guardar exactamente lo que dijo (ej: "3 días a la semana" o "3 días"). Tienes ESTRICTAMENTE PROHIBIDO asumir o inventar días específicos (por ejemplo, nunca asumas "Lunes a Miércoles" para "3 días").
-- horaInicioSolicitada: Hora de inicio del servicio (ej: "09:00").
-- horaFinSolicitada: Hora de fin del servicio (ej: "18:00").
+- horaInicioSolicitada: Hora de inicio del servicio en formato de 24 horas HH:mm (ej: "09:00").
+- horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). CRÍTICO CONVERSIÓN 12H A 24H: Convierte con exacta precisión matemática am/pm a 24 horas (ej: 9am = "09:00", 5pm = "17:00"). De 9am a 5pm es de "09:00" a "17:00" (8 horas diarias). No confundas 5pm con 16:00.
 - fechaInicioDeseada: Fecha de inicio deseada (ej: "Inmediato", "Próximo lunes").
 - linkUbicacion: URL o enlace de ubicación (Google Maps, Waze, etc.) compartido por el cliente.
 - razonContratacion: Motivo, necesidad o razón principal por la que busca o contrata el servicio (ej: 'necesito quien cuide a mi hijo mientras trabajo', 'trabajo por las tardes', 'apoyo después de la escuela', 'salir de viaje', etc.). Extrae siempre una frase corta y descriptiva resumida que represente esta razón si el cliente menciona para qué o por qué requiere el servicio. No lo dejes vacío si el cliente responde a la pregunta de por qué requiere el servicio.
 - mascotas: Mascotas en el hogar (ej: "2 perros", "1 gato"). Solo si se menciona de forma explícita. Si no se menciona o no está claro, NO extraigas este campo (no pongas "Ninguna").
 - indicacionesIngreso: Indicaciones de ingreso. Solo si se mencionan explícitamente.
 - preguntasMencionadas: Un arreglo de cadenas de texto en tercera persona resumiendo las preguntas clave, dudas u objeciones particulares expresadas por el cliente en el mensaje o conversación (ej: ["Ha preguntado por qué tendría que contratarnos a nosotros y no a otra agencia", "preguntó si la niñera puede cocinar"]). Si no hay preguntas particulares mevas, deja este campo fuera del JSON o vacío.
-- listoParaCierre: boolean (true si la INTENCIÓN PRINCIPAL del cliente es cerrar o avanzar a la contratación del servicio, pagar, hacer transferencia o agendar la niñera. Ejemplo: "Quiero contratar", "Acepto la cotización", "¿Dónde pago?", "Pásame a un asesor para pagar y contratar ya").
+- listoParaCierre: boolean (true ÚNICAMENTE si ya se le presentó una cotización previa al cliente Y el cliente responde expresando su intención explícita de contratar, pagar o agendar la niñera tras haber revisado la cotización. Ejemplo: "Acepto la cotización", "Quiero pagar", "¿Dónde transfiero?", "Quiero agendar la niñera con ese precio").
 - requiereAtencionHumana: boolean (true si la INTENCIÓN PRINCIPAL del cliente es pedir hablar con un humano por dudas específicas, explicaciones detalladas, soporte o quejas, SIN que su intención sea ya cerrar la contratación. Ejemplo: "Necesito hablar con una persona para que me explique bien", "No entiendo esto, pásame a un humano", "Prefiero hablar con alguien real antes de decidir").
 - nuevosHijos: Un arreglo de objetos para cada uno de los peques que se mencionen o identifiquen en el mensaje, donde cada objeto tenga:
   * nombre: Nombre del peque (si el cliente no menciona el nombre del peque, debes generar un nombre genérico secuencial como "Peque 1", "Peque 2", etc.).
@@ -1756,7 +1873,6 @@ function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage:
     // 2. Optimizar el documento de Precios y Tarifas según la ciudad del lead
     if (doc.titulo.toLowerCase().includes("precios, tarifas y condiciones")) {
       let contenidoOptimizado = doc.contenido;
-
       const ciudadNormalizada = ciudad.toLowerCase().trim();
       const esPuebla = ciudadNormalizada.includes("puebla") || ciudadNormalizada.includes("atlixco");
       const esXalapa = ciudadNormalizada.includes("xalapa");
@@ -1800,4 +1916,109 @@ function filtrarYOptimizarConocimiento(docs: any[], ciudad: string, lastMessage:
 
     return doc;
   }).filter(Boolean);
+}
+
+export async function generateRemarketingMessageForStage(
+  lead: any,
+  stage: number,
+  conversationHistory: any[]
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey === "sk-mock-key-for-development") {
+    throw new Error("OpenAI API Key no configurada.");
+  }
+
+  const nombreCliente = lead.nombreCompleto && !lead.nombreCompleto.toLowerCase().includes("prospecto")
+    ? lead.nombreCompleto.split(" ")[0]
+    : "Familia";
+
+  const ciudad = lead.ciudad || "su ciudad";
+  const servicioRaw = (lead.interesServicio || "").toLowerCase();
+  const esServicioFijo = servicioRaw.includes("fijo") || servicioRaw.includes("neuronanny") || servicioRaw.includes("miss") || !servicioRaw.includes("eventual");
+
+  let cotizacionMonto = "";
+  if (lead.cotizaciones && lead.cotizaciones.length > 0) {
+    const lastQuote = [...lead.cotizaciones].filter((q: any) => !q.deleted).pop();
+    if (lastQuote) {
+      cotizacionMonto = `$${lastQuote.total.toLocaleString("es-MX")} MXN`;
+    }
+  }
+
+
+  // Temas universales de las 7 etapas de remarketing aplicables a todos los leads
+  const universalStagePrompts: { [key: number]: { tema: string; enfoque: string } } = {
+    1: {
+      tema: "Filtros de Seguridad, Psicometría y Capacitación Constante",
+      enfoque: "Enfócate en la paz mental del cliente: resalta los filtros de seguridad y pruebas psicométricas al reclutar a nuestras nannies amorosas y dedicadas, garantizando que su peque estará en las mejores manos con capacitación constante para brindar la mejor atención posible."
+    },
+    2: {
+      tema: "Diferenciación vs Contratar por Facebook o Recomendación Casual",
+      enfoque: "Menciona qué hace diferente a Nannys y Peques de contratar a una niñera por Facebook o recomendación empírica: enfatiza el seguimiento continuo, las actividades planeadas para estimular el desarrollo de su peque y nuestros más de 6 años de experiencia."
+    },
+    3: {
+      tema: "Supervisión del Desempeño y Acompañamiento Continuo",
+      enfoque: "Reduce el miedo de '¿y si la nanny no hace bien su trabajo?'. Explica cómo supervisamos el desempeño y damos seguimiento a cada servicio, tanto a la nanny como a las actividades y avances del peque. En Nannys y Peques la nanny y la familia no están solas, les acompañamos."
+    },
+    4: {
+      tema: "Beneficios Exclusivos de la Agencia y Red de Especialistas en Salud",
+      enfoque: "Resalta los beneficios exclusivos al estar con la agencia: acceso a biblioteca digital, webinars, área psicopedagógica y acompañamiento a las familias, más nuestro catálogo de descuentos con especialistas en la salud (dentistas, nutriólogos, ginecólogos y más)."
+    },
+    5: {
+      tema: "Prueba Social (Más de 5,000 familias y 6,000 peques)",
+      enfoque: "Menciona nuestra prueba social: llevamos más de 5,000 familias y 6,000 peques acompañados; actualmente familias de Puebla, Xalapa, Querétaro y CDMX confían plenamente en nosotros."
+    },
+    6: {
+      tema: "Asignación de la Nanny Ideal que Cubra sus Expectativas",
+      enfoque: "Enfócate en que siempre buscamos asignar a su nanny ideal que cubra sus expectativas para que tanto la familia como el peque estén lo más cómodos posibles, felices y divirtiéndose."
+    },
+    7: {
+      tema: "Selección Estricta: Solo 10 de cada 100 niñeras califican",
+      enfoque: "Enfatiza que la seguridad de su familia es lo más importante para nosotros y por ello solo 10 de cada 100 niñeras aspirantes logran ingresar a nuestro equipo de nannies."
+    }
+  };
+
+  const currentConfig = universalStagePrompts[stage] || universalStagePrompts[1];
+
+  const prompt = `Eres Sofía, la Asesora Comercial Inteligente de "Nannys y Peques".
+Estás enviando el MENSAJE DE REMARKETING # ${stage} (Etapa ${stage} de 7) por WhatsApp a un cliente que cotizó el servicio de ${lead.interesServicio || "cuidado infantil"} en ${ciudad}.
+
+OBJETIVO DEL MENSAJE #${stage}:
+- Tema central: ${currentConfig.tema}
+- Enfoque clave: ${currentConfig.enfoque}
+- Cotización enviada previamente: ${cotizacionMonto ? cotizacionMonto : "Precotización personalizada"}
+
+INSTRUCCIONES DE REDACCIÓN OBLIGATORIAS:
+1. Sé sumamente cálida, empática, profesional y orientada a ventas consultivas.
+2. NUNCA suenes invasiva, desesperada, insistente ni robotizada.
+3. Saluda al cliente por su nombre (ej: "¡Hola ${nombreCliente}! ✨").
+4. El mensaje DEBE SER COMPLETAMENTE DIFERENTE a los anteriores, enfocándose estrictamente en resaltar el beneficio asignado para la Etapa ${stage}.
+5. Mantén el mensaje en un solo párrafo breve (menos de 60 palabras).
+6. Usa 1 o 2 emojis cálidos y variados (ej. ✨, 🌸, 🧸, 💛).`;
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: `Genera el mensaje de remarketing para la Etapa ${stage}.` }
+      ],
+      temperature: 0.6,
+      max_tokens: 180,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Falla al llamar a OpenAI para mensaje de remarketing.");
+  }
+
+  const data = await response.json();
+  const reply = data.choices?.[0]?.message?.content?.trim();
+  if (!reply) throw new Error("Mensaje de remarketing vacío retornado por OpenAI.");
+
+  return reply;
 }
