@@ -76,7 +76,6 @@ export async function generateAndSaveQuoteImage(data: QuoteImageData): Promise<s
     const precio = escapeXml(`$${data.total.toLocaleString("es-MX")} MXN`);
     const precioDetalle = escapeXml(data.notas || "");
     const nota = escapeXml(data.tipoServicio || "Por definir");
-    const notaDetalle = escapeXml("Las horas extra tienen un costo de $100 pesos c/u.");
 
     const svgOverlay = `
       <svg width="791" height="1024" xmlns="http://www.w3.org/2000/svg">
@@ -101,7 +100,6 @@ export async function generateAndSaveQuoteImage(data: QuoteImageData): Promise<s
         
         <!-- Nota -->
         <text x="170" y="665" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${nota}</text>
-        <text x="200" y="692" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500" fill="#718096" font-style="italic">${notaDetalle}</text>
       </svg>
     `;
 

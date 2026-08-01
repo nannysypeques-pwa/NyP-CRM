@@ -102,7 +102,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const precio = escapeXml(`$${cotizacion.total.toLocaleString("es-MX")} MXN`);
     const precioDetalle = escapeXml(cotizacion.notas || "");
     const nota = escapeXml(cotizacion.tipoServicio || "Por definir");
-    const notaDetalle = escapeXml("Las horas extra tienen un costo de $100 pesos c/u.");
 
     // Ajuste de coordenadas Y para que el texto descanse perfectamente sobre las líneas rosas del formato
     const svgOverlay = `
@@ -128,7 +127,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         
         <!-- Nota -->
         <text x="170" y="665" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#3A3A3C">${nota}</text>
-        <text x="200" y="692" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500" fill="#718096" font-style="italic">${notaDetalle}</text>
       </svg>
     `;
 
