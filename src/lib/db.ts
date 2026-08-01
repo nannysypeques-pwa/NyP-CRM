@@ -702,8 +702,44 @@ class BaseDeDatos {
   async addMessage(messageData: Omit<Mensaje, 'id' | 'creadoEn'> & { creadoEn?: Date | string }): Promise<Mensaje> {
     clearMemoryCache("convs");
     clearMemoryCache("leads");
-    const msg = await prisma.mensaje.create({
-      data: {
+    
+    let msg: any = null;
+    const msgId = (messageData as any).id || crypto.randomUUID();
+    const creadoEnDate = messageData.creadoEn ? new Date(messageData.creadoEn) : new Date();
+
+    try {
+      msg = await prisma.mensaje.create({
+        data: {
+          id: msgId,
+          idConversacion: messageData.idConversacion,
+          direccion: messageData.direccion,
+          tipoRemitente: messageData.tipoRemitente,
+          idRemitente: messageData.idRemitente || null,
+          contenido: messageData.contenido,
+          urlMultimedia: (messageData as any).urlMultimedia || null,
+          idMensajeRespondido: (messageData as any).idMensajeRespondido || null,
+          textoCitado: (messageData as any).textoCitado || null,
+          creadoEn: creadoEnDate
+        }
+      });
+    } catch (err: any) {
+      console.warn("[PRISMA FALLBACK] Error al insertar mensaje con Prisma, ejecutando raw SQL:", err.message);
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "Mensaje" ("id", "idConversacion", "direccion", "tipoRemitente", "idRemitente", "contenido", "urlMultimedia", "idMensajeRespondido", "textoCitado", "estado", "creadoEn") 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'DELIVERED', $10)`,
+        msgId,
+        messageData.idConversacion,
+        messageData.direccion,
+        messageData.tipoRemitente,
+        messageData.idRemitente || null,
+        messageData.contenido,
+        (messageData as any).urlMultimedia || null,
+        (messageData as any).idMensajeRespondido || null,
+        (messageData as any).textoCitado || null,
+        creadoEnDate
+      );
+      msg = {
+        id: msgId,
         idConversacion: messageData.idConversacion,
         direccion: messageData.direccion,
         tipoRemitente: messageData.tipoRemitente,
@@ -712,42 +748,53 @@ class BaseDeDatos {
         urlMultimedia: (messageData as any).urlMultimedia || null,
         idMensajeRespondido: (messageData as any).idMensajeRespondido || null,
         textoCitado: (messageData as any).textoCitado || null,
-        creadoEn: messageData.creadoEn ? new Date(messageData.creadoEn) : undefined
-      }
-    });
+        estado: "DELIVERED",
+        creadoEn: creadoEnDate
+      };
+    }
 
     // Update conversation ultimoMensajeEn and lead ultimoContactoEn
     const conv = await prisma.conversacion.update({
       where: { id: messageData.idConversacion },
-      data: { ultimoMensajeEn: msg.creadoEn }
+      data: { ultimoMensajeEn: creadoEnDate }
     });
 
     if (conv.idLead) {
       await prisma.lead.update({
         where: { id: conv.idLead },
-        data: { ultimoContactoEn: msg.creadoEn }
+        data: { ultimoContactoEn: creadoEnDate }
       });
     }
 
     return {
       ...msg,
-      creadoEn: msg.creadoEn.toISOString()
+      creadoEn: typeof msg.creadoEn === "string" ? msg.creadoEn : msg.creadoEn.toISOString()
     } as unknown as Mensaje;
   }
 
   async updateMessage(id: string, contenido: string): Promise<Mensaje> {
     clearMemoryCache("convs");
-    const msg = await prisma.mensaje.update({
-      where: { id },
-      data: {
-        contenido,
-        editado: true,
-        editadoEn: new Date()
-      }
-    });
+    let msg: any = null;
+    try {
+      msg = await prisma.mensaje.update({
+        where: { id },
+        data: {
+          contenido,
+          editado: true,
+          editadoEn: new Date()
+        }
+      });
+    } catch (err: any) {
+      console.warn("[PRISMA FALLBACK] Error al actualizar mensaje con Prisma, ejecutando raw SQL:", err.message);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Mensaje" SET "contenido" = $1, "editado" = true, "editadoEn" = $2 WHERE "id" = $3`,
+        contenido, new Date(), id
+      );
+      msg = await prisma.mensaje.findUnique({ where: { id } });
+    }
     return {
       ...msg,
-      creadoEn: msg.creadoEn.toISOString()
+      creadoEn: typeof msg.creadoEn === "string" ? msg.creadoEn : msg.creadoEn.toISOString()
     } as unknown as Mensaje;
   }
 

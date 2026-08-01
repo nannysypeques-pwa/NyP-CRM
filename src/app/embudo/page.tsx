@@ -477,6 +477,13 @@ export default function KanbanPage() {
         const data = await res.json();
         clientCache.set(`messages_${convId}`, data);
         setChatMessages(prev => {
+          const temps = prev.filter(m => m.id.startsWith("temp_"));
+          if (temps.length > 0) {
+            const pendingTemps = temps.filter(t => !data.some((d: any) => d.contenido === t.contenido));
+            if (pendingTemps.length > 0) {
+              return [...data, ...pendingTemps];
+            }
+          }
           if (
             prev.length === data.length &&
             prev.every((msg, idx) => msg.id === data[idx].id && msg.contenido === data[idx].contenido)
@@ -551,22 +558,28 @@ export default function KanbanPage() {
     setActiveDropCol(null);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetStatus: string) => {
+  const handleDrop = (e: React.DragEvent, targetCol: string) => {
     e.preventDefault();
     setActiveDropCol(null);
-    if (targetStatus === "NUEVO") return; // block drops into PENDIENTES
-    
-    const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId;
+    const leadId = e.dataTransfer.getData("text/plain");
     if (!leadId) return;
 
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    if (lead.estado === targetCol) return;
+
+    handleUpdateLeadStatus(leadId, targetCol);
     setDraggedLeadId(null);
-    await handleUpdateLeadStatus(leadId, targetStatus);
   };
 
   // Drawer interactions
   const handleCardClick = (lead: Lead) => {
     setSelectedLead(lead);
     setDrawerTab("general");
+    setReplyingToMessage(null);
+    setEditingMessage(null);
+    setChatInput("");
     
     // Find linked conversation
     const conv = conversations.find(c => c.idLead === lead.id);

@@ -251,15 +251,23 @@ export async function POST(req: NextRequest) {
     // Get or create conversation in db
     const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
 
-    // Si el lead estaba en estado PERDIDO y el cliente vuelve a escribir, reactivarlo al estado correspondiente
+    // Si un lead en estado CONTACTADO, PERDIDO o con agente asignado se vuelve a comunicar, reactivar la IA y regresarlo a la columna "EN CONVERSACIÓN" en el embudo
     if (conv.idLead) {
       const currentLead = await db.getLeadById(conv.idLead);
-      if (currentLead && currentLead.estado === "PERDIDO") {
-        const hasQuotes = currentLead.cotizaciones && currentLead.cotizaciones.length > 0;
-        const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
-        const reactivatedStatus = hasQuotes ? "COTIZADO" : (hasCity ? "CONTACTADO" : "NUEVO");
-        console.log(`[REACTIVACIÓN LEAD] Lead ${conv.idLead} estaba PERDIDO y volvió a escribir. Reactivando a estado: ${reactivatedStatus}`);
-        await db.updateLead(conv.idLead, { estado: reactivatedStatus });
+      if (currentLead) {
+        if (currentLead.estado === "CONTACTADO" || currentLead.estado === "PERDIDO" || !conv.iaActiva || currentLead.idUsuarioAsignado) {
+          const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
+          const targetStatus = currentLead.estado === "GANADO" ? "GANADO" : (hasCity ? "CONTACTADO" : "NUEVO");
+          console.log(`[RE-ACTIVACIÓN KANBAN] Lead ${conv.idLead} (Estado: ${currentLead.estado}) volvió a escribir. Re-activando IA y regresando a 'EN CONVERSACIÓN' en el Embudo.`);
+          
+          await db.updateConversation(conv.id, { iaActiva: true });
+          conv.iaActiva = true;
+
+          await db.updateLead(conv.idLead, { 
+            estado: targetStatus,
+            idUsuarioAsignado: undefined
+          });
+        }
       }
     }
 

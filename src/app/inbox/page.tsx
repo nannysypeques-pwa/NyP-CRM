@@ -527,6 +527,11 @@ function InboxContent() {
 
     hasScrolledForActiveConvRef.current = false;
 
+    // Resetear estados de edición, respuesta e input al cambiar de conversación
+    setReplyingToMessage(null);
+    setEditingMessage(null);
+    setChatInput("");
+
     // 1. Cargar mensajes instantáneamente desde caché local
     const cachedMsgs = clientCache.get<Message[]>(`messages_${activeConvId}`);
     if (cachedMsgs) {
@@ -640,6 +645,14 @@ function InboxContent() {
         const data = await res.json();
         clientCache.set(`messages_${convId}`, data);
         setMessages(prev => {
+          // Preservar mensajes optimistas temporales hasta que se confirmen en el servidor
+          const temps = prev.filter(m => m.id.startsWith("temp_"));
+          if (temps.length > 0) {
+            const pendingTemps = temps.filter(t => !data.some((d: any) => d.contenido === t.contenido));
+            if (pendingTemps.length > 0) {
+              return [...data, ...pendingTemps];
+            }
+          }
           if (
             prev.length === data.length &&
             prev.every((msg, idx) => msg.id === data[idx].id && msg.contenido === data[idx].contenido)

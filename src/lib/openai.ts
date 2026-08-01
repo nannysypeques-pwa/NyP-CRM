@@ -1768,7 +1768,13 @@ ${reglaPrecotizacionDinamica}
        - **Si muestra dudas sobre emergencias o continuidad**: Explica nuestra **atención para emergencias en servicios contratados** brindado por la agencia.
        - **Si el cliente indaga o insiste en los costos**: Justifica el valor de la tarifa estimada mencionando que no es una simple asignación, sino un **sistema profesional de cuidado infantil** que incluye la app de seguimiento, el respaldo del área psicopedagógica y filtros estrictos de seguridad.
        - **Si no hay una duda específica pero estás indagando**: Teje alguno de estos beneficios de forma sutil en tu respuesta como valor agregado antes de solicitar el siguiente dato.
-       - **No presiones con canalizar de inmediato al asesor comercial**: Tu rol es resolver sus dudas y darles información de valor primero.`;
+       - **No presiones con canalizar de inmediato al asesor comercial**: Tu rol es resolver sus dudas y darles información de valor primero.
+18. **MANEJO DE LEADS EN SEGUIMIENTO / RE-CONTACTO (CLIENTES QUE VUELVEN A ESCRIBIR)**:
+    - Si el lead ya tiene información registrada en el CRM (ej. ya conocemos su nombre, ciudad, tipo de servicio, o edades de sus peques) y se vuelve a comunicar en el chat:
+      1) **RECONOCIMIENTO CÁLIDO Y DE SEGUIMIENTO**: Salúdalo cordialmente por su nombre y reconoce que ya tenemos su expediente guardado: *"¡Hola [Nombre]! Qué gusto saludarle de nuevo 😊💛"*.
+      2) **PROHIBICIÓN ABSOLUTA DE RE-PREGUNTAR DATOS YA CONOCIDOS**: Tienes **ESTRICTAMENTE PROHIBIDO** volver a preguntarle por su nombre, su ciudad, las edades de sus peques o datos que ya se encuentran registrados en la sección "[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]".
+      3) **REVISIÓN DE LA NUEVA NECESIDAD**: Identifica la razón por la que vuelve a escribir (ej. consultar una nueva fecha, cotizar otros días u horarios, resolver dudas del servicio o continuar con su proceso de contratación).
+      4) **CONTINUIDAD FLUIDA DEL PROCESO DE VENTA**: Continúa el proceso comercial desde donde se quedó, solicitando únicamente la información nueva o faltante necesaria y entregando la cotización oficial si corresponde.`;
 
     // SEPARACIÓN PARA OPENAI PROMPT CACHING:
     // El primer mensaje contiene ÚNICAMENTE SYSTEM_PROMPT (100% estático).
