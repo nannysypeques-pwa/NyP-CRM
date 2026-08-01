@@ -250,6 +250,11 @@ export interface Mensaje {
   tipoRemitente: 'CLIENT' | 'AGENT' | 'IA';
   idRemitente?: string;
   contenido: string;
+  urlMultimedia?: string;
+  idMensajeRespondido?: string;
+  textoCitado?: string;
+  editado?: boolean;
+  editadoEn?: string;
   creadoEn: string;
 }
 
@@ -705,6 +710,8 @@ class BaseDeDatos {
         idRemitente: messageData.idRemitente,
         contenido: messageData.contenido,
         urlMultimedia: (messageData as any).urlMultimedia || null,
+        idMensajeRespondido: (messageData as any).idMensajeRespondido || null,
+        textoCitado: (messageData as any).textoCitado || null,
         creadoEn: messageData.creadoEn ? new Date(messageData.creadoEn) : undefined
       }
     });
@@ -722,6 +729,22 @@ class BaseDeDatos {
       });
     }
 
+    return {
+      ...msg,
+      creadoEn: msg.creadoEn.toISOString()
+    } as unknown as Mensaje;
+  }
+
+  async updateMessage(id: string, contenido: string): Promise<Mensaje> {
+    clearMemoryCache("convs");
+    const msg = await prisma.mensaje.update({
+      where: { id },
+      data: {
+        contenido,
+        editado: true,
+        editadoEn: new Date()
+      }
+    });
     return {
       ...msg,
       creadoEn: msg.creadoEn.toISOString()

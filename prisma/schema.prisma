@@ -134,6 +134,10 @@ model Mensaje {
   idMensajeWhatsapp String?      // ID de Meta
   contenido         String
   urlMultimedia     String?
+  idMensajeRespondido String?
+  textoCitado       String?
+  editado           Boolean      @default(false)
+  editadoEn         DateTime?
   estado            String       @default("DELIVERED") // "SENT" | "DELIVERED" | "READ" | "FAILED"
   creadoEn          DateTime     @default(now())
 

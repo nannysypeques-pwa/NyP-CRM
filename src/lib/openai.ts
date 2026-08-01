@@ -146,11 +146,11 @@ export function hasBuyingIntent(text: string, historyText?: string): boolean {
   // Si la IA le ofreció canalizar con un asesor comercial para formalizar la contratación y el cliente responde afirmativamente
   if (historyText) {
     const lowerHist = historyText.toLowerCase();
-    const iaOfferedClosing = lowerHist.includes("asesor comercial") || 
-                             lowerHist.includes("canalizar") || 
-                             lowerHist.includes("formalizar su solicitud") ||
-                             lowerHist.includes("validará los detalles finales");
-    
+    const iaOfferedClosing = lowerHist.includes("asesor comercial") ||
+      lowerHist.includes("canalizar") ||
+      lowerHist.includes("formalizar su solicitud") ||
+      lowerHist.includes("validará los detalles finales");
+
     if (iaOfferedClosing) {
       const positiveReplies = ["si", "claro", "adelante", "perfecto", "me parece bien", "si por favor", "si me gustaria", "si me interesa", "avanzar", "avancemos", "ok", "esta bien"];
       if (positiveReplies.some(r => lower === r || lower.startsWith(r + " ") || lower.endsWith(" " + r))) {
@@ -192,7 +192,7 @@ Tu objetivo principal es atender por WhatsApp a madres, padres o tutores interes
   Usa de 1 a 3 emojis por mensaje que se adapten de forma fresca y natural al contenido de lo que escribes. NUNCA repitas el mismo par de emojis en mensajes consecutivos.
 
 Ejemplo de estilo variado:
-"¡Hola! Qué gusto saludarle, soy Sofía, agente de IA de Nannys y Peques ✨🌷 Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestro servicio de cuidado infantil. ¿Cómo puedo apoyarle el día de hoy? 🧸"
+"¡Hola! Qué gusto saludarle, soy Sofía, agente IA de Nannys y Peques ✨🌷 Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestro servicio de cuidado infantil. ¿Cómo puedo apoyarle el día de hoy? 🧸"
 
 ==================================================
 2. CONCISIÓN PARA WHATSAPP
@@ -253,9 +253,9 @@ Debes seguir una ruta comercial simple, natural y consultiva:
 
 1. Primer contacto y saludos iniciales:
    * **SALUDO INICIAL ESTÁNDAR OBLIGATORIO**: Si el cliente envía un saludo inicial (ej. "Hola", "Buenas tardes", "Hola qué tal"), DEBES USAR OBLIGATORIAMENTE la siguiente estructura estándar de bienvenida:
-     "¡Hola {Nombre}! ✨🌷 Qué gusto saludarle. Soy Sofía, agente de IA de Nannys y Peques. Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestros servicios de cuidado infantil. ¿En qué puedo asistirle hoy? 🧸"
+     "¡Hola {Nombre}! ✨🌷 Qué gusto saludarle. Soy Sofía, agente IA de Nannys y Peques. Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestros servicios de cuidado infantil. ¿En qué puedo asistirle hoy? 🧸"
      (Si se conoce el nombre del cliente, inclúyelo: "¡Hola Gerardo! ✨🌷 Qué gusto saludarle...". Si no se conoce, usa "¡Hola! ✨🌷 Qué gusto saludarle...").
-   * **PRESENTACIÓN OBLIGATORIA DE IDENTIDAD**: Siempre preséntate mencionando tu nombre ("Soy Sofía, agente de IA de Nannys y Peques") para que la persona sepa quién le atiende.
+   * **PRESENTACIÓN OBLIGATORIA DE IDENTIDAD**: Siempre preséntate mencionando tu nombre ("Soy Sofía, agente IA de Nannys y Peques") para que la persona sepa quién le atiende.
    * **OBTENCIÓN DE DATOS POCO A POCO**: Si el cliente ya indica que busca información, cotizaciones o servicios, o si después del saludo inicial te confirma su interés, entonces procede a calificar de forma muy fluida y conversacional. 
    * Si la ciudad ya es conocida en el contexto (no es "Por definir" ni vacía), NO la preguntes de nuevo. Saluda reconociendo su ubicación y pregunta directamente el siguiente dato pendiente de calificación (ej. tipo de servicio, o edad del peque). Si la ciudad es desconocida ("Por definir"), pregúntala de forma muy amable una vez que el cliente haya manifestado interés en conocer costos o contratar, no antes.
 
@@ -1175,7 +1175,7 @@ Respuesta sugerida:
 * IMPORTANTE: Si la ciudad o algún dato ya está definido en el contexto del Lead, NUNCA uses las preguntas de las plantillas de abajo que intenten recopilar ese dato. Adáptalo conversacionalmente.
 
 Si el cliente solo dice "hola", "buenas tardes", "informes" o algo similar:
-* ESTRUCTURA ESTÁNDAR OBLIGATORIA DE BIENVENIDA: "¡Hola [Nombre si se conoce]! ✨🌷 Qué gusto saludarle. Soy Sofía, agente de IA de Nannys y Peques. Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestros servicios de cuidado infantil. ¿En qué puedo asistirle hoy? 🧸"
+* ESTRUCTURA ESTÁNDAR OBLIGATORIA DE BIENVENIDA: "¡Hola [Nombre si se conoce]! ✨🌷 Qué gusto saludarle. Soy Sofía, agente IA de Nannys y Peques. Con mucho gusto le ayudaré a resolver cualquier duda que tenga sobre nuestros servicios de cuidado infantil. ¿En qué puedo asistirle hoy? 🧸"
 
 Si el cliente pregunta por servicios:
 "Contamos con diferentes opciones de cuidado infantil a domicilio según la necesidad de cada familia 😊💛 Para recomendarle la más adecuada, ¿el servicio lo busca de forma fija o eventual para alguna fecha en particular? ✨"
@@ -1282,10 +1282,10 @@ export function detectServiceFromText(text: string): string | null {
     return "Servicio Eventual";
   }
   if (
-    lower.includes("eventual") || 
-    lower.includes("particular") || 
-    lower.includes("por horas") || 
-    lower.includes("por hora") || 
+    lower.includes("eventual") ||
+    lower.includes("particular") ||
+    lower.includes("por horas") ||
+    lower.includes("por hora") ||
     lower.includes("ocasional") ||
     lower.includes("solo seria") ||
     lower.includes("solo un dia") ||
@@ -1370,7 +1370,7 @@ export function detectMultipleAgesFromText(text: string): { textoEdad: string; n
   while ((match = regexYearsMonths.exec(lower)) !== null) {
     const years = parseInt(match[1], 10);
     const months = match[2] ? parseInt(match[2], 10) : 0;
-    
+
     let textoEdad = "";
     if (months > 0) {
       textoEdad = `${years} ${years === 1 ? 'año' : 'años'} y ${months} ${months === 1 ? 'mes' : 'meses'}`;
@@ -1405,7 +1405,7 @@ export function detectAgeFromText(text: string): number | null {
   }
 
   const lower = text.toLowerCase();
-  
+
   // Match "tiene X años", "de X años", "X anios", "X años", "peque de X"
   const match = lower.match(/\b(?:tiene|de|peque\s+de|edad\s+de)?\s*([0-1]?[0-9])\s*(?:años|anio|anios|ańos)\b/);
   if (match) {
@@ -1479,7 +1479,7 @@ function parseTextoEdad(textoEdad: string): number | null {
   const numMatch = textoEdad.match(/\d+/);
   if (!numMatch) return null;
   const num = parseInt(numMatch[0], 10);
-  
+
   if (textoEdad.toLowerCase().includes("mes")) {
     return num / 12;
   }
@@ -1616,7 +1616,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     const tieneCiudad = leadCity && leadCity !== "Por definir" && leadCity !== "No definida" && leadCity !== "";
     const tieneZona = lead?.zona && lead.zona !== "Por definir" && lead.zona !== "No registrada" && lead.zona !== "";
     const tieneRazon = lead?.razonContratacion && lead.razonContratacion !== "" && lead.razonContratacion !== "No especificada aún";
-    
+
     const numHijosEstimados = lead?.cantidadHijos || (lead?.hijos ? lead.hijos.length : 1);
     let tieneEdad = false;
     const hasHijoWithEdad = !!(lead?.hijos && lead.hijos.length > 0 && lead.hijos.some((h: any) => h.textoEdad && h.textoEdad.trim() !== ""));
@@ -1715,7 +1715,7 @@ ${datosFaltantesText}
 ${leadNotes}
 
 INSTRUCCIONES DE COMPORTAMIENTO Y PERSONALIZACIÓN COMERCIAL (CRÍTICO):
-1. **Presentación obligatoria de tu nombre (Sofía)**: En tu primer mensaje de contacto con el cliente (o si el historial de chat está vacío), **debes presentarte obligatoriamente diciendo tu nombre y rol**: *"Soy Sofía, agente de IA de Nannys y Peques 😊💛"*. Nunca omitas presentarte en el primer contacto.
+1. **Presentación obligatoria de tu nombre (Sofía)**: En tu primer mensaje de contacto con el cliente (o si el historial de chat está vacío), **debes presentarte obligatoriamente diciendo tu nombre y rol**: *"Soy Sofía, agente IA de Nannys y Peques 😊💛"*. Nunca omitas presentarte en el primer contacto.
 2. **Saluda por su nombre de pila al cliente** si está disponible (ej. si su nombre es "Gerardo", salúdalo de forma amigable y natural, ej: "Hola Gerardo, buenos días...").
 3. **PROHIBICIÓN ESTRICTA DE PREGUNTAS REPETITIVAS**: Está terminantemente prohibido formular preguntas sobre campos que ya aparecen arriba en la sección "[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]".
 4. **Justificación del contexto**: Si la ciudad ya es conocida (ej. "Puebla"), la IA NO debe preguntar por la ciudad. Si el historial de chat muestra que preguntaste la ciudad y el usuario no respondió explícitamente pero el CRM ya tiene "Puebla", asume la ciudad como resuelta e incorpórala de forma natural diciendo: "Como requiere el servicio en Puebla..." y pasa de inmediato a preguntar por el primer dato de la lista de "[DATOS FALTANTES]".

@@ -28,7 +28,10 @@ import {
   X,
   Save,
   ArrowLeft,
-  Info
+  Info,
+  CornerUpLeft,
+  Pencil,
+  Reply
 } from "lucide-react";
 import FormattedIntencionComercial from "@/components/FormattedIntencionComercial";
 import { renderNoteContent } from "@/lib/narrative";
@@ -43,6 +46,10 @@ interface Message {
   tipoRemitente: 'CLIENT' | 'AGENT' | 'IA';
   contenido: string;
   urlMultimedia?: string;
+  idMensajeRespondido?: string;
+  textoCitado?: string;
+  editado?: boolean;
+  editadoEn?: string;
   creadoEn: string;
 }
 
@@ -228,6 +235,42 @@ function InboxContent() {
   // Global AI switch — afecta TODAS las conversaciones y las que lleguen nuevas
   const [globalIA, setGlobalIA] = useState<boolean>(true);
   const [togglingGlobalIA, setTogglingGlobalIA] = useState(false);
+
+  // Reply & Edit states
+  const [replyingToMessage, setReplyingToMessage] = useState<{ id: string; senderName: string; snippet: string } | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+
+  const handleDoubleClickMessage = (msg: Message) => {
+    const isClient = msg.direccion === "INBOUND";
+    const isIA = msg.tipoRemitente === "IA";
+    const senderName = isClient ? (activeLead?.nombreCompleto || "Cliente") : (isIA ? "Sofía IA" : "Agente");
+    setReplyingToMessage({
+      id: msg.id,
+      senderName,
+      snippet: msg.contenido
+    });
+    setEditingMessage(null);
+  };
+
+  const handleStartEditMessage = (msg: Message) => {
+    setEditingMessage({
+      id: msg.id,
+      content: msg.contenido
+    });
+    setChatInput(msg.contenido);
+    setReplyingToMessage(null);
+  };
+
+  const scrollToMessage = (msgId?: string | null) => {
+    if (!msgId) return;
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMsgId(msgId);
+      setTimeout(() => setHighlightedMsgId(null), 2000);
+    }
+  };
 
   useEffect(() => {
     // Cargar el estado global de IA al montar
@@ -670,6 +713,33 @@ function InboxContent() {
     if (!chatInput.trim() || !activeConvId) return;
 
     const text = chatInput.trim();
+
+    // MODO EDICIÓN DE MENSAJE ENVIADO
+    if (editingMessage) {
+      const messageIdToEdit = editingMessage.id;
+      setEditingMessage(null);
+      setChatInput("");
+
+      // Actualización optimista inmediata
+      setMessages(prev => prev.map(m => m.id === messageIdToEdit ? { ...m, contenido: text, editado: true } : m));
+
+      try {
+        await fetch(`/api/conversations/${activeConvId}/messages/${messageIdToEdit}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contenido: text })
+        });
+        fetchMessages(activeConvId);
+        fetchConversations();
+      } catch (err) {
+        console.error(err);
+      }
+      return;
+    }
+
+    // MODO ENVÍO O RESPUESTA
+    const replyData = replyingToMessage;
+    setReplyingToMessage(null);
     setChatInput("");
 
     // 1. OPTIMISTIC UPDATE: Agregar el mensaje a la pantalla de inmediato sin esperar al servidor (0ms)
@@ -679,6 +749,8 @@ function InboxContent() {
       direccion: "OUTBOUND",
       tipoRemitente: "AGENT",
       contenido: text,
+      idMensajeRespondido: replyData?.id || undefined,
+      textoCitado: replyData?.snippet || undefined,
       creadoEn: new Date().toISOString()
     };
 
@@ -702,7 +774,9 @@ function InboxContent() {
           direccion: "OUTBOUND",
           tipoRemitente: "AGENT",
           idRemitente: currentUser?.userId || "agent-laura",
-          contenido: text
+          contenido: text,
+          idMensajeRespondido: replyData?.id || null,
+          textoCitado: replyData?.snippet || null
         }),
       });
 
@@ -997,16 +1071,65 @@ function InboxContent() {
             return (
               <div 
                 key={msg.id}
-                className={`flex ${isClient ? "justify-start" : "justify-end"}`}
+                id={`msg-${msg.id}`}
+                onDoubleClick={() => handleDoubleClickMessage(msg)}
+                className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
               >
+                {/* Hover Action buttons (Reply / Edit) */}
+                <div className={`hidden group-hover:flex items-center space-x-1 bg-white/90 backdrop-blur-xs border border-slate-200 rounded-full px-2 py-0.5 shadow-sm text-slate-600 ${
+                  isClient ? "order-2" : "order-1"
+                }`}>
+                  <button 
+                    type="button"
+                    title="Responder (Doble Clic)"
+                    onClick={() => handleDoubleClickMessage(msg)}
+                    className="p-1 hover:text-[#026692] transition-colors rounded-full"
+                  >
+                    <CornerUpLeft className="w-3.5 h-3.5" />
+                  </button>
+                  {!isClient && (
+                    <button 
+                      type="button"
+                      title="Editar mensaje enviado"
+                      onClick={() => handleStartEditMessage(msg)}
+                      className="p-1 hover:text-amber-600 transition-colors rounded-full"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
                 {/* Bubble Container */}
-                <div className={`max-w-[70%] rounded-2xl p-4 shadow-sm relative ${
+                <div className={`max-w-[70%] rounded-2xl p-4 shadow-sm relative transition-all cursor-pointer ${
+                  isClient ? "order-1" : "order-2"
+                } ${
+                  highlightedMsgId === msg.id ? "ring-2 ring-[#026692] scale-[1.01]" : ""
+                } ${
                   isClient 
                     ? "bg-[#e1eff8] text-slate-800 rounded-tl-none border border-[#cbdfe9]" 
                     : isIA 
                       ? "bg-[#026692] text-white rounded-tr-none shadow-md" 
                       : "bg-white text-slate-800 rounded-tr-none border border-[#e2edf6]"
                 }`}>
+
+                  {/* Quoted Box Preview if replying */}
+                  {msg.textoCitado && (
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); scrollToMessage(msg.idMensajeRespondido); }}
+                      className={`mb-2.5 p-2 rounded-xl border-l-4 text-xs cursor-pointer transition-all hover:opacity-90 ${
+                        isClient 
+                          ? "bg-[#cbe3f3] border-[#026692] text-slate-800" 
+                          : isIA 
+                            ? "bg-[#014d6e] border-sky-300 text-sky-100" 
+                            : "bg-slate-100 border-[#026692] text-slate-700"
+                      }`}
+                    >
+                      <div className="font-bold text-[10px] uppercase opacity-80 flex items-center gap-1 mb-0.5">
+                        <CornerUpLeft className="w-3 h-3" /> Respuesta
+                      </div>
+                      <div className="truncate font-medium italic">{msg.textoCitado}</div>
+                    </div>
+                  )}
                   
                   {/* AI header label */}
                   {isIA && (
@@ -1031,12 +1154,13 @@ function InboxContent() {
                     <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.contenido}</p>
                   )}
                   
-                  {/* Time / checkmark indicator */}
-                  <div className={`text-[9px] font-bold text-right mt-1.5 ${
+                  {/* Time / checkmark / edit indicator */}
+                  <div className={`text-[9px] font-bold text-right mt-1.5 flex items-center justify-end gap-1 ${
                     isClient ? "text-slate-400" : isIA ? "text-sky-200" : "text-slate-400"
                   }`}>
-                    {new Date(msg.creadoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {!isClient && <span className="ml-1">✓✓</span>}
+                    {msg.editado && <span className="italic opacity-80">(editado)</span>}
+                    <span>{new Date(msg.creadoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {!isClient && <span>✓✓</span>}
                   </div>
                 </div>
               </div>
@@ -1047,6 +1171,54 @@ function InboxContent() {
 
         {/* Chat Input form */}
         <div className="p-4 bg-white border-t border-[#e2edf6] flex-shrink-0 z-10 shadow-inner relative">
+          
+          {/* Reply Banner */}
+          {replyingToMessage && (
+            <div className="mb-2 px-3 py-2 bg-[#eaf4fa] border border-[#cbdfe9] rounded-xl flex items-center justify-between z-20 text-xs shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                <div className="w-1 h-7 bg-[#026692] rounded-full flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-extrabold text-[#026692] block text-[10px] uppercase tracking-wide">
+                    Respondiendo a {replyingToMessage.senderName}
+                  </span>
+                  <span className="text-slate-600 truncate block text-[11px] font-medium">
+                    {replyingToMessage.snippet}
+                  </span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setReplyingToMessage(null)}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors ml-2 flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Edit Mode Banner */}
+          {editingMessage && (
+            <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between z-20 text-xs shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2 min-w-0 flex-1">
+                <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-extrabold text-amber-800 block text-[10px] uppercase tracking-wide">
+                    Editar mensaje enviado
+                  </span>
+                  <span className="text-slate-600 truncate block text-[11px] font-medium">
+                    {editingMessage.content}
+                  </span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => { setEditingMessage(null); setChatInput(""); }}
+                className="p-1 text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-full transition-colors ml-2 flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           
           {/* Emoji Picker Popup */}
           {showEmojiPicker && (

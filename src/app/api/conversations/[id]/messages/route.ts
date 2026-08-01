@@ -101,7 +101,7 @@ async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string)
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    const { direccion, tipoRemitente, idRemitente, contenido, urlMultimedia } = body;
+    const { direccion, tipoRemitente, idRemitente, contenido, urlMultimedia, idMensajeRespondido, textoCitado } = body;
 
     if (!direccion || !tipoRemitente || !contenido) {
       return NextResponse.json({ error: "Faltan campos obligatorios (direccion, tipoRemitente o contenido)" }, { status: 400 });
@@ -114,7 +114,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       tipoRemitente,
       idRemitente,
       contenido,
-      urlMultimedia: urlMultimedia || null
+      urlMultimedia: urlMultimedia || null,
+      idMensajeRespondido: idMensajeRespondido || null,
+      textoCitado: textoCitado || null
     } as any);
 
     const conv = await db.getConversationById(params.id);
