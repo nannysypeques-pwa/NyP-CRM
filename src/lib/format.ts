@@ -33,11 +33,15 @@ export function formatLeadAges(lead?: any): string {
       if (validHijos.length === 1) {
         return validHijos[0].textoEdad || (lead.edadHijo !== undefined && lead.edadHijo !== null ? (lead.edadHijo === 0 ? "Menor a 1 año" : `${lead.edadHijo} años`) : "Por definir");
       }
-      return validHijos.map((h: any, idx: number) => {
-        const age = h.textoEdad || `${h.edad || ""} años`;
-        const name = (h.nombre && !h.nombre.toLowerCase().startsWith("peque")) ? h.nombre : `Peque ${idx + 1}`;
-        return `${name}: ${age}`;
-      }).join(", ");
+      const parts = validHijos.map((h: any, idx: number) => {
+        const age = h.textoEdad || (h.edad !== undefined ? `${h.edad} años` : "");
+        const hasRealName = h.nombre && !h.nombre.toLowerCase().startsWith("peque");
+        return hasRealName ? `${h.nombre} (${age})` : `${age}`;
+      }).filter(Boolean);
+
+      if (parts.length === 1) return parts[0];
+      const last = parts.pop();
+      return `${parts.join(", ")} y ${last}`;
     }
   }
   if (lead.edadHijo !== undefined && lead.edadHijo !== null) {

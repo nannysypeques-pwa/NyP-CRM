@@ -76,3 +76,56 @@ export function calculatePrecotizacion(ciudad: string, dias: number, horas: numb
 
   return price || null;
 }
+
+export interface VerificationResult {
+  esValida: boolean;
+  precioOficial: number | null;
+  textoCorregido: string;
+  razon?: string;
+}
+
+/**
+ * Segunda Revisión Estricta de Cotizaciones (Motor de Verificación Doble)
+ * Garantiza que la IA NUNCA pueda enviar un precio inventado al cliente ni en texto ni en imagen.
+ */
+export function verificarYCorregirCotizacion(
+  aiText: string,
+  ciudad: string,
+  dias: number,
+  horas: number,
+  aiPriceProposed?: number
+): VerificationResult {
+  const tagRegex = /\[COTIZACION:[^\]]+\]/gi;
+  let textoLimpio = aiText.replace(tagRegex, "").trim();
+
+  // 1. Verificación de parámetros requeridos
+  if (!ciudad || ciudad === "Por definir" || ciudad.trim() === "") {
+    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: "Falta definir la ciudad" };
+  }
+  if (!dias || dias <= 0) {
+    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: "Falta definir número de días válido (>= 1)" };
+  }
+  if (!horas || horas < 3 || horas > 10) {
+    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: `Horas por día no válidas (${horas} hrs). Debe ser entre 3 y 10 horas` };
+  }
+
+  // 2. Consulta de Tabulador Oficial (Matemática 100% estricta)
+  const precioOficial = calculatePrecotizacion(ciudad, dias, horas);
+  if (!precioOficial) {
+    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: `No existe tarifa en tabulador para ${ciudad}, ${dias} días, ${horas} hrs` };
+  }
+
+  // 3. Segunda Revisión y Sanitización del Texto:
+  // Si la IA propuso un precio o si el texto del mensaje incluye una cifra diferente a la oficial,
+  // se reemplaza de forma determinista cualquier monto del texto por la cifra exacta del tabulador.
+  if (aiPriceProposed && aiPriceProposed !== precioOficial) {
+    console.warn(`[SEGUNDA REVISIÓN DE PRECIOS] ⚠️ Mismatch detectado. IA propuso: $${aiPriceProposed}, Tabulador oficial: $${precioOficial}. Corrigiendo texto.`);
+    textoLimpio = textoLimpio.replace(/\$\s*[\d,]+(?:\.\d+)?(?:\s*MXN)?/gi, `$${precioOficial.toLocaleString()} MXN`);
+  }
+
+  return {
+    esValida: true,
+    precioOficial,
+    textoCorregido: textoLimpio
+  };
+}

@@ -1279,13 +1279,80 @@ export function detectServiceFromText(text: string): string | null {
     return "Nanny Nocturna";
   }
   if (lower.includes("fiesta") || lower.includes("boda") || lower.includes("bautizo") || lower.includes("cumpleanos")) {
-    return "Evento / Fiesta";
+    return "Servicio Eventual";
   }
-  if (lower.includes("eventual") || lower.includes("particular") || lower.includes("por horas") || lower.includes("por hora") || lower.includes("ocasional")) {
+  if (
+    lower.includes("eventual") || 
+    lower.includes("particular") || 
+    lower.includes("por horas") || 
+    lower.includes("por hora") || 
+    lower.includes("ocasional") ||
+    lower.includes("solo seria") ||
+    lower.includes("solo un dia") ||
+    lower.includes("un solo dia") ||
+    lower.includes("una sola fecha") ||
+    /este\s+(martes|miercoles|jueves|viernes|sabado|domingo|lunes)/.test(lower)
+  ) {
     return "Servicio Eventual";
   }
   if (lower.includes("fijo") || lower.includes("fija") || lower.includes("semanal") || lower.includes("tiempo completo") || lower.includes("medio tiempo")) {
     return "Servicio Fijo";
+  }
+
+  return null;
+}
+
+export function parseHoursFromText(text: string): { horaInicio?: string; horaFin?: string; horasPorDia?: number } | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // Match 12h or 24h ranges like "5 pm a 10 pm", "9am a 5pm", "09:30 a 17:30", "de 8:20 a 18:20"
+  const rangeMatch = lower.match(/(?:de\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*a\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (rangeMatch) {
+    let h1 = parseInt(rangeMatch[1], 10);
+    const m1 = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : 0;
+    let ampm1 = rangeMatch[3];
+    let h2 = parseInt(rangeMatch[4], 10);
+    const m2 = rangeMatch[5] ? parseInt(rangeMatch[5], 10) : 0;
+    let ampm2 = rangeMatch[6];
+
+    // If second time has pm and first time has no ampm, infer ampm1 based on context (e.g. 5 a 10 pm -> 5pm to 10pm = 17:00 to 22:00)
+    if (ampm2 === "pm" && !ampm1) {
+      if (h1 < 12 && h2 <= 12 && h1 >= 1 && h1 <= 11) {
+        if (h1 < h2 && h1 < 7) {
+          ampm1 = "pm";
+        } else if (h1 >= 7) {
+          ampm1 = "am";
+        }
+      }
+    }
+
+    if (ampm1 === "pm" && h1 < 12) h1 += 12;
+    if (ampm1 === "am" && h1 === 12) h1 = 0;
+    if (ampm2 === "pm" && h2 < 12) h2 += 12;
+    if (ampm2 === "am" && h2 === 12) h2 = 0;
+
+    const startFormatted = `${String(h1).padStart(2, "0")}:${String(m1).padStart(2, "0")}`;
+    const endFormatted = `${String(h2).padStart(2, "0")}:${String(m2).padStart(2, "0")}`;
+    const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+    const horas = mins > 0 ? Math.ceil(mins / 60) : 0;
+
+    if (horas > 0) {
+      return {
+        horaInicio: startFormatted,
+        horaFin: endFormatted,
+        horasPorDia: horas
+      };
+    }
+  }
+
+  // Match standalone hours like "5 horas" / "por 5 horas"
+  const standaloneMatch = lower.match(/(\d{1,2})\s*horas/);
+  if (standaloneMatch) {
+    const hrs = parseInt(standaloneMatch[1], 10);
+    if (hrs > 0 && hrs <= 12) {
+      return { horasPorDia: hrs };
+    }
   }
 
   return null;
@@ -1682,6 +1749,18 @@ ${reglaPrecotizacionDinamica}
    - **PASO 2 - MODERA CON EDUCACIÓN**: Explica de forma cálida que en Nannys y Peques los servicios se cotizan según el paquete completo (número de horas, días y tipo de servicio), no por hora suelta. Pero cuando el cliente lo calcula, el resultado matemático por hora es válido para su caso específico.
    - **EJEMPLO DE RESPUESTA MODERADORA**: *"¡Exactamente, Juls! 😊 Su cálculo es correcto: para su servicio de 5 horas, el precio por hora equivale aproximadamente a $139. Nuestros servicios se cotizan como paquete completo según las horas, días y tipo de servicio, lo que garantiza disponibilidad exclusiva y cobertura profesional durante todo ese tiempo. En su caso particular, esa equivalencia es precisa 🌸"*
    - **NUNCA digas** que el cálculo del cliente está mal si matemáticamente es correcto. NUNCA ignores ni invalides sus números si cuadran con la cotización emitida.
+16. **TARIFAS DE HORAS EXTRA (RESPONDE ÚNICAMENTE SI EL CLIENTE PREGUNTA EXPLICITAMENTE)**:
+    - No agregues menciones de horas extra en la precotización inicial ni en las imágenes.
+    - Si el cliente pregunta de forma explícita cuánto cuesta una hora extra o adicional, debes responder cálidamente con la tarifa según la ciudad:
+      * En **Puebla** y **Xalapa**: La hora extra tiene un costo de **$100 MXN**.
+      * En **CDMX** y **Querétaro**: La hora extra tiene un costo de **$150 MXN**.
+17. **MANEJO DE SOLICITUDES DE "SERVICIO DE PLANTA" (CRÍTICO Y OBLIGATORIO)**:
+    - **PROHIBICIÓN ABSOLUTA DE DECIR QUE TENEMOS NANNY DE PLANTA**: Nannys y Peques NO ofrece servicio de planta de 24 horas ni con la nanny quedándose a dormir en casa de la familia. Nuestros servicios son estrictamente de **entrada por salida** con jornadas máximas de **10 horas diarias por servicio**.
+    - **PASO 1 - PREGUNTA DE CLARIFICACIÓN OBLIGATORIA**: Cuando una familia pregunte o mencione "servicio de planta", "nanny de planta" o "de planta", TIENES QUE PREGUNTAR PRIMERO para clarificar si requieren que la nanny se quede a dormir:
+      *"Para ofrecerle la opción adecuada, ¿requiere que la nanny se quede a dormir en su hogar (servicio de planta de 24 horas), o busca un apoyo fijo de entrada por salida en un horario de hasta 10 horas diarias? 😊💛"*
+    - **PASO 2 - SI CONFIRMAN QUE REQUIEREN QUE SE QUEDE A DORMIR**: Explícales de manera sumamente atenta y empática:
+      *"Le comento con mucha transparencia que en Nannys y Peques no contamos con servicio de planta con la nanny quedándose a dormir; nuestros servicios son exclusivamente de entrada por salida con jornadas máximas de 10 horas por servicio 😊💛 Sin embargo, si usted lo desea, es totalmente posible contratar más de un servicio de entrada por salida para cubrir la totalidad de las 24 horas diarias."*
+    - **PASO 3 - SI BUSCAN ENTRADA POR SALIDA**: Continúa normalmente la cualificación del servicio fijo en modalidad entrada por salida.
 15. **REFUERZO DE VALOR DE MARCA ADAPTATIVO AL CONTEXTO (CRÍTICO - PROHIBIDO INVENTAR INFORMACIÓN)**: No actúes como un formulario frío de recopilación. Tu rol es persuadir y educar con psicología de ventas. Analiza el contexto actual del chat y el dolor de la familia para destacar el valor de marca más oportuno de manera fluida (no los digas todos juntos, menciona solo 1 o máximo 2 de forma natural por respuesta):
        - **Si el cliente muestra preocupación por la seguridad, confianza o el cuidado**: Resalta nuestro **proceso de selección riguroso** (pruebas psicométricas, verificación de referencias, y estudio socioeconómico o visita domiciliaria, donde solo ingresan alrededor de 10 de cada 100 candidatas) y nuestros **más de 6 años de experiencia** respaldados por más de 5,000 familias.
        - **Si pregunta por actividades, estimulación o desarrollo del peque**: Menciona el **respaldo psicopedagógico especializado** (equipo de psicólogas que revisan y auditan las planeaciones de actividades orientadas a las 5 áreas de desarrollo: cognitiva, lenguaje, motriz, socioemocional y sensorial).

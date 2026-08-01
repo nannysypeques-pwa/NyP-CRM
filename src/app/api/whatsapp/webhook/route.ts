@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, detectMultipleAgesFromText, detectServiceFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent } from "@/lib/openai";
+import { generateAIResponse, detectCityFromText, detectLocationFromText, detectAgeFromText, detectMultipleAgesFromText, detectServiceFromText, extractLeadInfo, parseNumDias, detectHumanAttentionRequest, hasBuyingIntent, parseHoursFromText } from "@/lib/openai";
 import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/prisma";
 import { buildNarrativeSummary } from "@/lib/narrative";
-import { calculatePrecotizacion } from "@/lib/pricing";
+import { calculatePrecotizacion, verificarYCorregirCotizacion } from "@/lib/pricing";
 import { generateAndSaveQuoteImage } from "@/lib/generate-quote-image";
 
 function validateSignature(payload: string, signatureHeader: string | null): boolean {
@@ -472,17 +472,50 @@ export async function POST(req: NextRequest) {
         let imageUrl = "";
 
         if (conv.idLead) {
-          const tagRegex = /\[COTIZACION:(\d+(?:\.\d+)?)\]/;
+          const tagRegex = /\[COTIZACION:(\d+(?:\.\d+)?|CALCULAR)\]/i;
           const match = aiResponseText.match(tagRegex);
           if (match) {
-            finalResponseText = aiResponseText.replace(tagRegex, "").trim();
+            const proposedPrice = match[1] !== "CALCULAR" ? parseFloat(match[1]) : undefined;
+            const rawLead = await db.getLeadById(conv.idLead);
+            if (rawLead) {
+              let lead: any = { ...rawLead };
+              // 1. Sincronizar datos conversacionales faltantes directamente del historial del chat si aún no están en la BD
+              const chatHistory = await db.getMessagesByConversationId(conv.id);
+              const fullTextHistory = chatHistory.map(m => m.contenido).join("\n");
+              const updatesSync: any = {};
 
-            const lead = await db.getLeadById(conv.idLead);
-            if (lead) {
+              if (!lead.horaInicioSolicitada || !lead.horaFinSolicitada) {
+                const parsedH = parseHoursFromText(fullTextHistory);
+                if (parsedH?.horaInicio && parsedH?.horaFin) {
+                  updatesSync.horaInicioSolicitada = parsedH.horaInicio;
+                  updatesSync.horaFinSolicitada = parsedH.horaFin;
+                }
+              }
+
+              if (!lead.diasSolicitados || lead.diasSolicitados === "Por definir") {
+                if (/martes|miercoles|jueves|viernes|sabado|domingo|lunes|1 dia|un dia|solo un dia/i.test(fullTextHistory)) {
+                  const matchDia = fullTextHistory.match(/(?:este\s+)?(martes|miércoles|jueves|viernes|sábado|domingo|lunes)(?:\s+\d+\s+de\s+\w+)?/i);
+                  updatesSync.diasSolicitados = matchDia ? matchDia[0] : "1 día";
+                }
+              }
+
+              if (!lead.interesServicio || lead.interesServicio === "Por definir") {
+                const detectedSvc = detectServiceFromText(fullTextHistory);
+                if (detectedSvc) {
+                  updatesSync.interesServicio = detectedSvc;
+                }
+              }
+
+              if (Object.keys(updatesSync).length > 0) {
+                await db.updateLead(lead.id, updatesSync);
+                lead = { ...lead, ...updatesSync };
+              }
+
               let numDias = 0;
               if (lead.diasSolicitados) {
                 numDias = parseNumDias(lead.diasSolicitados);
               }
+              if (numDias <= 0) numDias = 1;
 
               // Extract horasDiarias
               let horasDiarias = 0;
@@ -495,90 +528,102 @@ export async function POST(req: NextRequest) {
                 } catch (e) {}
               }
 
-              // CRÍTICO: Siempre usar el precio del tabulador oficial, nunca el precio que la IA haya escrito en el tag.
-              // Esto evita que la IA invente o interpole un precio incorrecto.
-              const serverPrice = calculatePrecotizacion(lead.ciudad, numDias, horasDiarias);
-              const price = serverPrice ?? parseFloat(match[1]);
-              if (!serverPrice) {
-                console.warn(`[COTIZACION] Precio del tabulador no encontrado para ${lead.ciudad}, ${numDias} días, ${horasDiarias} hrs. Usando precio de la IA: ${match[1]}`);
-              } else if (serverPrice !== parseFloat(match[1])) {
-                console.warn(`[COTIZACION] ⚠️ La IA propuso precio ${match[1]} pero el tabulador oficial indica $${serverPrice}. Usando $${serverPrice}.`);
+              if (horasDiarias <= 0) {
+                const parsedH = parseHoursFromText(fullTextHistory);
+                if (parsedH?.horasPorDia) horasDiarias = parsedH.horasPorDia;
               }
 
-              // Reuse an existing quote if it was created recently by AI and has the same total
-              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-              const existingQuote = await prisma.cotizacion.findFirst({
-                where: {
-                  idLead: conv.idLead,
-                  total: price,
-                  creadoPor: "Asistente IA",
-                  creadoEn: { gte: fiveMinutesAgo },
-                  deleted: false
-                },
-                orderBy: { creadoEn: "desc" }
-              });
+              // SEGUNDA REVISIÓN Y SANITIZACIÓN DOBLE MOTOR
+              const verificacion = verificarYCorregirCotizacion(
+                aiResponseText,
+                lead.ciudad,
+                numDias,
+                horasDiarias,
+                proposedPrice
+              );
 
-              if (existingQuote) {
-                quoteCreated = existingQuote;
+              if (!verificacion.esValida || !verificacion.precioOficial) {
+                console.warn(`[COTIZACION RECHAZADA EN SEGUNDA REVISIÓN] Razon: ${verificacion.razon}`);
+                finalResponseText = verificacion.textoCorregido;
               } else {
-                let snapshotEdad = "";
-                if (lead.hijos && lead.hijos.length > 0) {
-                  const h = lead.hijos.find((x: any) => x.textoEdad && x.textoEdad.trim() !== "");
-                  if (h) snapshotEdad = h.textoEdad;
-                }
-                if (!snapshotEdad && lead.edadHijo !== null && lead.edadHijo !== undefined) {
-                  snapshotEdad = lead.edadHijo === 0 ? "Menor a 1 año" : `${lead.edadHijo} ${lead.edadHijo === 1 ? "año" : "años"}`;
-                }
-                if (!snapshotEdad) snapshotEdad = "Por definir";
+                const price = verificacion.precioOficial;
+                finalResponseText = verificacion.textoCorregido;
 
-                // Create a new Quote in the database
-                quoteCreated = await prisma.cotizacion.create({
-                  data: {
+                // Reuse an existing quote if it was created recently by AI and has the same total
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                const existingQuote = await prisma.cotizacion.findFirst({
+                  where: {
                     idLead: conv.idLead,
+                    total: price,
+                    creadoPor: "Asistente IA",
+                    creadoEn: { gte: fiveMinutesAgo },
+                    deleted: false
+                  },
+                  orderBy: { creadoEn: "desc" }
+                });
+
+                if (existingQuote) {
+                  quoteCreated = existingQuote;
+                } else {
+                  let snapshotEdad = "";
+                  if (lead.hijos && lead.hijos.length > 0) {
+                    const h = lead.hijos.find((x: any) => x.textoEdad && x.textoEdad.trim() !== "");
+                    if (h) snapshotEdad = h.textoEdad;
+                  }
+                  if (!snapshotEdad && lead.edadHijo !== null && lead.edadHijo !== undefined) {
+                    snapshotEdad = lead.edadHijo === 0 ? "Menor a 1 año" : `${lead.edadHijo} ${lead.edadHijo === 1 ? "año" : "años"}`;
+                  }
+                  if (!snapshotEdad) snapshotEdad = "Por definir";
+
+                  const quoteTipoServicio = lead.interesServicio && lead.interesServicio !== "Por definir" ? lead.interesServicio : "Servicio Eventual";
+
+                  // Create a new Quote in the database
+                  quoteCreated = await prisma.cotizacion.create({
+                    data: {
+                      idLead: conv.idLead,
+                      nombreCliente: lead.nombreCompleto || "Por definir",
+                      edadPeque: snapshotEdad,
+                      zona: lead.zona || "Por definir",
+                      tipoServicio: quoteTipoServicio,
+                      ciudad: lead.ciudad,
+                      dias: lead.diasSolicitados || `${numDias} día(s)`,
+                      horaInicio: lead.horaInicioSolicitada || "Por definir",
+                      horaFin: lead.horaFinSolicitada || "Por definir",
+                      horasPorDia: horasDiarias,
+                      cantidadHijos: lead.cantidadHijos || 1,
+                      subtotal: price,
+                      descuento: 0,
+                      total: price,
+                      estado: "ENVIADA",
+                      validoHasta: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días
+                      creadoPor: "Asistente IA",
+                      notas: `${numDias} días, ${horasDiarias} horas por día.`
+                    }
+                  });
+
+                  // INMUTABILIDAD: Generar y guardar la imagen PNG congelada
+                  const savedImageUrl = await generateAndSaveQuoteImage({
+                    id: quoteCreated.id,
+                    creadoEn: quoteCreated.creadoEn,
                     nombreCliente: lead.nombreCompleto || "Por definir",
                     edadPeque: snapshotEdad,
+                    dias: lead.diasSolicitados || `${numDias} día(s)`,
+                    horaInicio: lead.horaInicioSolicitada || "Por definir",
+                    horaFin: lead.horaFinSolicitada || "Por definir",
+                    horasPorDia: horasDiarias,
                     zona: lead.zona || "Por definir",
-                    tipoServicio: lead.interesServicio || "Por horas",
-                    ciudad: lead.ciudad,
-                    dias: lead.diasSolicitados || "Por definir",
-                    horaInicio: lead.horaInicioSolicitada || "09:00",
-                    horaFin: lead.horaFinSolicitada || "17:00",
-                    horasPorDia: horasDiarias || 8,
-                    cantidadHijos: lead.cantidadHijos || 1,
-                    subtotal: price,
-                    descuento: 0,
                     total: price,
-                    estado: "ENVIADA",
-                    validoHasta: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días
-                    creadoPor: "Asistente IA",
-                    notas: `${numDias} días, ${horasDiarias} horas por día.`
-                  }
-                });
-
-                // INMUTABILIDAD: Generar y guardar la imagen PNG congelada ahora mismo.
-                // La imagen refleja los datos exactos del momento del envío y NO se puede modificar después.
-                const savedImageUrl = await generateAndSaveQuoteImage({
-                  id: quoteCreated.id,
-                  creadoEn: quoteCreated.creadoEn,
-                  nombreCliente: lead.nombreCompleto || "Por definir",
-                  edadPeque: snapshotEdad,
-                  dias: lead.diasSolicitados || "Por definir",
-                  horaInicio: lead.horaInicioSolicitada || "09:00",
-                  horaFin: lead.horaFinSolicitada || "17:00",
-                  horasPorDia: horasDiarias || 8,
-                  zona: lead.zona || "Por definir",
-                  total: price,
-                  notas: `${numDias} días, ${horasDiarias} horas por día.`,
-                  tipoServicio: lead.interesServicio || "Por horas"
-                });
-
-                if (savedImageUrl) {
-                  // Guardar la ruta permanente en la BD para que no sea regenerable
-                  await prisma.cotizacion.update({
-                    where: { id: quoteCreated.id },
-                    data: { imagenUrl: savedImageUrl }
+                    notas: `${numDias} días, ${horasDiarias} horas por día.`,
+                    tipoServicio: quoteTipoServicio
                   });
-                  quoteCreated = { ...quoteCreated, imagenUrl: savedImageUrl };
+
+                  if (savedImageUrl) {
+                    await prisma.cotizacion.update({
+                      where: { id: quoteCreated.id },
+                      data: { imagenUrl: savedImageUrl }
+                    });
+                    quoteCreated = { ...quoteCreated, imagenUrl: savedImageUrl };
+                  }
                 }
               }
             }

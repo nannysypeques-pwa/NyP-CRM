@@ -18,35 +18,22 @@ export function formatIntencionComercial(lead: any): string {
   if (hijos.length > 0) {
     pequesSection = hijos.map((hijo: any, index: number) => {
       const label = hijos.length > 1 ? ` (Peque ${index + 1})` : "";
+      const nombre = hijo.nombre || `Peque ${index + 1}`;
+      const edad = hijo.textoEdad || (hijo.fechaNacimiento ? hijo.fechaNacimiento : "");
       return `👫 *Nombre del peque${label}:*
-${hijo.nombre || `Peque ${index + 1}`}
+${nombre}
 👶🏻 *Edad/Fecha de nacimiento:*
-${hijo.textoEdad || (hijo.fechaNacimiento ? hijo.fechaNacimiento : "")}
-🗣 *Alergias:*
-${hijo.alergias || ""}
-🫀 *Condición médica o especificaciones adicionales:*
-${hijo.condicionMedica || ""}
-🩺 *Estado de salud actual:*
-${hijo.estadoSalud || ""}
-🌈 *Preferencias o actividades favoritas:*
-${hijo.preferencias || ""}
-❤️ *Indicaciones generales para la nanny:*
-${hijo.indicacionesNanny || hijo.instrucciones || ""}`;
+${edad}`;
     }).join("\n\n");
   } else {
+    let edadStr = "";
+    if (lead.edadHijo !== undefined && lead.edadHijo !== null) {
+      edadStr = lead.edadHijo === 0 ? "Menor a 1 año" : `${lead.edadHijo} años`;
+    }
     pequesSection = `👫 *Nombre del peque:*
-
+Peque 1
 👶🏻 *Edad/Fecha de nacimiento:*
-${lead.edadHijo ? `${lead.edadHijo} años` : ""}
-🗣 *Alergias:*
-
-🫀 *Condición médica o especificaciones adicionales:*
-
-🩺 *Estado de salud actual:*
-
-🌈 *Preferencias o actividades favoritas:*
-
-❤️ *Indicaciones generales para la nanny:*`;
+${edadStr}`;
   }
 
   return `*Tipo de servicio*
@@ -65,7 +52,6 @@ ${lead.linkUbicacion || ""}
 ${lead.razonContratacion || ""}
 📲Contacto:
 ${lead.telefono || ""}
-${pequesSection}
-🐶🐱 *No de mascotas:* 
-${lead.mascotas || ""}`;
+${pequesSection}`;
 }
+
