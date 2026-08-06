@@ -371,6 +371,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               updates.estado = "GANADO";
             }
 
+            // Regla de Negocio: Si es un servicio eventual y no se especificó un día, pero tenemos horario, cotizar para 1 día por defecto
+            const interesServicioFinal = updates.interesServicio || currentLead?.interesServicio;
+            const esEventual = interesServicioFinal === "Servicio Eventual" || interesServicioFinal === "Nanny Express";
+            const diasFinal = updates.diasSolicitados || currentLead?.diasSolicitados;
+            const tieneHoras = (updates.horaInicioSolicitada || currentLead?.horaInicioSolicitada) && 
+                               ((updates.horaFinSolicitada || currentLead?.horaFinSolicitada) || 
+                                (updates.horaInicioSolicitada || currentLead?.horaInicioSolicitada)?.toLowerCase().includes("hora"));
+
+            if (esEventual && (!diasFinal || diasFinal === "Por definir" || diasFinal === "No especificados") && tieneHoras) {
+              updates.diasSolicitados = "1 día (por definir)";
+              console.log(`[DEFAULT 1 DÍA EVENTUAL] Lead ${conv.idLead} no tiene días especificados para servicio eventual, asumiendo 1 día.`);
+            }
+
             // Si se detecta nuevos hijos
             if (extractedData.nuevosHijos && Array.isArray(extractedData.nuevosHijos) && extractedData.nuevosHijos.length > 0) {
               if (!updates.cantidadHijos && (!currentLead || !currentLead.cantidadHijos)) {

@@ -168,6 +168,7 @@ export default function RootLayout({
                 {userInitials}
               </div>
               <div className="min-w-0 flex-1">
+                <span className="block text-[9px] font-semibold text-slate-400 mb-0.5">v1.1</span>
                 <p className="text-xs font-semibold text-slate-800 truncate">{user.nombre}</p>
                 <p className="text-[9px] text-[#5caad0] font-bold uppercase truncate">{user.rol}</p>
               </div>
