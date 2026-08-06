@@ -208,6 +208,7 @@ function InboxContent() {
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   
   // Quote Modal State
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
@@ -297,6 +298,11 @@ function InboxContent() {
       snippet: msg.contenido
     });
     setEditingMessage(null);
+
+    // Auto-focus input
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
   };
 
   const handleStartEditMessage = (msg: Message) => {
@@ -306,6 +312,11 @@ function InboxContent() {
     });
     setChatInput(msg.contenido);
     setReplyingToMessage(null);
+
+    // Auto-focus input
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
   };
 
   const scrollToMessage = (msgId?: string | null) => {
@@ -616,18 +627,10 @@ function InboxContent() {
   useEffect(() => {
     if (!messagesEndRef.current || !chatContainerRef.current) return;
     
-    const container = chatContainerRef.current;
-    
-    // Check if the user is already scrolled to the bottom (within a threshold of 150px)
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-    
-    if (!hasScrolledForActiveConvRef.current) {
-      if (messages.length > 0) {
-        messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "nearest" });
-        hasScrolledForActiveConvRef.current = true;
-      }
-    } else if (isAtBottom) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (messages.length > 0) {
+      const behavior = !hasScrolledForActiveConvRef.current ? "auto" : "smooth";
+      messagesEndRef.current.scrollIntoView({ behavior, block: "nearest" });
+      hasScrolledForActiveConvRef.current = true;
     }
   }, [messages]);
 
@@ -1351,6 +1354,7 @@ function InboxContent() {
               />
               <input 
                 type="text" 
+                ref={chatInputRef}
                 placeholder="Escribe un mensaje..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}

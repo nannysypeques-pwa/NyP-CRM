@@ -8,7 +8,7 @@ import { generateAndSaveQuoteImage } from "@/lib/generate-quote-image";
 
 
 // Helper para enviar mensajes de WhatsApp a través de la API oficial
-async function sendWhatsAppMessage(to: string, text: string, contextMessageId?: string | null): Promise<string | null> {
+async function sendWhatsAppMessage(to: string, text: string, contextMessageId?: string | null, textoCitado?: string | null): Promise<string | null> {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
@@ -19,13 +19,18 @@ async function sendWhatsAppMessage(to: string, text: string, contextMessageId?: 
 
   const cleanPhone = to.replace(/\D/g, "");
 
+  let finalBody = text;
+  if (textoCitado) {
+    finalBody = `> ↩️ *Respuesta a:* "${textoCitado}"\n\n${text}`;
+  }
+
   const payload: any = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to: cleanPhone,
     type: "text",
     text: {
-      body: text,
+      body: finalBody,
     },
   };
 
@@ -249,7 +254,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         if (urlMultimedia) {
           sentWamid = await sendWhatsAppImage(conv.telefono, urlMultimedia, contenido);
         } else {
-          sentWamid = await sendWhatsAppMessage(conv.telefono, contenido, contextMessageId);
+          sentWamid = await sendWhatsAppMessage(conv.telefono, contenido, contextMessageId, textoCitado);
         }
       }
 
