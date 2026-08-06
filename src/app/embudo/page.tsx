@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -222,11 +222,64 @@ export default function KanbanPage() {
   // Emojis and files
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   // Reply & Edit states in Embudo
   const [replyingToMessage, setReplyingToMessage] = useState<{ id: string; senderName: string; snippet: string } | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+
+  // 24 Hour Window and Templates states
+  const [tick, setTick] = useState(0);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const is24HourWindowClosed = useMemo(() => {
+    if (!chatMessages || chatMessages.length === 0) return false;
+    
+    // Find the last message sent by the customer (INBOUND)
+    const lastClientMsg = [...chatMessages]
+      .reverse()
+      .find(m => m.direccion === "INBOUND");
+      
+    if (!lastClientMsg) return true; // No client message, so window is closed
+    
+    const lastMsgTime = new Date(lastClientMsg.creadoEn).getTime();
+    const now = Date.now();
+    const diff = now - lastMsgTime;
+    
+    return diff > 24 * 60 * 60 * 1000; // 24 hours in ms
+  }, [chatMessages]);
+
+  const remainingTimeText = useMemo(() => {
+    if (!chatMessages || chatMessages.length === 0) return "";
+    
+    const lastClientMsg = [...chatMessages]
+      .reverse()
+      .find(m => m.direccion === "INBOUND");
+      
+    if (!lastClientMsg) return "";
+    
+    const lastMsgTime = new Date(lastClientMsg.creadoEn).getTime();
+    const now = Date.now();
+    const remainingMs = (24 * 60 * 60 * 1000) - (now - lastMsgTime);
+    
+    if (remainingMs <= 0) return "";
+    
+    const remainingHours = Math.floor(remainingMs / (60 * 60 * 1000));
+    const remainingMinutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+    
+    if (remainingHours > 0) {
+      return `${remainingHours}h ${remainingMinutes}m`;
+    }
+    return `${remainingMinutes}m`;
+  }, [chatMessages, tick]);
 
   const handleDoubleClickMessage = (msg: Message) => {
     const isClient = msg.direccion === "INBOUND";
@@ -238,6 +291,11 @@ export default function KanbanPage() {
       snippet: msg.contenido
     });
     setEditingMessage(null);
+
+    // Auto-focus input
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
   };
 
   const handleStartEditMessage = (msg: Message) => {
@@ -247,6 +305,11 @@ export default function KanbanPage() {
     });
     setChatInput(msg.contenido);
     setReplyingToMessage(null);
+
+    // Auto-focus input
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
   };
 
   const scrollToMessage = (msgId?: string | null) => {
@@ -1166,9 +1229,22 @@ export default function KanbanPage() {
                       📞 {formatPhoneNumber(selectedLead.telefono)}
                     </p>
                   )}
-                  <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
-                  </span>
+                  {is24HourWindowClosed ? (
+                    <span className="text-[9px] md:text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md font-extrabold flex items-center gap-1 border border-amber-200 mt-1 w-max">
+                      ⚠️ Ventana de 24h cerrada
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[9px] md:text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> En línea
+                      </span>
+                      {remainingTimeText && (
+                        <span className="text-[9px] md:text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded-md font-extrabold border border-sky-200 flex items-center gap-1">
+                          ⏱️ {remainingTimeText} restantes
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -1215,17 +1291,29 @@ export default function KanbanPage() {
                 <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
                   {chatMessages.length === 0 ? (
                     <p className="text-center text-xs text-slate-400 py-8">Cargando conversación de WhatsApp...</p>
-                  ) : chatMessages.map((msg) => {
+                  ) : chatMessages.map((msg, index) => {
                     const isClient = msg.direccion === "INBOUND";
                     const isIA = msg.tipoRemitente === "IA";
                     
+                    const currentDateText = getMessageDateDividerText(msg.creadoEn);
+                    const prevMsg = index > 0 ? chatMessages[index - 1] : null;
+                    const prevDateText = prevMsg ? getMessageDateDividerText(prevMsg.creadoEn) : "";
+                    const showDivider = currentDateText !== prevDateText;
+
                     return (
-                      <div 
-                        key={msg.id}
-                        id={`msg-embudo-${msg.id}`}
-                        onDoubleClick={() => handleDoubleClickMessage(msg)}
-                        className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
-                      >
+                      <React.Fragment key={msg.id}>
+                        {showDivider && (
+                          <div className="flex justify-center my-4 w-full">
+                            <span className="bg-slate-200/60 backdrop-blur-xs text-slate-600 border border-[#e2edf6] rounded-xl px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+                              {currentDateText}
+                            </span>
+                          </div>
+                        )}
+                        <div 
+                          id={`msg-embudo-${msg.id}`}
+                          onDoubleClick={() => handleDoubleClickMessage(msg)}
+                          className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
+                        >
                         {/* Hover Action buttons (Reply / Edit) */}
                         <div className={`hidden group-hover:flex items-center space-x-1 bg-white/90 backdrop-blur-xs border border-slate-200 rounded-full px-2 py-0.5 shadow-sm text-slate-600 ${
                           isClient ? "order-2" : "order-1"
@@ -1311,8 +1399,9 @@ export default function KanbanPage() {
                           </span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </React.Fragment>
+                  );
+                })}
                   <div ref={chatEndRef} />
                 </div>
 
@@ -1414,43 +1503,65 @@ export default function KanbanPage() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSendMessage} className="flex items-center space-x-3 bg-[#f4f8fc] border border-[#cbdfe9] rounded-2xl px-4 py-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="text-slate-400 hover:text-[#026692] transition-colors"
-                    >
-                      <Smile className="w-5 h-5" />
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-slate-400 hover:text-[#026692] transition-colors"
-                    >
-                      <Paperclip className="w-5 h-5" />
-                    </button>
-                    <input 
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Escribe como agente..."
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onFocus={() => setShowEmojiPicker(false)}
-                      className="flex-1 bg-transparent border-0 outline-none text-xs text-slate-800 focus:ring-0"
-                    />
-                    <button 
-                      type="submit" 
-                      disabled={!chatInput.trim()}
-                      className="w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-center transition-all flex-shrink-0"
-                    >
-                      <Send className="w-3.5 h-3.5 ml-0.5" />
-                    </button>
-                  </form>
+                  {is24HourWindowClosed ? (
+                    <div className="flex flex-col md:flex-row items-center justify-between bg-amber-50/70 border border-amber-200 rounded-2xl p-4 gap-4 animate-in fade-in duration-200">
+                      <div className="flex items-start space-x-2.5">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-extrabold text-amber-800 text-xs uppercase tracking-wide">Ventana de 24 horas cerrada</h4>
+                          <p className="text-[11px] text-slate-600 font-medium leading-normal mt-0.5">
+                            Meta no permite enviar mensajes libres una vez transcurrido este tiempo. Debes reactivar el chat enviando una plantilla autorizada.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowTemplateModal(true)}
+                        className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <MessageSquare className="w-4 h-4" /> Reactivar con Plantilla
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSendMessage} className="flex items-center space-x-3 bg-[#f4f8fc] border border-[#cbdfe9] rounded-2xl px-4 py-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="text-slate-400 hover:text-[#026692] transition-colors"
+                      >
+                        <Smile className="w-5 h-5" />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-slate-400 hover:text-[#026692] transition-colors"
+                      >
+                        <Paperclip className="w-5 h-5" />
+                      </button>
+                      <input 
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                      <input 
+                        type="text" 
+                        ref={chatInputRef}
+                        placeholder="Escribe como agente..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onFocus={() => setShowEmojiPicker(false)}
+                        className="flex-1 bg-transparent border-0 outline-none text-xs text-slate-800 focus:ring-0"
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={!chatInput.trim()}
+                        className="w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-center transition-all flex-shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5 ml-0.5" />
+                      </button>
+                    </form>
+                  )}
                 </div>
 
               </div>
@@ -1824,6 +1935,372 @@ export default function KanbanPage() {
         </div>
       )}
 
+      {showTemplateModal && (
+        <TemplateModal 
+          isOpen={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          activeConvId={activeConv ? activeConv.id : null}
+          activeLead={selectedLead}
+          currentUser={currentUser}
+          fetchMessages={fetchMessages}
+          fetchConversations={fetchLeadsAndConversations}
+        />
+      )}
+
+    </div>
+  );
+}
+
+function getMessageDateDividerText(dateString: string | Date): string {
+  const d = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1: Date, d2: Date) => 
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  if (isSameDay(d, today)) {
+    return "Hoy";
+  } else if (isSameDay(d, yesterday)) {
+    return "Ayer";
+  } else {
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
+}
+
+interface TemplateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  activeConvId: string | null;
+  activeLead: any | null;
+  currentUser: any | null;
+  fetchMessages: (convId: string) => Promise<void>;
+  fetchConversations: () => Promise<void>;
+}
+
+function TemplateModal({
+  isOpen,
+  onClose,
+  activeConvId,
+  activeLead,
+  currentUser,
+  fetchMessages,
+  fetchConversations
+}: TemplateModalProps) {
+  const [metaTemplates, setMetaTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>("");
+  const [templateVariables, setTemplateVariables] = useState<string[]>([]);
+  const [templateHeaderImage, setTemplateHeaderImage] = useState<string>("");
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateSendError, setTemplateSendError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingTemplates(true);
+      fetch("/api/whatsapp/templates")
+        .then(res => res.json())
+        .then(data => {
+          if (data.data) {
+            const approvedOrPending = data.data.filter(
+              (t: any) => t.status === "APPROVED" || t.status === "PENDING"
+            );
+            setMetaTemplates(approvedOrPending);
+          }
+          setLoadingTemplates(false);
+        })
+        .catch(err => {
+          console.error("Error loading templates", err);
+          setLoadingTemplates(false);
+        });
+    }
+  }, [isOpen]);
+
+  const activeTemplate = useMemo(() => {
+    return metaTemplates.find(t => t.name === selectedTemplateName);
+  }, [metaTemplates, selectedTemplateName]);
+
+  useEffect(() => {
+    if (activeTemplate) {
+      const bodyComp = activeTemplate.components.find((c: any) => c.type === "BODY");
+      const bodyText = bodyComp ? bodyComp.text : "";
+      const count = bodyText.match(/\{\{\d+\}\}/g)?.length || 0;
+      const initialVars = Array(count).fill("");
+      if (count > 0 && activeLead) {
+        initialVars[0] = activeLead.nombreCompleto;
+      }
+      setTemplateVariables(initialVars);
+
+      const headerComp = activeTemplate.components.find((c: any) => c.type === "HEADER");
+      if (headerComp && headerComp.format === "IMAGE") {
+        setTemplateHeaderImage("https://nyp-crm.vercel.app/images/cotizacion_base.png");
+      } else {
+        setTemplateHeaderImage("");
+      }
+      setTemplateSendError(null);
+    } else {
+      setTemplateVariables([]);
+      setTemplateHeaderImage("");
+    }
+  }, [activeTemplate, activeLead]);
+
+  const templatePreviewText = useMemo(() => {
+    if (!activeTemplate) return "";
+    const bodyComp = activeTemplate.components.find((c: any) => c.type === "BODY");
+    if (!bodyComp) return "";
+    let text = bodyComp.text;
+    
+    templateVariables.forEach((val, idx) => {
+      const placeholder = `{{${idx + 1}}}`;
+      text = text.replaceAll(placeholder, val || placeholder);
+    });
+    return text;
+  }, [activeTemplate, templateVariables]);
+
+  const handleSendTemplateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTemplate || !activeConvId) return;
+
+    setSendingTemplate(true);
+    setTemplateSendError(null);
+
+    const bodyComp = activeTemplate.components.find((c: any) => c.type === "BODY");
+    const footerComp = activeTemplate.components.find((c: any) => c.type === "FOOTER");
+    
+    let finalContent = templatePreviewText;
+    if (footerComp) {
+      finalContent += `\n\n_${footerComp.text}_`;
+    }
+
+    const hasImageHeader = activeTemplate.components.some((c: any) => c.type === "HEADER" && c.format === "IMAGE");
+
+    try {
+      const res = await fetch(`/api/conversations/${activeConvId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          direccion: "OUTBOUND",
+          tipoRemitente: "AGENT",
+          idRemitente: currentUser?.id || "agente",
+          contenido: finalContent,
+          urlMultimedia: hasImageHeader ? templateHeaderImage : null,
+          template: {
+            name: activeTemplate.name,
+            languageCode: activeTemplate.language || "es",
+            headerImage: hasImageHeader ? templateHeaderImage : null,
+            bodyVariables: templateVariables
+          }
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Error al enviar la plantilla");
+      }
+
+      onClose();
+      await fetchMessages(activeConvId);
+      await fetchConversations();
+    } catch (err: any) {
+      console.error("Error sending template:", err);
+      setTemplateSendError(err.message || "Error desconocido al enviar la plantilla");
+    } finally {
+      setSendingTemplate(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+          <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-[#026692]" /> Reactivar con Plantilla
+          </h3>
+          <button 
+            onClick={onClose} 
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-xl transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
+          {loadingTemplates ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-3">
+              <div className="w-8 h-8 border-3 border-[#026692] border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs font-bold text-[#026692]">Consultando plantillas de Meta...</p>
+            </div>
+          ) : metaTemplates.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+              <h4 className="font-bold text-slate-800 text-sm">Sin plantillas disponibles</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-normal">
+                No se encontraron plantillas aprobadas o pendientes en tu cuenta comercial de Meta. Por favor configúralas y apruébalas en tu Administrador de WhatsApp de Meta Developers.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSendTemplateSubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                  Seleccionar Plantilla de WhatsApp
+                </label>
+                <select
+                  value={selectedTemplateName}
+                  onChange={e => setSelectedTemplateName(e.target.value)}
+                  className="w-full bg-[#f4f8fc] border border-[#d4e6f4] rounded-2xl px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-[#026692] font-semibold transition-all"
+                  required
+                >
+                  <option value="">-- Elige una plantilla autorizada --</option>
+                  {metaTemplates.map((t: any) => (
+                    <option key={t.id} value={t.name}>
+                      {t.name} ({t.status === "APPROVED" ? "Aprobada" : "En revisión"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {activeTemplate && (
+                <>
+                  {activeTemplate.status === "PENDING" && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-800 leading-normal font-medium">
+                        Esta plantilla está <strong>En revisión</strong> por Meta. WhatsApp podría rechazar su envío hasta que el estado cambie oficialmente a "Aprobada".
+                      </p>
+                    </div>
+                  )}
+
+                  {activeTemplate.components.some((c: any) => c.type === "HEADER" && c.format === "IMAGE") && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                        Imagen de Cabecera (URL Pública)
+                      </label>
+                      <input
+                        type="url"
+                        value={templateHeaderImage}
+                        onChange={e => setTemplateHeaderImage(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full bg-[#f4f8fc] border border-[#d4e6f4] rounded-2xl px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+                        required
+                      />
+                      <span className="text-[10px] text-slate-400 block leading-tight">
+                        Meta requiere una dirección de imagen pública (ej. subida a un servidor o Imgur) para mostrarla en el celular del cliente.
+                      </span>
+                    </div>
+                  )}
+
+                  {templateVariables.length > 0 && (
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wide block">
+                        Variables de la Plantilla
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {templateVariables.map((val, idx) => (
+                          <div key={idx} className="space-y-1">
+                            <span className="text-[10px] font-bold text-slate-400">
+                              Variable {`{{${idx + 1}}}`}
+                            </span>
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={e => {
+                                const newVars = [...templateVariables];
+                                newVars[idx] = e.target.value;
+                                setTemplateVariables(newVars);
+                              }}
+                              placeholder={`Valor para {{${idx + 1}}}`}
+                              className="w-full bg-[#f4f8fc] border border-[#d4e6f4] rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+                              required
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wide block">
+                      Vista previa del mensaje
+                    </label>
+                    <div className="bg-[#f0f2f5] rounded-2xl p-4 border border-slate-200">
+                      <div className="bg-[#e2f4dd] border border-[#cbe4c5] rounded-2xl p-3 text-xs max-w-[90%] ml-auto text-slate-800 space-y-2 relative shadow-xs">
+                        {activeTemplate.components.some((c: any) => c.type === "HEADER" && c.format === "IMAGE") && templateHeaderImage && (
+                          <img 
+                            src={templateHeaderImage} 
+                            alt="Header preview" 
+                            className="w-full h-32 object-cover rounded-xl mb-1.5"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://placehold.co/600x314?text=Error+cargando+imagen";
+                            }}
+                          />
+                        )}
+                        <p className="whitespace-pre-wrap leading-relaxed font-normal">{templatePreviewText}</p>
+                        
+                        {activeTemplate.components.some((c: any) => c.type === "FOOTER") && (
+                          <p className="text-[10px] text-slate-400 italic">
+                            {activeTemplate.components.find((c: any) => c.type === "FOOTER")?.text}
+                          </p>
+                        )}
+
+                        {activeTemplate.components.find((c: any) => c.type === "BUTTONS")?.buttons?.map((btn: any, i: number) => (
+                          <div key={i} className="mt-2 pt-2 border-t border-slate-200/40 flex justify-center">
+                            <span className="text-[#026692] font-bold text-[10px] flex items-center gap-1">
+                              🔗 {btn.text}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {templateSendError && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-600 font-semibold leading-normal animate-in shake-100 duration-200">
+                      ❌ Error: {templateSendError}
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-3 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      disabled={sendingTemplate}
+                      className="py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sendingTemplate}
+                      className="flex-1 py-3 bg-[#026692] hover:bg-[#1d4359] text-white rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {sendingTemplate ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Enviando plantilla...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" /> Enviar Plantilla
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

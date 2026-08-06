@@ -1139,17 +1139,29 @@ function InboxContent() {
           
           {messages.length === 0 ? (
             <p className="text-center text-xs text-slate-400 my-8">Sin mensajes previos en esta conversación.</p>
-          ) : messages.map((msg) => {
+          ) : messages.map((msg, index) => {
             const isClient = msg.direccion === "INBOUND";
             const isIA = msg.tipoRemitente === "IA";
             
+            const currentDateText = getMessageDateDividerText(msg.creadoEn);
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const prevDateText = prevMsg ? getMessageDateDividerText(prevMsg.creadoEn) : "";
+            const showDivider = currentDateText !== prevDateText;
+
             return (
-              <div 
-                key={msg.id}
-                id={`msg-${msg.id}`}
-                onDoubleClick={() => handleDoubleClickMessage(msg)}
-                className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
-              >
+              <React.Fragment key={msg.id}>
+                {showDivider && (
+                  <div className="flex justify-center my-4 w-full">
+                    <span className="bg-slate-200/60 backdrop-blur-xs text-slate-600 border border-[#e2edf6] rounded-xl px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+                      {currentDateText}
+                    </span>
+                  </div>
+                )}
+                <div 
+                  id={`msg-${msg.id}`}
+                  onDoubleClick={() => handleDoubleClickMessage(msg)}
+                  className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
+                >
                 {/* Hover Action buttons (Reply / Edit) */}
                 <div className={`hidden group-hover:flex items-center space-x-1 bg-white/90 backdrop-blur-xs border border-slate-200 rounded-full px-2 py-0.5 shadow-sm text-slate-600 ${
                   isClient ? "order-2" : "order-1"
@@ -1239,8 +1251,9 @@ function InboxContent() {
                   </div>
                 </div>
               </div>
-            );
-          })}
+            </React.Fragment>
+          );
+        })}
           <div ref={messagesEndRef} />
         </div>
 
@@ -2272,4 +2285,27 @@ export default function InboxPage() {
       <InboxContent />
     </Suspense>
   );
+}
+
+function getMessageDateDividerText(dateString: string | Date): string {
+  const d = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1: Date, d2: Date) => 
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  if (isSameDay(d, today)) {
+    return "Hoy";
+  } else if (isSameDay(d, yesterday)) {
+    return "Ayer";
+  } else {
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
 }

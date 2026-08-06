@@ -11,7 +11,9 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
   }
 
   if (data.interesServicio && data.interesServicio !== "Por definir") {
-    text += ` busca un servicio ${data.interesServicio.toLowerCase()}`;
+    const svc = data.interesServicio.toLowerCase();
+    const svcName = svc.startsWith("servicio ") ? svc.substring(9) : svc;
+    text += ` busca un servicio ${svcName}`;
   } else {
     text += ` busca un servicio`;
   }
@@ -20,22 +22,26 @@ export function buildNarrativeSummary(lead: any, updates: any, nuevosHijos?: any
     text += ` de ${data.diasSolicitados.toLowerCase()}`;
   }
 
-  if (data.horaInicioSolicitada && data.horaFinSolicitada) {
-    const formatTime = (t: string) => {
-      const match = t.match(/^(\d+):(\d+)/);
-      if (match) {
-        let hour = parseInt(match[1], 10);
-        const minute = match[2];
-        const ampm = hour >= 12 ? "pm" : "am";
-        hour = hour % 12;
-        hour = hour ? hour : 12; // 0 should be 12
-        return `${hour}${minute === "00" ? "" : ":" + minute}${ampm}`;
-      }
-      return t;
-    };
-    const start = formatTime(data.horaInicioSolicitada);
-    const end = formatTime(data.horaFinSolicitada);
-    text += ` en un horario de ${start} a ${end}`;
+  if (data.horaInicioSolicitada) {
+    if (data.horaFinSolicitada) {
+      const formatTime = (t: string) => {
+        const match = t.match(/^(\d+):(\d+)/);
+        if (match) {
+          let hour = parseInt(match[1], 10);
+          const minute = match[2];
+          const ampm = hour >= 12 ? "pm" : "am";
+          hour = hour % 12;
+          hour = hour ? hour : 12; // 0 should be 12
+          return `${hour}${minute === "00" ? "" : ":" + minute}${ampm}`;
+        }
+        return t;
+      };
+      const start = formatTime(data.horaInicioSolicitada);
+      const end = formatTime(data.horaFinSolicitada);
+      text += ` en un horario de ${start} a ${end}`;
+    } else {
+      text += ` en un horario de ${data.horaInicioSolicitada}`;
+    }
   }
 
   if (data.zona && data.zona !== "Por definir") {

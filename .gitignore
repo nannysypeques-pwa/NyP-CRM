@@ -39,3 +39,6 @@ src/lib/mock_db.json
 
 # generated quote images
 /public/cotizaciones/
+
+.vercel
+.env*

@@ -71,8 +71,9 @@ export function calculatePrecotizacion(ciudad: string, dias: number, horas: numb
   if (!daysTable) return null;
 
   // Normalizar horas (3 a 10) — redondear SIEMPRE hacia arriba (regla de negocio)
-  const normalizedHours = Math.max(3, Math.min(10, Math.ceil(horas)));
-  const price = daysTable[normalizedHours];
+  const roundedHours = Math.ceil(horas);
+  if (roundedHours < 3 || roundedHours > 10) return null;
+  const price = daysTable[roundedHours];
 
   return price || null;
 }
@@ -95,7 +96,7 @@ export function verificarYCorregirCotizacion(
   horas: number,
   aiPriceProposed?: number
 ): VerificationResult {
-  const tagRegex = /\[COTIZACION:[^\]]+\]/gi;
+  const tagRegex = /\[[\s\*]*COTIZACION:[^\]]+\]/gi;
   let textoLimpio = aiText.replace(tagRegex, "").trim();
 
   // 1. Verificación de parámetros requeridos

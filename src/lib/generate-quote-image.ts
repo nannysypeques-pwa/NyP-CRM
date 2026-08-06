@@ -71,7 +71,14 @@ export async function generateAndSaveQuoteImage(data: QuoteImageData): Promise<s
     const fecha = escapeXml(rawFecha.replace(/[\u200e\u200f\u202a-\u202e]/g, ""));
     const cliente = escapeXml(data.nombreCliente || "Por definir");
     const edadPeque = escapeXml(data.edadPeque || "Por definir");
-    const horario = escapeXml(`${data.dias} de ${data.horaInicio} a ${data.horaFin} (${data.horasPorDia} hrs/día)`);
+    let horarioText = "";
+    if (data.horaInicio && data.horaInicio !== "Por definir" && (!data.horaFin || data.horaFin === "Por definir" || data.horaFin === "")) {
+      const parsedHrs = data.horasPorDia || (parseInt(data.horaInicio) || 0);
+      horarioText = `${data.dias} • ${data.horaInicio} (${parsedHrs} ${parsedHrs === 1 ? 'hr' : 'hrs'}/día)`;
+    } else {
+      horarioText = `${data.dias} de ${data.horaInicio} a ${data.horaFin} (${data.horasPorDia} hrs/día)`;
+    }
+    const horario = escapeXml(horarioText);
     const zona = escapeXml(data.zona || "Por definir");
     const precio = escapeXml(`$${data.total.toLocaleString("es-MX")} MXN`);
     const precioDetalle = escapeXml(data.notas || "");

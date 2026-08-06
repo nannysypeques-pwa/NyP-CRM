@@ -58,6 +58,30 @@ export function parseNumDias(diasText: string): number {
     }
   }
 
+  // 5. Detectar rango de fechas específicas del calendario (ej. "del 1 al 5 de septiembre")
+  const rangeDatesMatch = lower.match(/del\s+(\d{1,2})\s+al\s+(\d{1,2})/i);
+  if (rangeDatesMatch) {
+    const start = parseInt(rangeDatesMatch[1], 10);
+    const end = parseInt(rangeDatesMatch[2], 10);
+    if (end >= start && end <= 31 && start >= 1) {
+      return (end - start) + 1;
+    }
+  }
+
+  // 6. Detectar listas de fechas específicas del calendario (ej. "1 y 2 de septiembre", "3, 4 y 5 de agosto")
+  const dayNumbers = lower.match(/\b([1-9]|[12]\d|3[01])\b/g);
+  if (dayNumbers && dayNumbers.length > 0) {
+    const hasMonth = /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i.test(lower);
+    if (hasMonth) {
+      return dayNumbers.length;
+    }
+  }
+
+  // Si tiene contenido y no es una frase vacía o de marcador de posición, asumimos que es al menos 1 día de servicio (ej. "1 de septiembre", "Viernes 31", etc.)
+  if (lower !== "por definir" && lower !== "no especificados" && lower !== "no especificado" && lower !== "no definido" && lower.length > 0) {
+    return 1;
+  }
+
   return 0;
 }
 
@@ -651,12 +675,17 @@ Explicación amigable y alternativa comercial obligatoria:
 5q. RECLUTAMIENTO — INTERESADAS EN TRABAJAR COMO NANNY
 ==================================================
 
-Si una persona contacta preguntando por trabajo, vacantes, empleo como nanny o cómo unirse al equipo de Nannys y Peques:
-
+Si una persona contacta preguntando por trabajo, vacantes, empleo como nanny, cómo unirse al equipo de Nannys y Peques, o para postularse a alguna vacante:
 * Responde con calidez y entusiasmo por su interés.
-* Indícale que el proceso inicia completando el formulario de reclutamiento en: reclutamiento.nannysypeques.com.mx
+* Indícale que para postularse deben hacerlo completando el formulario en: reclutamiento.nannysypeques.com.mx
+* Aclárale que si su perfil cumple con alguna vacante que tengamos, nos pondríamos en contacto con ella.
 * No hagas preguntas adicionales ni recopiles datos de la candidata por este medio.
-* Ejemplo de respuesta: "¡Qué gusto que esté interesada en formar parte de nuestro equipo! 😊💛 Para iniciar el proceso, le invitamos a llenar el formulario de registro en nuestro portal: reclutamiento.nannysypeques.com.mx — Ahí el equipo de reclutamiento le contactará con los siguientes pasos ✨"
+* Ejemplo de respuesta: "¡Qué gusto que esté interesada en formar parte de nuestro equipo! 😊💛 Para postularse, es necesario realizar su registro en nuestro portal: reclutamiento.nannysypeques.com.mx. Si su perfil cumple con alguna vacante que tengamos disponible, nos pondremos en contacto con usted ✨"
+
+Si la candidata ya se registró y pregunta cómo va su proceso, cuándo le darán respuesta, o si tenemos alguna respuesta sobre su postulación:
+* Indícale amablemente que el proceso de reclutamiento es gestionado por otra área.
+* Dile que no se preocupe, que si su perfil cumple con alguna vacante actual disponible, nos pondremos en contacto con ella a través de la información de contacto que proporcionó en el formulario de registro.
+* Ejemplo de respuesta: "Le comento amablemente que el proceso de reclutamiento es llevado por otra área de la empresa. Sin embargo, no se preocupe: si su perfil cumple con alguna de nuestras vacantes actuales, nos pondremos en contacto con usted directamente a través de los datos que nos proporcionó en el formulario de registro. ¡Mucho éxito! 😊💛"
 
 ==================================================
 6. USO ESTRICTO DE BASE DE CONOCIMIENTOS
@@ -1269,6 +1298,9 @@ export function detectServiceFromText(text: string): string | null {
   if (!text) return null;
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+  if (lower.includes("express") || lower.includes("expres")) {
+    return "Nanny Express";
+  }
   if (lower.includes("neuronanny") || lower.includes("neuro nanny") || lower.includes("neuro-nanny")) {
     return "Neuronanny";
   }
@@ -1452,6 +1484,13 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
     } catch (e) { }
   }
 
+  if (horasPorDia === 0 && lead.horaInicioSolicitada) {
+    const numMatch = lead.horaInicioSolicitada.match(/\d+/);
+    if (numMatch) {
+      horasPorDia = parseInt(numMatch[0], 10);
+    }
+  }
+
   try {
     await db.addCotizacion(leadId, {
       idLead: leadId,
@@ -1486,6 +1525,19 @@ function parseTextoEdad(textoEdad: string): number | null {
   return num;
 }
 
+function formatCustomDate(date: Date): string {
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const months = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+  const dayName = days[date.getDay()];
+  const dayNum = date.getDate();
+  const monthName = months[date.getMonth()];
+  const year = date.getFullYear();
+  return `${dayName} ${dayNum} de ${monthName} de ${year}`;
+}
+
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -1495,6 +1547,14 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
   }
 
   try {
+    const currentDate = new Date();
+    const currentDateText = formatCustomDate(currentDate);
+    const currentTimeText = currentDate.toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
+
     // Fetch lead details for dynamic context
     const conv = await db.getConversationById(idConversacion);
     const lead = conv?.idLead ? await db.getLeadById(conv.idLead) : null;
@@ -1660,10 +1720,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     let reglaPrecotizacionDinamica = "";
     if (countAiQuotes >= 3) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta.`;
-    } else if (!tieneCiudad || !tieneZona || !tieneRazon || !tieneEdad || !tieneDias || !tieneHorario) {
+    } else if (!tieneCiudad || !tieneRazon || !tieneEdad || !tieneDias || !tieneHorario) {
       const faltantesList = [];
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
-      if (!tieneZona) faltantesList.push("Zona o Colonia");
       if (!tieneRazon) faltantesList.push("Razón de Contratación");
       if (!tieneEdad) {
         if (numHijosEstimados > 1) {
@@ -1675,7 +1734,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       if (!tieneDias) faltantesList.push("Días de servicio");
       if (!tieneHorario) faltantesList.push("Horario de servicio");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad/zona, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, zona/colonia, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
     } else if (!cotizacionPermitida) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN (REGLAS DE EDAD/CANTIDAD DE HIJOS)**: ${motivoBloqueoCotizacion}
       * REGLA DE ORO: Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier estimación de precios, tarifas o cotizaciones en tu respuesta, y no debes incluir la etiqueta \`[COTIZACION:...]\`.
@@ -1698,12 +1757,19 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
           4) Finaliza obligatoriamente tu respuesta con la etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
         * REGLA DE NO MOSTRAR PRECIO EN TEXTO PLANO: No escribas la cifra monetaria en el texto plano de tu mensaje; únicamente incluye la etiqueta \`[COTIZACION:${calculatedPrice}]\` al final para que el CRM genere la imagen automáticamente.`;
       } else {
-        reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN PERSONALIZADA POR ASESOR**: Debido a que los horarios o días solicitados son variables, inestables o están fuera de los límites de la tabla de precios, debes indicarle de manera sumamente atenta y cálida que el asesor de ventas oficial se encargará de prepararle una cotización a la medida para confirmar la disponibilidad y el precio exacto. Mientras tanto, ofrécete a seguir aclarando cualquier duda general sobre el servicio y nannies.`;
+        reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN PERSONALIZADA POR ASESOR**: Debido a que los horarios o días solicitados se encuentran fuera de nuestros límites de tabulador estándar, debes guiar al cliente bajo las siguientes pautas:
+        * Explica de manera muy atenta, empática y clara que nuestros servicios de precotización estándar tienen un rango de **mínimo 3 y máximo 10 horas diarias**.
+        * Pregúntale amablemente al cliente si le gustaría **ajustar el horario de su servicio** para que entre en este rango estándar, o bien, si prefiere que **un asesor comercial se ponga en contacto para proponerle alguna otra alternativa personalizada** para sus requerimientos.
+        * Queda estrictamente PROHIBIDO incluir cualquier etiqueta de \`[COTIZACION:...]\` y tienes PROHIBIDO inventar un precio.
+        * Continúa de forma muy proactiva recabando cualquier información que haga falta (datos faltantes) y resolviendo todas las dudas del lead sobre las nannies, los filtros de seguridad, psicopedagogía o el funcionamiento de la app.`;
       }
     }
 
     const leadContextPrompt = `[CONTEXTO DEL LEAD ACTUAL (BASE DE DATOS DEL CRM)]
 El CRM es la fuente de verdad absoluta. Confía plenamente en la información de abajo, incluso si el chat reciente parece ignorarla o si tu última pregunta fue pedir un dato y el cliente no la contestó de forma directa en el texto.
+
+[FECHA Y HORA ACTUAL DE LA CONVERSACIÓN]
+Hoy es ${currentDateText} y la hora actual es ${currentTimeText}.
 
 [DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]
 ${datosConocidosText}
@@ -1876,19 +1942,35 @@ export async function extractLeadInfo(messageContent: string, historyText: strin
     return null;
   }
 
+  const currentDate = new Date();
+  const currentDateText = formatCustomDate(currentDate);
+  const currentTimeText = currentDate.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+
   const extractionSystemPrompt = `Eres un asistente de extracción de datos de CRM para "Nannys y Peques".
 Tu trabajo es analizar el último mensaje enviado por el cliente (y el contexto reciente de la conversación si es necesario) para extraer datos clave del lead de manera extremadamente precisa.
+
+FECHA Y HORA ACTUAL DE LA CONVERSACIÓN: Hoy es ${currentDateText} y la hora actual es ${currentTimeText}. Utiliza esta fecha y hora de referencia para calcular y resolver fechas relativas mencionadas por el cliente, tales como "hoy" (que equivale a la fecha de hoy), "mañana", "el próximo lunes", etc.
 
 Debes devolver obligatoriamente un único objeto JSON válido con los siguientes campos opcionales (solo inclúyelos si el cliente los proporcionó de forma clara y explícita, no supongas nada):
 - nombreCompleto: Nombre del cliente (tutor/padre/madre).
 - ciudad: Ciudad del servicio. Solo puede ser una de estas: "Puebla", "CDMX", "Atlixco", "Querétaro" o "Xalapa".
 - zona: Zona, colonia o fraccionamiento (ej: "Angelópolis", "Lomas de Angelópolis", "Sonata").
-- interesServicio: Tipo de servicio solicitado. Intenta normalizarlo a: "Servicio Fijo", "Por horas" o "Servicio Eventual" (o el término específico usado). Si el cliente menciona "Fija" o "Fijo", normalízalo como "Servicio Fijo". Si menciona "eventual", "particular" o "fecha particular", normalízalo como "Servicio Eventual".
+- interesServicio: Tipo de servicio de interés. Debe ser exactamente uno de los siguientes: "Servicio Fijo", "Servicio Eventual", "Nanny Express", "Nanny Nocturna", "Miss Nanny" o "Nanny para Fiestas". 
+  CRÍTICO - REGLA DE SERVICIO EXPRESS: Si el cliente busca el servicio para "hoy" (el día de hoy) o para que comience dentro de las próximas 12 horas, o indica que es una emergencia de último minuto, se considerará un servicio exprés. En ese caso, debes clasificarlo y registrarlo obligatoriamente como "Nanny Express" (nunca como "Servicio Eventual"). Si es para fechas posteriores, clasifícalo según sus características (ej: "Servicio Eventual" para eventuales de un día, "Servicio Fijo" para servicios fijos recurrentes de varios días a la semana).
+  CRÍTICO - RESPUESTAS DIRECTAS: Si el cliente responde directamente "fijo", "fija", "eventual", "express" o similar ante la pregunta de qué tipo de servicio busca, debes clasificarlo de inmediato en interesServicio (ej: "Fija" o "Fijo" -> "Servicio Fijo", "Eventual" -> "Servicio Eventual").
 - edadHijo: Edad del hijo (número entero). Si menciona que tiene 4 años, extrae 4. Si es de meses (ej: "2 meses"), extrae 0 en edadHijo e incluye la descripción exacta "2 meses" en el arreglo nuevosHijos.
 - cantidadHijos: Cantidad de hijos a cuidar (número entero).
-- diasSolicitados: Días de la semana o cantidad de días requerida (ej: "Lunes a Viernes", "3 días a la semana"). CRÍTICO: Si el cliente indica una cantidad de días (ej: "3 días") pero NO menciona qué días de la semana específicos quiere, debes guardar exactamente lo que dijo (ej: "3 días a la semana" o "3 días"). Tienes ESTRICTAMENTE PROHIBIDO asumir o inventar días específicos (por ejemplo, nunca asumas "Lunes a Miércoles" para "3 días").
-- horaInicioSolicitada: Hora de inicio del servicio en formato de 24 horas HH:mm (ej: "09:00").
-- horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). CRÍTICO CONVERSIÓN 12H A 24H: Convierte con exacta precisión matemática am/pm a 24 horas (ej: 9am = "09:00", 5pm = "17:00"). De 9am a 5pm es de "09:00" a "17:00" (8 horas diarias). No confundas 5pm con 16:00.
+- diasSolicitados: Días de la semana, cantidad de días requerida, o fechas/días específicos del servicio (ej: "Lunes a Viernes", "3 días a la semana", "Viernes 31 (1 día)", "1 y 2 de septiembre (2 días)"). 
+  CRÍTICO PARA CONTEO DE DÍAS EVENTUALES: Si el cliente menciona fechas o días específicos (ej. "1 de septiembre", "1 y 2 de septiembre", "este viernes y sábado"), debes guardarlos aquí y OBLIGATORIAMENTE agregar al final el número de días entre paréntesis con el formato "(X días)" o "(1 día)" (ej: "1 de septiembre (1 día)", "1 y 2 de septiembre (2 días)", "viernes 31 (1 día)", "del 1 al 5 de septiembre (5 días)"). Si se refiere a "hoy", debes resolverlo a la fecha de hoy (ej: "${currentDateText} (1 día)"). Si se refiere a "mañana", debes resolverlo a la fecha de mañana (calculando el día calendario de mañana a partir de la fecha de hoy de la conversación; por ejemplo, si hoy es Jueves 6 de Agosto de 2026, debes retornar exactamente "Viernes 7 de Agosto de 2026 (1 día)"). Esto es de carácter obligatorio para que el sistema de cotización calcule el precio de forma exacta; tienes estrictamente prohibido retornar el término literal "hoy" o "mañana".
+  PROHIBICIÓN CRÍTICA DE HORAS: Tienes ESTRICTAMENTE PROHIBIDO guardar el horario o cantidad de horas (ej: "4 horas", "de 9 a 5", "tardes", "22:00 a 08:00") en diasSolicitados. El campo diasSolicitados debe contener únicamente días o fechas de calendario, nunca la cantidad de horas ni el horario del día. Tienes estrictamente prohibido asumir o inventar días de la semana específicos si no los menciona.
+- horaInicioSolicitada: Hora de inicio del servicio en formato de 24 horas HH:mm (ej: "09:00"). CRÍTICO - SOLO DURACIÓN: Si el cliente NO proporciona una hora específica de inicio/fin pero indica una duración, cantidad de horas o formato por día (ej: "4 horas", "de 4 a 5 horas", "8 hrs al día", "8 horas al día", "8 horas"), debes guardar esa descripción de duración/horas exactamente en horaInicioSolicitada (ej: "8 horas" o "4 horas") and dejar horaFinSolicitada como null.
+- horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). 
+  CRÍTICO CONVERSIÓN 12H A 24H: Convierte con exacta precisión matemática am/pm a 24 horas (ej: 9am = "09:00", 5pm = "17:00"). De 9am a 5pm es de "09:00" a "17:00" (8 horas diarias). No confundas 5pm con 16:00.
+  CRÍTICO RANGOS DE HORARIO IMPLÍCITOS: Si el cliente proporciona un rango como "4 a 7pm" o "9 a 5pm", debes interpretar que el primer número comparte el mismo bloque/indicador am/pm que el segundo (ej: "4 a 7pm" significa de 4pm a 7pm, es decir, de "16:00" a "19:00"; "9 a 5pm" significa de 9am a 5pm, es decir, de "09:00" a "17:00"). Convierte ambos a formato HH:mm de 24 horas con absoluta precisión.
 - fechaInicioDeseada: Fecha de inicio deseada (ej: "Inmediato", "Próximo lunes").
 - linkUbicacion: URL o enlace de ubicación (Google Maps, Waze, etc.) compartido por el cliente.
 - razonContratacion: Motivo, necesidad o razón principal por la que busca o contrata el servicio (ej: 'necesito quien cuide a mi hijo mientras trabajo', 'trabajo por las tardes', 'apoyo después de la escuela', 'salir de viaje', etc.). Extrae siempre una frase corta y descriptiva resumida que represente esta razón si el cliente menciona para qué o por qué requiere el servicio. No lo dejes vacío si el cliente responde a la pregunta de por qué requiere el servicio.

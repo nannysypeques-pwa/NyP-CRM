@@ -42,7 +42,7 @@ ${lead.interesServicio || ""}
 📆 *Día o días de servicio*
 ${lead.diasSolicitados || ""}
 🕗 *horario del servicio*
-${lead.horaInicioSolicitada && lead.horaFinSolicitada ? `${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}` : ""}
+${lead.horaInicioSolicitada && lead.horaFinSolicitada ? `${lead.horaInicioSolicitada} a ${lead.horaFinSolicitada}` : (lead.horaInicioSolicitada || "")}
 📍*zona o colonia:*
 ${lead.zona || ""}
 📍*Link de ubicación:*

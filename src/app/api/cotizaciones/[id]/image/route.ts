@@ -97,7 +97,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
     const edadPeque = escapeXml(rawEdad);
 
-    const horario = escapeXml(`${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`);
+    let horarioText = "";
+    if (cotizacion.horaInicio && cotizacion.horaInicio !== "Por definir" && (!cotizacion.horaFin || cotizacion.horaFin === "Por definir" || cotizacion.horaFin === "")) {
+      const parsedHrs = cotizacion.horasPorDia || (parseInt(cotizacion.horaInicio) || 0);
+      horarioText = `${cotizacion.dias} • ${cotizacion.horaInicio} (${parsedHrs} ${parsedHrs === 1 ? 'hr' : 'hrs'}/día)`;
+    } else {
+      horarioText = `${cotizacion.dias} de ${cotizacion.horaInicio} a ${cotizacion.horaFin} (${cotizacion.horasPorDia} hrs/día)`;
+    }
+    const horario = escapeXml(horarioText);
     const zona = escapeXml((cotizacion as any).zona || cotizacion.lead.zona || "Por definir");
     const precio = escapeXml(`$${cotizacion.total.toLocaleString("es-MX")} MXN`);
     const precioDetalle = escapeXml(cotizacion.notas || "");

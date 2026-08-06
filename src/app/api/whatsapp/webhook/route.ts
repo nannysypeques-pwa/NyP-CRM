@@ -509,7 +509,7 @@ export async function POST(req: NextRequest) {
         let imageUrl = "";
 
         if (conv.idLead) {
-          const tagRegex = /\[COTIZACION:(\d+(?:\.\d+)?|CALCULAR)\]/i;
+          const tagRegex = /\[[\s\*]*COTIZACION:[\s\*]*(\d+(?:\.\d+)?|CALCULAR)[\s\*]*\]/i;
           const match = aiResponseText.match(tagRegex);
           if (match) {
             const proposedPrice = match[1] !== "CALCULAR" ? parseFloat(match[1]) : undefined;
@@ -531,7 +531,7 @@ export async function POST(req: NextRequest) {
 
               if (!lead.diasSolicitados || lead.diasSolicitados === "Por definir") {
                 if (/martes|miercoles|jueves|viernes|sabado|domingo|lunes|1 dia|un dia|solo un dia/i.test(fullTextHistory)) {
-                  const matchDia = fullTextHistory.match(/(?:este\s+)?(martes|miércoles|jueves|viernes|sábado|domingo|lunes)(?:\s+\d+\s+de\s+\w+)?/i);
+                  const matchDia = fullTextHistory.match(/(?:este\s+)?(martes|miércoles|jueves|viernes|sábado|domingo|lunes)(?:\s+\d+(?:\s+de\s+\w+)?)?/i);
                   updatesSync.diasSolicitados = matchDia ? matchDia[0] : "1 día";
                 }
               }
@@ -730,13 +730,14 @@ export async function POST(req: NextRequest) {
                                   lowerAiResponse.includes("te canalizo con") || 
                                   lowerAiResponse.includes("te paso con un asesor") || 
                                   lowerAiResponse.includes("te transfiero") || 
-                                  lowerAiResponse.includes("un asesor tomará tu solicitud");
+                                  lowerAiResponse.includes("un asesor tomará tu solicitud") ||
+                                  (lowerAiResponse.includes("asesor") && (lowerAiResponse.includes("contacto") || lowerAiResponse.includes("comunic") || lowerAiResponse.includes("canaliz") || lowerAiResponse.includes("llamar"))) ||
+                                  (lowerAiResponse.includes("reclutamiento") && (lowerAiResponse.includes("contacto") || lowerAiResponse.includes("comunic") || lowerAiResponse.includes("canaliz")));
 
             // Requisitos estrictos para "Listo para Cierre" (GANADO):
             // 1. Contar con toda la información necesaria para cotizar
             const tieneInfoCompletaParaCotizar = Boolean(
               lead.ciudad && lead.ciudad !== "Por definir" && lead.ciudad !== "" &&
-              lead.zona && lead.zona !== "Por definir" && lead.zona !== "" &&
               ((lead.hijos && lead.hijos.length > 0) || (lead.edadHijo !== undefined && lead.edadHijo !== null && lead.edadHijo !== 0)) &&
               lead.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" &&
               lead.horaInicioSolicitada && lead.horaFinSolicitada
