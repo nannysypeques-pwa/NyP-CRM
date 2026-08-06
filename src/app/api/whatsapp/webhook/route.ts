@@ -49,13 +49,13 @@ function normalizePhone(phone: string): string {
 }
 
 // WhatsApp API Sender Helper
-async function sendWhatsAppMessage(to: string, text: string) {
+async function sendWhatsAppMessage(to: string, text: string): Promise<string | null> {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
     console.log("WhatsApp credentials not set or mock. Skipping API call.");
-    return;
+    return null;
   }
 
   const cleanPhone = to.replace(/\D/g, "");
@@ -87,8 +87,10 @@ async function sendWhatsAppMessage(to: string, text: string) {
         `Falla al enviar mensaje de WhatsApp. API de Meta retornó status ${response.status}`,
         JSON.stringify(data)
       ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+      return null;
     } else {
       console.log("WhatsApp message sent successfully:", data);
+      return data?.messages?.[0]?.id || null;
     }
   } catch (error: any) {
     console.error("Network error sending WhatsApp message:", error);
@@ -98,16 +100,17 @@ async function sendWhatsAppMessage(to: string, text: string) {
       `Error de red al intentar conectar con la API de WhatsApp de Meta`,
       error instanceof Error ? error.stack : JSON.stringify(error)
     ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+    return null;
   }
 }
 
-async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
+async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string): Promise<string | null> {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
     console.log("WhatsApp credentials not set or mock. Skipping image API call.");
-    return;
+    return null;
   }
 
   const cleanPhone = to.replace(/\D/g, "");
@@ -139,8 +142,10 @@ async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string)
         `Falla al enviar imagen de WhatsApp. API de Meta retornó status ${response.status}`,
         JSON.stringify(data)
       ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+      return null;
     } else {
       console.log("WhatsApp image sent successfully:", data);
+      return data?.messages?.[0]?.id || null;
     }
   } catch (error: any) {
     console.error("Network error sending WhatsApp image:", error);
@@ -149,6 +154,7 @@ async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string)
       `Error de red al intentar enviar imagen de WhatsApp`,
       error instanceof Error ? error.stack : JSON.stringify(error)
     ).catch(dbErr => console.error("Error al registrar incidente de WhatsApp en DB:", dbErr));
+    return null;
   }
 }
 
@@ -315,14 +321,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Buscar si el cliente está respondiendo a un mensaje específico en WhatsApp (message.context.id)
+    let idMensajeRespondido: string | null = null;
+    let textoCitado: string | null = null;
+
+    if (message.context?.id) {
+      try {
+        const parentMsgs: any[] = await prisma.$queryRawUnsafe(
+          `SELECT "id", "contenido" FROM "Mensaje" WHERE "idMensajeWhatsapp" = $1 LIMIT 1`,
+          message.context.id
+        );
+        if (parentMsgs.length > 0) {
+          idMensajeRespondido = parentMsgs[0].id;
+          textoCitado = parentMsgs[0].contenido;
+          console.log(`[CITA DETECTADA EN WEBHOOK] El cliente respondió al mensaje ${idMensajeRespondido} con texto: "${textoCitado}"`);
+        }
+      } catch (e) {
+        console.error("Error al buscar mensaje respondido en webhook:", e);
+      }
+    }
+
     // Guardar mensaje original (INBOUND)
     const newMsg = await db.addMessage({
       idConversacion: conv.id,
       direccion: "INBOUND",
       tipoRemitente: "CLIENT",
+      idMensajeWhatsapp: message.id,
+      idMensajeRespondido: idMensajeRespondido,
+      textoCitado: textoCitado,
       contenido: content,
       creadoEn: creadoEn
-    });
+    } as any);
 
     // Extraer y guardar información del Lead en la base de datos si aplica
     let extractedData: any = null;
@@ -651,7 +680,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        await db.addMessage({
+        const newAiMsg = await db.addMessage({
           idConversacion: conv.id,
           direccion: "OUTBOUND",
           tipoRemitente: "IA",
@@ -661,10 +690,24 @@ export async function POST(req: NextRequest) {
         } as any);
 
         // Enviar el mensaje generado de forma real por WhatsApp al número del cliente
-        if (imageUrl) {
-          await sendWhatsAppImage(rawPhone, imageUrl, finalResponseText);
-        } else {
-          await sendWhatsAppMessage(rawPhone, finalResponseText);
+        if (conv) {
+          let sentWamid: string | null = null;
+          if (imageUrl) {
+            sentWamid = await sendWhatsAppImage(rawPhone, imageUrl, finalResponseText);
+          } else {
+            sentWamid = await sendWhatsAppMessage(rawPhone, finalResponseText);
+          }
+
+          if (sentWamid && newAiMsg?.id) {
+            try {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Mensaje" SET "idMensajeWhatsapp" = $1 WHERE "id" = $2`,
+                sentWamid, newAiMsg.id
+              );
+            } catch (e) {
+              console.error("Error updating IA outbound webhook wamid:", e);
+            }
+          }
         }
 
         // Actualizar datos de lead si aplica

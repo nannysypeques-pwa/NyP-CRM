@@ -7,26 +7,33 @@ import { calculatePrecotizacion, verificarYCorregirCotizacion } from "@/lib/pric
 import { generateAndSaveQuoteImage } from "@/lib/generate-quote-image";
 
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const messages = await db.getMessagesByConversationId(params.id);
-    return NextResponse.json(messages);
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
-  }
-}
-
 // Helper para enviar mensajes de WhatsApp a través de la API oficial
-async function sendWhatsAppMessage(to: string, text: string) {
+async function sendWhatsAppMessage(to: string, text: string, contextMessageId?: string | null): Promise<string | null> {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
     console.log("WhatsApp credentials not set or mock. Skipping API call.");
-    return;
+    return null;
   }
 
   const cleanPhone = to.replace(/\D/g, "");
+
+  const payload: any = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: cleanPhone,
+    type: "text",
+    text: {
+      body: text,
+    },
+  };
+
+  if (contextMessageId) {
+    payload.context = {
+      message_id: contextMessageId
+    };
+  }
 
   try {
     const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
@@ -35,35 +42,30 @@ async function sendWhatsAppMessage(to: string, text: string) {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: cleanPhone,
-        type: "text",
-        text: {
-          body: text,
-        },
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
     if (!response.ok) {
       console.error("Error sending WhatsApp message:", data);
+      return null;
     } else {
-      console.log("WhatsApp message sent successfully:", data);
+      console.log("WhatsApp message sent successfully with context:", data);
+      return data?.messages?.[0]?.id || null;
     }
   } catch (error) {
     console.error("Network error sending WhatsApp message:", error);
+    return null;
   }
 }
 
-async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
+async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string): Promise<string | null> {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
-    console.log("WhatsApp credentials not set or mock. Skipping image API call.");
-    return;
+    console.log("WhatsApp credentials not set or mock. Skipping API call.");
+    return null;
   }
 
   const cleanPhone = to.replace(/\D/g, "");
@@ -82,7 +84,7 @@ async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string)
         type: "image",
         image: {
           link: imageUrl,
-          caption: caption || undefined
+          caption: caption || ""
         },
       }),
     });
@@ -90,18 +92,112 @@ async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string)
     const data = await response.json();
     if (!response.ok) {
       console.error("Error sending WhatsApp image:", data);
+      return null;
     } else {
       console.log("WhatsApp image sent successfully:", data);
+      return data?.messages?.[0]?.id || null;
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Network error sending WhatsApp image:", error);
+    return null;
+  }
+}
+
+async function sendWhatsAppTemplate(
+  to: string,
+  templateName: string,
+  languageCode: string,
+  bodyVariables: string[],
+  headerImageUrl?: string
+): Promise<string | null> {
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId || token === "mock-whatsapp-token" || phoneId === "mock-phone-id") {
+    console.log("WhatsApp credentials not set or mock. Skipping API call.");
+    return null;
+  }
+
+  const cleanPhone = to.replace(/\D/g, "");
+
+  const components: any[] = [];
+
+  if (headerImageUrl) {
+    components.push({
+      type: "header",
+      parameters: [
+        {
+          type: "image",
+          image: {
+            link: headerImageUrl
+          }
+        }
+      ]
+    });
+  }
+
+  if (bodyVariables && bodyVariables.length > 0) {
+    components.push({
+      type: "body",
+      parameters: bodyVariables.map(v => ({
+        type: "text",
+        text: v
+      }))
+    });
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: cleanPhone,
+    type: "template",
+    template: {
+      name: templateName,
+      language: {
+        code: languageCode
+      },
+      components: components
+    }
+  };
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Error sending WhatsApp template:", data);
+      return null;
+    } else {
+      console.log("WhatsApp template sent successfully:", data);
+      return data?.messages?.[0]?.id || null;
+    }
+  } catch (error) {
+    console.error("Network error sending WhatsApp template:", error);
+    return null;
+  }
+}
+
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const messages = await db.getMessagesByConversationId(params.id);
+    return NextResponse.json(messages);
+  } catch (error) {
+    console.error("Failed to fetch messages:", error);
+    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    const { direccion, tipoRemitente, idRemitente, contenido, urlMultimedia, idMensajeRespondido, textoCitado } = body;
+    const { direccion, tipoRemitente, idRemitente, contenido, urlMultimedia, idMensajeRespondido, textoCitado, template } = body;
 
     if (!direccion || !tipoRemitente || !contenido) {
       return NextResponse.json({ error: "Faltan campos obligatorios (direccion, tipoRemitente o contenido)" }, { status: 400 });
@@ -123,10 +219,49 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Si el agente responde desde el CRM, enviamos la respuesta de forma real por WhatsApp
     if (direccion === "OUTBOUND" && tipoRemitente === "AGENT" && conv) {
-      if (urlMultimedia) {
-        await sendWhatsAppImage(conv.telefono, urlMultimedia, contenido);
+      let sentWamid: string | null = null;
+
+      if (template) {
+        // Enviar plantilla de WhatsApp
+        sentWamid = await sendWhatsAppTemplate(
+          conv.telefono,
+          template.name,
+          template.languageCode || "es",
+          template.bodyVariables || [],
+          template.headerImage || undefined
+        );
       } else {
-        await sendWhatsAppMessage(conv.telefono, contenido);
+        let contextMessageId: string | undefined = undefined;
+        if (idMensajeRespondido) {
+          try {
+            const rawMsgs: any[] = await prisma.$queryRawUnsafe(
+              `SELECT "idMensajeWhatsapp" FROM "Mensaje" WHERE "id" = $1 LIMIT 1`,
+              idMensajeRespondido
+            );
+            if (rawMsgs.length > 0 && rawMsgs[0].idMensajeWhatsapp) {
+              contextMessageId = rawMsgs[0].idMensajeWhatsapp;
+            }
+          } catch (e) {
+            console.error("Error fetching quoted wamid:", e);
+          }
+        }
+
+        if (urlMultimedia) {
+          sentWamid = await sendWhatsAppImage(conv.telefono, urlMultimedia, contenido);
+        } else {
+          sentWamid = await sendWhatsAppMessage(conv.telefono, contenido, contextMessageId);
+        }
+      }
+
+      if (sentWamid && newMsg?.id) {
+        try {
+          await prisma.$executeRawUnsafe(
+            `UPDATE "Mensaje" SET "idMensajeWhatsapp" = $1 WHERE "id" = $2`,
+            sentWamid, newMsg.id
+          );
+        } catch (e) {
+          console.error("Error updating outbound wamid:", e);
+        }
       }
     }
 
@@ -336,7 +471,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         }
       }
 
-      const aiResponseText = await generateAIResponse(params.id, contenido);
+      try {
+        const aiResponseText = await generateAIResponse(params.id, contenido);
 
       // Guardar el mensaje generado por la IA en la base de datos
       let quoteCreated = null;
@@ -515,7 +651,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         }
       }
 
-      await db.addMessage({
+      const newAiMsg = await db.addMessage({
         idConversacion: params.id,
         direccion: "OUTBOUND",
         tipoRemitente: "IA",
@@ -525,10 +661,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       // Si es un canal de comunicación real/simulado, enviar el mensaje generado por WhatsApp
       if (conv) {
+        let sentWamid: string | null = null;
         if (imageUrl) {
-          await sendWhatsAppImage(conv.telefono, imageUrl, finalResponseText);
+          sentWamid = await sendWhatsAppImage(conv.telefono, imageUrl, finalResponseText);
         } else {
-          await sendWhatsAppMessage(conv.telefono, finalResponseText);
+          sentWamid = await sendWhatsAppMessage(conv.telefono, finalResponseText);
+        }
+
+        if (sentWamid && newAiMsg?.id) {
+          try {
+            await prisma.$executeRawUnsafe(
+              `UPDATE "Mensaje" SET "idMensajeWhatsapp" = $1 WHERE "id" = $2`,
+              sentWamid, newAiMsg.id
+            );
+          } catch (e) {
+            console.error("Error updating IA outbound wamid:", e);
+          }
         }
       }
       
@@ -612,7 +760,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           });
         }
       }
+    } catch (error) {
+      console.error("Error al procesar respuesta de la IA en POST /messages:", error);
     }
+  }
 
     return NextResponse.json(newMsg, { status: 201 });
   } catch (error) {

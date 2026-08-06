@@ -98,6 +98,18 @@ function getEffectiveCityTargets(filter: { rol: string; ciudad?: string | null; 
   return null;
 }
 
+function getSecurityCityTargets(filter: { rol: string; ciudad?: string | null } | null): string[] | null {
+  if (!filter) return null;
+  // If the user has assigned coverage cities (e.g. "Puebla, CDMX" or "Xalapa"), ALWAYS restrict to those cities for security
+  if (filter.ciudad && filter.ciudad.trim() !== "" && filter.ciudad.toUpperCase() !== "TODAS" && filter.ciudad.toUpperCase() !== "TODAS LAS CIUDADES") {
+    const cities = filter.ciudad.split(",").map(c => c.trim()).filter(Boolean);
+    if (cities.length > 0 && !cities.some(c => c.toUpperCase() === "TODAS")) {
+      return cities;
+    }
+  }
+  return null;
+}
+
 function buildMultiCityCondition(cityTargets: string[]) {
   const set = new Set<string>();
 
@@ -344,7 +356,7 @@ class BaseDeDatos {
 
   async getLeadById(id: string): Promise<Lead | undefined> {
     const filter = getRequestFilter();
-    const cityTargets = getEffectiveCityTargets(filter);
+    const cityTargets = getSecurityCityTargets(filter);
 
     const lead = await prisma.lead.findFirst({
       where: { id, deleted: false },
@@ -511,7 +523,7 @@ class BaseDeDatos {
 
   async getConversationById(id: string): Promise<Conversacion | undefined> {
     const filter = getRequestFilter();
-    const cityTargets = getEffectiveCityTargets(filter);
+    const cityTargets = getSecurityCityTargets(filter);
 
     const conv = await prisma.conversacion.findFirst({
       where: { id, deleted: false },
@@ -535,7 +547,7 @@ class BaseDeDatos {
 
   async getConversationByPhone(phone: string): Promise<Conversacion | undefined> {
     const filter = getRequestFilter();
-    const cityTargets = getEffectiveCityTargets(filter);
+    const cityTargets = getSecurityCityTargets(filter);
 
     const conv = await prisma.conversacion.findFirst({
       where: { telefono: phone, deleted: false },
@@ -689,14 +701,35 @@ class BaseDeDatos {
 
 
   async getMessagesByConversationId(conversationId: string): Promise<Mensaje[]> {
-    const messages = await prisma.mensaje.findMany({
-      where: { idConversacion: conversationId },
-      orderBy: { creadoEn: 'asc' }
-    });
-    return messages.map(m => ({
-      ...m,
-      creadoEn: m.creadoEn.toISOString()
-    })) as unknown as Mensaje[];
+    try {
+      const rawMsgs: any[] = await prisma.$queryRawUnsafe(
+        `SELECT "id", "idConversacion", "direccion", "tipoRemitente", "idRemitente", "contenido", "urlMultimedia", "idMensajeRespondido", "textoCitado", "editado", "estado", "creadoEn"
+         FROM "Mensaje"
+         WHERE "idConversacion" = $1
+         ORDER BY "creadoEn" ASC`,
+        conversationId
+      );
+      return rawMsgs.map(m => ({
+        ...m,
+        idMensajeRespondido: m.idMensajeRespondido || null,
+        textoCitado: m.textoCitado || null,
+        editado: m.editado || false,
+        creadoEn: typeof m.creadoEn === "string" ? m.creadoEn : (m.creadoEn ? m.creadoEn.toISOString() : new Date().toISOString())
+      })) as unknown as Mensaje[];
+    } catch (err: any) {
+      console.warn("[PRISMA FALLBACK] Error en raw SQL getMessagesByConversationId, usando findMany:", err.message);
+      const messages = await prisma.mensaje.findMany({
+        where: { idConversacion: conversationId },
+        orderBy: { creadoEn: 'asc' }
+      });
+      return messages.map(m => ({
+        ...m,
+        idMensajeRespondido: (m as any).idMensajeRespondido || null,
+        textoCitado: (m as any).textoCitado || null,
+        editado: (m as any).editado || false,
+        creadoEn: typeof m.creadoEn === "string" ? m.creadoEn : m.creadoEn.toISOString()
+      })) as unknown as Mensaje[];
+    }
   }
 
   async addMessage(messageData: Omit<Mensaje, 'id' | 'creadoEn'> & { creadoEn?: Date | string }): Promise<Mensaje> {
