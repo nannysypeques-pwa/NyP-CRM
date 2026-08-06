@@ -40,8 +40,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network First strategy for dynamic & API requests to guarantee live CRM data
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/_next/data')) {
+  // Network First strategy for dynamic, API requests & page routes to guarantee live CRM data
+  // Page routes (e.g. /, /inbox, /embudo) do not have a dot (.) in the filename extension
+  const isPageRoute = !url.pathname.includes('.');
+  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/_next/data') || isPageRoute) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );
