@@ -317,9 +317,15 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                 lead.estado === "NUEVO" ? "bg-sky-50 text-[#026692]" :
                 lead.estado === "CONTACTADO" ? "bg-amber-50 text-amber-600" :
                 lead.estado === "COTIZADO" ? "bg-blue-50 text-blue-600" :
-                lead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600 animate-bounce" : "bg-rose-50 text-rose-600"
+                lead.estado === "GANADO" ? "bg-emerald-50 text-emerald-600 animate-bounce" :
+                lead.estado === "ATENCION_HUMANA" ? "bg-indigo-50 text-indigo-600" : "bg-rose-50 text-rose-600"
               }`}>
-                {lead.estado === "GANADO" ? "CLIENTE GANADO" : lead.estado === "PERDIDO" ? "CERRADO PERDIDO" : lead.estado}
+                {lead.estado === "NUEVO" ? "PENDIENTE" :
+                 lead.estado === "CONTACTADO" ? "EN CONVERSACIÓN" :
+                 lead.estado === "COTIZADO" ? "EN COTIZACIÓN" :
+                 lead.estado === "GANADO" ? "LISTO PARA EL CIERRE" :
+                 lead.estado === "ATENCION_HUMANA" ? "ATENCIÓN HUMANA" :
+                 lead.estado === "PERDIDO" ? "CERRADO PERDIDO" : lead.estado}
               </span>
             </div>
             <p className="text-slate-500 text-sm flex items-center gap-1.5">

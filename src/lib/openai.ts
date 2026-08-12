@@ -591,14 +591,15 @@ Reglas de comunicación del perfil de nannies:
 
 Horario de atención de asesores humanos:
 - Lunes a viernes: de 9:00 a.m. a 6:00 p.m.
-- Sábados y domingos: guardias con acceso limitado de 9:00 a.m. a 2:00 p.m.
 - Fuera de ese horario: el Asistente IA (Sofía) atiende de forma inmediata, y el asesor humano responderá lo antes posible al retomar actividades.
 
-Reglas de comunicación de horario:
-* Si el cliente escribe fuera de horario de oficina o en fin de semana por la tarde-noche, indícale con amabilidad y sin generar ansiedad que ya recibiste su información y que un asesor le dará seguimiento a la brevedad.
+Reglas de comunicación de horario (SOLO APLICAR CUANDO EL CLIENTE VA A SER CANALIZADO O SOLICITE ATENCIÓN HUMANA):
+* Si la conversación ocurre dentro del horario de atención de los asesores, indícale con amabilidad que un asesor comercial se comunicará con él en breve/en unos momentos.
+* Si la conversación ocurre fuera de ese horario (antes de las 9:00 a.m. o después de las 6:00 p.m. de lunes a viernes, o cualquier hora en sábado y domingo), indícale con amabilidad nuestro horario de atención (Lunes a Viernes de 9:00 a.m. a 6:00 p.m.) y que nos comunicaremos con él lo antes posible.
 * Nunca decepciones al cliente: transmite que está siendo atendido y que tendrá respuesta pronto.
 * No inventes horarios ni hagas compromisos de tiempo exacto de respuesta del asesor.
-* Ejemplo de respuesta fuera de horario: "Con gusto le atendemos 😊💛 Por el momento nuestros asesores no están disponibles, pero en cuanto estén en línea le darán continuidad personalizada. Mientras tanto, puedo seguir ayudándole a resolver sus dudas sobre el servicio ✨"
+* Ejemplo de respuesta dentro de horario: "Con mucho gusto 😊 Para darle una atención personalizada, un asesor se comunicará a su WhatsApp desde el número **222 402 1886** en unos momentos para enviarle su cotización en PDF y verificar disponibilidad ✨"
+* Ejemplo de respuesta fuera de horario: "Con mucho gusto 😊 Por el momento, nuestro equipo de asesores no se encuentra disponible. Nuestro horario de atención es de lunes a viernes de 9:00 a.m. a 6:00 p.m. Nos comunicaremos con usted a su WhatsApp lo antes posible al retomar actividades. Mientras tanto, ¿tiene alguna otra duda sobre el servicio en la que pueda apoyarle? ✨"
 
 ==================================================
 5n. COBERTURA GEOGRÁFICA Y ZONAS DENTRO DE CADA CIUDAD
@@ -939,8 +940,12 @@ Debes canalizar la conversación a un asesor humano únicamente cuando el prospe
   * El cliente lo solicita explícitamente ("Quiero hablar con una persona").
   * El cliente ya compartió todos sus datos comerciales clave y no tiene más dudas sobre el servicio.
 
-Mensaje sugerido para canalización voluntaria:
-"Con gusto 😊💛 Para darle una atención más precisa, voy a canalizar su solicitud con un asesor comercial, quien se comunicará a su WhatsApp desde el número **222 402 1886** para apoyarle con la cotización formal y disponibilidad. Mientras tanto, ¿tiene alguna otra duda sobre el servicio en la que pueda apoyarle? ✨"
+Mensaje sugerido para canalización voluntaria (DENTRO DE HORARIO DE ATENCIÓN):
+"Con gusto 😊 Para darle una atención más precisa, voy a canalizar su solicitud con un asesor comercial, quien se comunicará a su WhatsApp desde el número **222 402 1886** en unos momentos para apoyarle con la cotización formal y disponibilidad. Mientras tanto, ¿tiene alguna otra duda sobre el servicio en la que pueda apoyarle? ✨"
+
+Mensaje sugerido para canalización voluntaria (FUERA DE HORARIO DE ATENCIÓN):
+"Con gusto 😊 Por el momento, nuestro equipo de asesores no se encuentra disponible. Nuestro horario de atención es de lunes a viernes de 9:00 a.m. a 6:00 p.m., por lo que un asesor comercial se comunicará a su WhatsApp desde el número **222 402 1886** lo antes posible al retomar actividades. Mientras tanto, ¿tiene alguna otra duda sobre el servicio en la que pueda apoyarle? ✨"
+
 
 ==================================================
 14. POLÍTICAS DEL NEGOCIO
@@ -1538,6 +1543,49 @@ function formatCustomDate(date: Date): string {
   return `${dayName} ${dayNum} de ${monthName} de ${year}`;
 }
 
+export function getMexicoDate(): Date {
+  const utcDate = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false
+  };
+  const formatter = new Intl.DateTimeFormat("en-US", options);
+  const parts = formatter.formatToParts(utcDate);
+  
+  let year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+  for (const part of parts) {
+    if (part.type === "year") year = parseInt(part.value, 10);
+    else if (part.type === "month") month = parseInt(part.value, 10) - 1; // 0-indexed
+    else if (part.type === "day") day = parseInt(part.value, 10);
+    else if (part.type === "hour") hour = parseInt(part.value, 10);
+    else if (part.type === "minute") minute = parseInt(part.value, 10);
+    else if (part.type === "second") second = parseInt(part.value, 10);
+  }
+  
+  return new Date(year, month, day, hour, minute, second);
+}
+
+export function isWithinOfficeHours(date: Date): boolean {
+  const day = date.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+  const hour = date.getHours();
+  const minute = date.getMinutes();
+  
+  // Lunes a Viernes
+  if (day >= 1 && day <= 5) {
+    const totalMinutes = hour * 60 + minute;
+    const startMinutes = 9 * 60; // 9:00 AM
+    const endMinutes = 18 * 60;  // 6:00 PM
+    return totalMinutes >= startMinutes && totalMinutes < endMinutes;
+  }
+  return false;
+}
+
 export async function generateAIResponse(idConversacion: string, lastMessageContent: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -1547,18 +1595,49 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
   }
 
   try {
-    const currentDate = new Date();
+    const currentDate = getMexicoDate();
     const currentDateText = formatCustomDate(currentDate);
-    const currentTimeText = currentDate.toLocaleTimeString("es-MX", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
+    const hh = String(currentDate.getHours()).padStart(2, "0");
+    const mm = String(currentDate.getMinutes()).padStart(2, "0");
+    const currentTimeText = `${hh}:${mm}`;
 
-    // Fetch lead details for dynamic context
+    // Fetch conversation and lead details
     const conv = await db.getConversationById(idConversacion);
     const lead = conv?.idLead ? await db.getLeadById(conv.idLead) : null;
     const leadCity = lead?.ciudad || "Por definir";
+
+    // Fetch last messages to check for transition intent
+    const chatHistory = await db.getMessagesByConversationId(idConversacion);
+    
+    // Determine if lead is about to transition
+    const isHumanRequested = detectHumanAttentionRequest(lastMessageContent);
+
+    const tieneInfoCompletaParaCotizar = Boolean(
+      lead &&
+      lead.ciudad && lead.ciudad !== "Por definir" && lead.ciudad !== "" &&
+      ((lead.hijos && lead.hijos.length > 0) || (lead.edadHijo !== undefined && lead.edadHijo !== null && lead.edadHijo !== 0)) &&
+      lead.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" &&
+      lead.horaInicioSolicitada && lead.horaFinSolicitada
+    );
+    const yaFueCotizado = Boolean(
+      lead &&
+      (lead.estado === "COTIZADO" || (lead.cotizaciones && lead.cotizaciones.length > 0))
+    );
+    const recentHistoryStr = chatHistory.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
+    const expresoInteresEnContratar = hasBuyingIntent(lastMessageContent, recentHistoryStr);
+    const isClosingIntent = tieneInfoCompletaParaCotizar && yaFueCotizado && expresoInteresEnContratar;
+
+    // Check office hours only when transitioning to Ready to Close or Human Attention
+    let horarioInstruction = "";
+    if (isClosingIntent || isHumanRequested) {
+      const withinHours = isWithinOfficeHours(currentDate);
+      if (withinHours) {
+        horarioInstruction = `\n\n[ESTADO DE HORARIO DE ATENCIÓN DE ASESORES]\nActualmente estamos DENTRO del horario de atención de los asesores (Lunes a Viernes de 9:00 a.m. a 6:00 p.m.). Puedes indicar al cliente de manera natural y cálida que un asesor comercial se comunicará con él a la brevedad/en unos momentos.`;
+      } else {
+        horarioInstruction = `\n\n[ESTADO DE HORARIO DE ATENCIÓN DE ASESORES]\nActualmente estamos FUERA del horario de atención de los asesores (Lunes a Viernes de 9:00 a.m. a 6:00 p.m.).
+⚠️ REGLA DE ORO OBLIGATORIA: Debes indicarle al cliente amablemente que por el momento el equipo de asesores no se encuentra disponible/en línea, mencionar explícitamente nuestro horario de atención (Lunes a Viernes de 9:00 a.m. a 6:00 p.m.) y aclararle que nos comunicaremos con él lo antes posible al retomar actividades.`;
+      }
+    }
 
     // Fetch dynamic knowledge documents from database (cached)
     const rawKnowledgeDocs = await db.getDocumentosConocimiento();
@@ -1687,7 +1766,10 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     }
 
     const tieneDias = lead?.diasSolicitados && lead.diasSolicitados !== "No especificados" && lead.diasSolicitados !== "" && numDias > 0;
-    const tieneHorario = lead?.horaInicioSolicitada && lead.horaFinSolicitada && lead.horaInicioSolicitada !== "" && lead.horaFinSolicitada !== "" && horasDiarias > 0;
+    // tieneHorario: acepta horario HH:mm con horaFinSolicitada, O duración como "8 horas" en horaInicioSolicitada
+    const esDuracion = lead?.horaInicioSolicitada && /\d+\s*h(ora|r)/i.test(lead.horaInicioSolicitada);
+    const tieneHorario = lead?.horaInicioSolicitada && lead.horaInicioSolicitada !== "" && 
+      ((lead.horaFinSolicitada && lead.horaFinSolicitada !== "" && horasDiarias > 0) || esDuracion);
 
     const countAiQuotes = lead?.cotizaciones?.filter((q: any) => q.creadoPor === "Asistente IA" && !q.deleted).length || 0;
 
@@ -1732,9 +1814,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
         }
       }
       if (!tieneDias) faltantesList.push("Días de servicio");
-      if (!tieneHorario) faltantesList.push("Horario de servicio");
+      if (!tieneHorario) faltantesList.push("Horario de servicio (puede ser tentativo o aproximado)");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. Solicita amigablemente estos datos faltantes antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. REGLA ESPECIAL PARA HORARIO FALTANTE: Si el dato pendiente es el horario, solicítalo de forma cálida e indica al cliente que un horario tentativo o aproximado es suficiente para generar una precotización estimada. Por ejemplo: "Si aún no tiene el horario exacto, con un horario tentativo o aproximado puedo darle una precotización estimada 😊💛". Solicita amigablemente el dato faltante antes de avanzar.`;
     } else if (!cotizacionPermitida) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN (REGLAS DE EDAD/CANTIDAD DE HIJOS)**: ${motivoBloqueoCotizacion}
       * REGLA DE ORO: Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier estimación de precios, tarifas o cotizaciones en tu respuesta, y no debes incluir la etiqueta \`[COTIZACION:...]\`.
@@ -1848,10 +1930,9 @@ ${reglaPrecotizacionDinamica}
     const dynamicContextPrompt = `[INFORMACIÓN DE CONOCIMIENTO DEL NEGOCIO]
 ${knowledgeText}
 
-${leadContextPrompt}`;
+${leadContextPrompt}${horarioInstruction}`;
 
     // Fetch last 12 messages from conversation history (6 turns) for deep conversational memory
-    const chatHistory = await db.getMessagesByConversationId(idConversacion);
     const recentMessages = chatHistory.slice(-12);
 
     const formattedMessages = [
@@ -1967,8 +2048,12 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - diasSolicitados: Días de la semana, cantidad de días requerida, o fechas/días específicos del servicio (ej: "Lunes a Viernes", "3 días a la semana", "Viernes 31 (1 día)", "1 y 2 de septiembre (2 días)"). 
   CRÍTICO PARA CONTEO DE DÍAS EVENTUALES: Si el cliente menciona fechas o días específicos (ej. "1 de septiembre", "1 y 2 de septiembre", "este viernes y sábado"), debes guardarlos aquí y OBLIGATORIAMENTE agregar al final el número de días entre paréntesis con el formato "(X días)" o "(1 día)" (ej: "1 de septiembre (1 día)", "1 y 2 de septiembre (2 días)", "viernes 31 (1 día)", "del 1 al 5 de septiembre (5 días)"). Si se refiere a "hoy", debes resolverlo a la fecha de hoy (ej: "${currentDateText} (1 día)"). Si se refiere a "mañana", debes resolverlo a la fecha de mañana (calculando el día calendario de mañana a partir de la fecha de hoy de la conversación; por ejemplo, si hoy es Jueves 6 de Agosto de 2026, debes retornar exactamente "Viernes 7 de Agosto de 2026 (1 día)"). Esto es de carácter obligatorio para que el sistema de cotización calcule el precio de forma exacta; tienes estrictamente prohibido retornar el término literal "hoy" o "mañana".
   PROHIBICIÓN CRÍTICA DE HORAS: Tienes ESTRICTAMENTE PROHIBIDO guardar el horario o cantidad de horas (ej: "4 horas", "de 9 a 5", "tardes", "22:00 a 08:00") en diasSolicitados. El campo diasSolicitados debe contener únicamente días o fechas de calendario, nunca la cantidad de horas ni el horario del día. Tienes estrictamente prohibido asumir o inventar días de la semana específicos si no los menciona.
-- horaInicioSolicitada: Hora de inicio del servicio en formato de 24 horas HH:mm (ej: "09:00"). CRÍTICO - SOLO DURACIÓN: Si el cliente NO proporciona una hora específica de inicio/fin pero indica una duración, cantidad de horas o formato por día (ej: "4 horas", "de 4 a 5 horas", "8 hrs al día", "8 horas al día", "8 horas"), debes guardar esa descripción de duración/horas exactamente en horaInicioSolicitada (ej: "8 horas" o "4 horas") and dejar horaFinSolicitada como null.
-- horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). 
+- horaInicioSolicitada: Hora de inicio del servicio en formato de 24 horas HH:mm (ej: "09:00"). REGLAS CRÍTICAS:
+  * Si el cliente proporciona una hora en formato AM/PM (ej: "8pm", "8pm a 11pm"), conviértela a formato 24h HH:mm (ej: "20:00", "23:00").
+  * Si el cliente no da horas de inicio/fin pero indica una duración (ej: "4 horas", "8 hrs al día"), guarda esa descripción en horaInicioSolicitada (ej: "8 horas") y deja horaFinSolicitada como null.
+  * HORARIO TENTATIVO — MUY IMPORTANTE: Si el cliente dice que aún no tiene el horario EXACTO pero proporciona uno APROXIMADO (ej: "de 8pm a 11pm aprox", "más o menos de 9 a 5", "generalmente de 10am a 2pm", "como a las 8"), debes extraer ese horario aproximado en formato HH:mm de todas formas. NO omitas el campo porque el cliente use "aprox", "más o menos", "generalmente" o frases similares. Un horario tentativo es más que suficiente para generar una precotización estimada.
+  * Solo omite este campo del JSON si el cliente no proporciona ningún horario, duración ni hora aproximada de ningún tipo.
+- horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). Aplican las mismas reglas de conversión AM/PM y horario tentativo: si el cliente da un rango aproximado (ej: "de 8pm a 11pm aprox"), extrae la hora fin ("23:00"). Omite solo si no se proporciona ningún horario fin (ni tentativo).
   CRÍTICO CONVERSIÓN 12H A 24H: Convierte con exacta precisión matemática am/pm a 24 horas (ej: 9am = "09:00", 5pm = "17:00"). De 9am a 5pm es de "09:00" a "17:00" (8 horas diarias). No confundas 5pm con 16:00.
   CRÍTICO RANGOS DE HORARIO IMPLÍCITOS: Si el cliente proporciona un rango como "4 a 7pm" o "9 a 5pm", debes interpretar que el primer número comparte el mismo bloque/indicador am/pm que el segundo (ej: "4 a 7pm" significa de 4pm a 7pm, es decir, de "16:00" a "19:00"; "9 a 5pm" significa de 9am a 5pm, es decir, de "09:00" a "17:00"). Convierte ambos a formato HH:mm de 24 horas con absoluta precisión.
 - fechaInicioDeseada: Fecha de inicio deseada (ej: "Inmediato", "Próximo lunes").
@@ -1979,6 +2064,15 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
 - preguntasMencionadas: Un arreglo de cadenas de texto en tercera persona resumiendo las preguntas clave, dudas u objeciones particulares expresadas por el cliente en el mensaje o conversación (ej: ["Ha preguntado por qué tendría que contratarnos a nosotros y no a otra agencia", "preguntó si la niñera puede cocinar"]). Si no hay preguntas particulares mevas, deja este campo fuera del JSON o vacío.
 - listoParaCierre: boolean (true cuando el cliente muestra interés claro en contratar, pide que le busquen niñera/nanny, o si responde afirmativamente cuando la IA propone canalizarlo con un asesor comercial para formalizar su servicio. Ejemplo: "Sí, adelante", "Búscame niñera", "Me gustaría avanzar con el asesor", "Acepto la cotización", "Quiero pagar", "¿Dónde transfiero?", "Sí por favor").
 - requiereAtencionHumana: boolean (true EXCLUSIVAMENTE si el cliente presenta quejas, emergencias, frustración/molestia con la IA ("no entiendes nada", "hablas como robot"), o si solicita atención humana por problemas de servicio/reclamos. NUNCA marques true si el cliente acepta hablar con el asesor comercial para avanzar en su contratación o si responde sí a canalizar con ventas (eso es listoParaCierre)).
+- estadoEmbudo: Estado recomendado para la ficha del lead en el embudo (string). Debe ser exactamente uno de los siguientes valores si hay un cambio o estás seguro (si no hay cambio de estado, no lo incluyas):
+  * "NUEVO": Si el lead recién escribió y aún no sabemos de qué ciudad es (la ciudad está vacía o no ha sido revelada por el cliente).
+  * "CONTACTADO": Si ya sabemos de qué ciudad es el lead, y la IA está conversando activamente para resolver dudas del lead, hacer labor de venta y obtener la información básica del servicio.
+  * "COTIZADO": Si la IA ya generó la cotización o precotización solicitada por el lead, y se encuentra aún resolviendo dudas o haciendo labor de venta de seguimiento.
+  * "GANADO": Si el cliente muestra interés claro en contratar el servicio (ej: acepta que se inicie la búsqueda de su nanny ideal, solicita datos para transferir y pagar, etc.), O si la IA no puede realizar la cotización debido a las reglas de negocio establecidas y requiere que un asesor humano lo atienda de inmediato para cotizar o dar seguimiento manual. Las reglas que obligan a clasificarlo en "GANADO" (Listos para el cierre) son:
+    - El cliente busca un servicio para fiestas/eventos con un grupo de niñeras.
+    - El cliente tiene más de 2 peques/hijos a cuidar (3, 4 o más hijos).
+    - El cliente requiere un servicio express o de emergencia (para hoy o que comience dentro de las próximas 12 horas).
+  * "ATENCION_HUMANA": Si el cliente muestra frustración, molestia o quejas al hablar con la IA, o si el motivo por el cual escribe NO es para contratar un servicio ni para vacantes (por ejemplo: si ofrece servicios como proveedor externo, spam, alianzas de negocio, o cualquier tema ajeno a contratación de servicios y reclutamiento).
 - nuevosHijos: Un arreglo de objetos para cada uno de los peques que se mencionen o identifiquen en el mensaje, donde cada objeto tenga:
   * nombre: Nombre del peque (si el cliente no menciona el nombre del peque, debes generar un nombre genérico secuencial como "Peque 1", "Peque 2", etc.).
   * textoEdad: Edad del niño de forma descriptiva (ej: "1 año", "3 años", "7 años").
@@ -1992,8 +2086,9 @@ Reglas críticas de extracción:
 1. No asumas ni inventes datos. Extrae solo lo que el cliente afirme o confirme en el mensaje.
 2. Si una propiedad de nuevosHijos o del Lead no es mencionada explícitamente por el usuario, no le asignes ningún valor ficticio por defecto. Simplemente deja el campo fuera del JSON o vacío.
 3. Si el mensaje no contiene ningún dato nuevo para extraer, devuelve un objeto vacío: {}.
-4. Devuelve ÚNICAMENTE un objeto JSON válido, sin delimitadores como \`\`\`json ni comentarios ni texto extra.
-5. PROHIBIDO ASUMIR DÍAS: Está estrictamente prohibido que asumas qué días específicos de la semana corresponden a expresiones genéricas de cantidad de días. Si el cliente dice "3 días", debes extraer "3 días" y NUNCA asumir "Lunes a Miércoles" o similares.`;
+4. Devuelve ÚNICAMENTE un objeto JSON válido, sin delimitadores como "json" ni comentarios ni texto extra.
+5. PROHIBIDO ASUMIR DÍAS: Está estrictamente prohibido que asumas qué días específicos de la semana corresponden a expresiones genéricas de cantidad de días. Si el cliente dice "3 días", debes extraer "3 días" y NUNCA asumir "Lunes a Miércoles" o similares.
+6. PROHIBICIÓN ABSOLUTA DE USAR EJEMPLOS DEL PROMPT: Tienes estrictamente prohibido usar o rellenar campos utilizando los textos e instrucciones dados como ejemplos en este prompt (como "necesito quien cuide a mi hijo mientras trabajo", "Nanny Express", o la fecha de hoy/mañana dada de ejemplo en el prompt) si el cliente no los ha mencionado de forma literal en la conversación. Si no los menciona, no los incluyas en el JSON.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

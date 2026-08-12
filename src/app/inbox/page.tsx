@@ -246,6 +246,7 @@ function InboxContent() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [metaTemplates, setMetaTemplates] = useState<any[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   const is24HourWindowClosed = useMemo(() => {
     if (!messages || messages.length === 0) return true;
@@ -361,47 +362,119 @@ function InboxContent() {
       .catch(err => console.error("Error loading current user:", err));
   }, []);
 
-  const renderStatusBadge = (lead: Lead) => {
-    let text = "";
-    let style = "";
+  const handleChangeStatus = async (optionVal: string) => {
+    if (!activeLead) return;
+    setShowStatusDropdown(false);
 
-    switch (lead.estado) {
-      case "NUEVO":
-        text = "NUEVO";
-        style = "bg-sky-50 text-[#026692] border border-sky-200/60";
-        break;
-      case "CONTACTADO":
-        const agent = usersList.find(u => u.id === lead.idUsuarioAsignado);
-        const agentName = agent ? agent.nombre : (lead.idUsuarioAsignado ? "Asignado" : "");
-        text = agentName ? `CONTACTADO POR ${agentName.toUpperCase()}` : "CONTACTADO";
-        style = "bg-amber-50 text-amber-700 border border-amber-200/60";
-        break;
-      case "COTIZADO":
-        text = "EN COTIZACIÓN";
-        style = "bg-blue-50 text-blue-700 border border-blue-200/60";
-        break;
-      case "GANADO":
-        text = "CLIENTE GANADO";
-        style = "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
-        break;
-      case "ATENCION_HUMANA":
-        text = "ATENCIÓN HUMANA";
-        style = "bg-indigo-50 text-indigo-700 border border-indigo-200/60";
-        break;
-      case "PERDIDO":
-        text = "PERDIDO";
-        style = "bg-rose-50 text-rose-700 border border-rose-200/60";
-        break;
-      default:
-        text = lead.estado;
-        style = "bg-slate-50 text-slate-700 border border-slate-200";
-        break;
+    let targetEstado = optionVal;
+    let targetAgentId = activeLead.idUsuarioAsignado;
+
+    if (optionVal === "CONTACTADO") {
+      targetAgentId = ""; // Limpiar asignación de agente
+    } else if (optionVal === "CONTACTADO_ASIGNADO") {
+      targetEstado = "CONTACTADO";
+      targetAgentId = currentUser?.userId || currentUser?.id || "";
+    } else if (optionVal === "NUEVO") {
+      targetAgentId = ""; // Limpiar asignación al regresar a Pendiente
     }
 
+    try {
+      const res = await fetch(`/api/leads/${activeLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          estado: targetEstado,
+          idUsuarioAsignado: targetAgentId || null
+        }),
+      });
+      if (res.ok) {
+        fetchLeadDetails(activeLead.id);
+        fetchConversations();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const ESTADOS_OPCIONES = [
+    { value: "NUEVO",               label: "Pendiente",           color: "text-[#026692] bg-sky-50 border-sky-200",        dot: "bg-sky-500" },
+    { value: "CONTACTADO",          label: "En conversación",     color: "text-amber-700 bg-amber-50 border-amber-200",    dot: "bg-amber-500" },
+    { value: "COTIZADO",            label: "En cotización",       color: "text-blue-700 bg-blue-50 border-blue-200",      dot: "bg-blue-500" },
+    { value: "GANADO",              label: "Listo para el Cierre",color: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
+    { value: "ATENCION_HUMANA",     label: "Atención Humana",     color: "text-indigo-700 bg-indigo-50 border-indigo-200",dot: "bg-indigo-500" },
+    { value: "PERDIDO",             label: "Cerrado (Perdido)",   color: "text-rose-700 bg-rose-50 border-rose-200",      dot: "bg-rose-500" },
+    { value: "CONTACTADO_ASIGNADO", label: "Contactado",         color: "text-purple-700 bg-purple-50 border-purple-200",  dot: "bg-purple-500" },
+  ];
+
+  const renderStatusBadge = (lead: Lead) => {
+    const isAssigned = !!lead.idUsuarioAsignado && lead.idUsuarioAsignado !== "";
+    
+    let est = ESTADOS_OPCIONES.find(e => {
+      if (e.value === "CONTACTADO") {
+        return lead.estado === "CONTACTADO" && !isAssigned;
+      }
+      if (e.value === "CONTACTADO_ASIGNADO") {
+        return lead.estado === "CONTACTADO" && isAssigned;
+      }
+      return e.value === lead.estado;
+    });
+
+    if (!est) {
+      est = { value: lead.estado, label: lead.estado, color: "text-slate-700 bg-slate-50 border-slate-200", dot: "bg-slate-500" };
+    }
+
+    const label = est.label;
+    const color = est.color;
+    const agentLabel = lead.estado === "CONTACTADO" && isAssigned
+      ? ` — ${(usersList.find(u => u.id === lead.idUsuarioAsignado)?.nombre || "Asignado").toUpperCase()}`
+      : "";
+
+    const isOptionCurrent = (optionVal: string) => {
+      if (optionVal === "CONTACTADO") {
+        return lead.estado === "CONTACTADO" && !isAssigned;
+      }
+      if (optionVal === "CONTACTADO_ASIGNADO") {
+        return lead.estado === "CONTACTADO" && isAssigned;
+      }
+      return lead.estado === optionVal;
+    };
+
     return (
-      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block shadow-xs ${style}`}>
-        {text}
-      </span>
+      <div className="relative inline-block">
+        <button
+          onClick={() => setShowStatusDropdown(v => !v)}
+          className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-flex items-center gap-1.5 border shadow-xs cursor-pointer hover:opacity-80 transition-opacity ${color}`}
+          title="Cambiar estado del embudo"
+        >
+          {label}{agentLabel}
+          <svg className="w-2.5 h-2.5 opacity-60" fill="none" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        {showStatusDropdown && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowStatusDropdown(false)} />
+            <div className="absolute left-0 top-full mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 min-w-[200px] animate-in fade-in slide-in-from-top-2 duration-150">
+              <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest px-3 pt-1 pb-1.5">Mover a embudo</p>
+              {ESTADOS_OPCIONES.map(e => {
+                const isCurrent = isOptionCurrent(e.value);
+                return (
+                  <button
+                    key={e.value}
+                    onClick={() => handleChangeStatus(e.value)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-left transition-colors hover:bg-slate-50 ${
+                      isCurrent ? "opacity-50 cursor-default" : "cursor-pointer"
+                    }`}
+                    disabled={isCurrent}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${e.dot}`} />
+                    {e.label}
+                    {isCurrent && <span className="ml-auto text-[9px] text-slate-400 font-normal">actual</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     );
   };
 
@@ -1013,6 +1086,7 @@ function InboxContent() {
                 key={conv.id}
                 onClick={() => {
                   setActiveConvId(conv.id);
+                  setShowStatusDropdown(false);
                   setMobileView("chat");
                   if (typeof window !== "undefined" && window.history) {
                     window.history.replaceState({}, "", "/inbox");
@@ -1053,7 +1127,7 @@ function InboxContent() {
       </div>
 
       {/* COLUMN 2: Chat area */}
-      <div className={`flex-1 ${mobileView === "list" ? "hidden lg:flex" : "flex"} flex-col h-full bg-[#f4f8fc]`}>
+      <div className={`flex-1 min-w-0 ${mobileView === "list" ? "hidden lg:flex" : "flex"} flex-col h-full bg-[#f4f8fc]`}>
         
         {/* Chat Window Header */}
         <div className="h-16 border-b border-[#e2edf6] bg-white px-4 md:px-6 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
@@ -1160,7 +1234,7 @@ function InboxContent() {
                 <div 
                   id={`msg-${msg.id}`}
                   onDoubleClick={() => handleDoubleClickMessage(msg)}
-                  className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
+                  className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2 min-w-0 w-full`}
                 >
                 {/* Hover Action buttons (Reply / Edit) */}
                 <div className={`hidden group-hover:flex items-center space-x-1 bg-white/90 backdrop-blur-xs border border-slate-200 rounded-full px-2 py-0.5 shadow-sm text-slate-600 ${
@@ -1187,7 +1261,7 @@ function InboxContent() {
                 </div>
 
                 {/* Bubble Container */}
-                <div className={`max-w-[70%] rounded-2xl p-4 shadow-sm relative transition-all cursor-pointer ${
+                <div className={`max-w-[70%] min-w-0 rounded-2xl p-4 shadow-sm relative transition-all cursor-pointer ${
                   isClient ? "order-1" : "order-2"
                 } ${
                   highlightedMsgId === msg.id ? "ring-2 ring-[#026692] scale-[1.01]" : ""
@@ -1203,7 +1277,7 @@ function InboxContent() {
                   {msg.textoCitado && (
                     <div 
                       onClick={(e) => { e.stopPropagation(); scrollToMessage(msg.idMensajeRespondido); }}
-                      className={`mb-2.5 p-2 rounded-xl border-l-4 text-xs cursor-pointer transition-all hover:opacity-90 ${
+                      className={`mb-2.5 p-2 rounded-xl border-l-4 text-xs cursor-pointer transition-all hover:opacity-90 min-w-0 ${
                         isClient 
                           ? "bg-[#cbe3f3] border-[#026692] text-slate-800" 
                           : isIA 

@@ -162,6 +162,7 @@ export default function KanbanPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState("general");
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   
   // Drawer Chat States
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
@@ -175,47 +176,85 @@ export default function KanbanPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [usersList, setUsersList] = useState<any[]>(clientCache.get<any[]>("users_list") || []);
 
-  const renderStatusBadge = (lead: Lead) => {
-    let text = "";
-    let style = "";
+  const ESTADOS_OPCIONES = [
+    { value: "NUEVO",               label: "Pendiente",           color: "text-[#026692] bg-sky-50 border-sky-200",        dot: "bg-sky-500" },
+    { value: "CONTACTADO",          label: "En conversación",     color: "text-amber-700 bg-amber-50 border-amber-200",    dot: "bg-amber-500" },
+    { value: "COTIZADO",            label: "En cotización",       color: "text-blue-700 bg-blue-50 border-blue-200",      dot: "bg-blue-500" },
+    { value: "GANADO",              label: "Listo para el Cierre",color: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
+    { value: "ATENCION_HUMANA",     label: "Atención Humana",     color: "text-indigo-700 bg-indigo-50 border-indigo-200",dot: "bg-indigo-500" },
+    { value: "PERDIDO",             label: "Cerrado (Perdido)",   color: "text-rose-700 bg-rose-50 border-rose-200",      dot: "bg-rose-500" },
+    { value: "CONTACTADO_ASIGNADO", label: "Contactado",         color: "text-purple-700 bg-purple-50 border-purple-200",  dot: "bg-purple-500" },
+  ];
 
-    switch (lead.estado) {
-      case "NUEVO":
-        text = "NUEVO";
-        style = "bg-sky-50 text-[#026692] border border-sky-200/60";
-        break;
-      case "CONTACTADO":
-        const agent = usersList.find(u => u.id === lead.idUsuarioAsignado);
-        const agentName = agent ? agent.nombre : (lead.idUsuarioAsignado ? "Asignado" : "");
-        text = agentName ? `CONTACTADO POR ${agentName.toUpperCase()}` : "CONTACTADO";
-        style = "bg-amber-50 text-amber-700 border border-amber-200/60";
-        break;
-      case "COTIZADO":
-        text = "EN COTIZACIÓN";
-        style = "bg-blue-50 text-blue-700 border border-blue-200/60";
-        break;
-      case "GANADO":
-        text = "CLIENTE GANADO";
-        style = "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
-        break;
-      case "ATENCION_HUMANA":
-        text = "ATENCIÓN HUMANA";
-        style = "bg-indigo-50 text-indigo-700 border border-indigo-200/60";
-        break;
-      case "PERDIDO":
-        text = "PERDIDO";
-        style = "bg-rose-50 text-rose-700 border border-rose-200/60";
-        break;
-      default:
-        text = lead.estado;
-        style = "bg-slate-50 text-slate-700 border border-slate-200";
-        break;
+  const renderStatusBadge = (lead: Lead) => {
+    const isAssigned = !!lead.idUsuarioAsignado && lead.idUsuarioAsignado !== "";
+    
+    let est = ESTADOS_OPCIONES.find(e => {
+      if (e.value === "CONTACTADO") {
+        return lead.estado === "CONTACTADO" && !isAssigned;
+      }
+      if (e.value === "CONTACTADO_ASIGNADO") {
+        return lead.estado === "CONTACTADO" && isAssigned;
+      }
+      return e.value === lead.estado;
+    });
+
+    if (!est) {
+      est = { value: lead.estado, label: lead.estado, color: "text-slate-700 bg-slate-50 border-slate-200", dot: "bg-slate-500" };
     }
 
+    const label = est.label;
+    const color = est.color;
+    const agentLabel = lead.estado === "CONTACTADO" && isAssigned
+      ? ` — ${(usersList.find(u => u.id === lead.idUsuarioAsignado)?.nombre || "Asignado").toUpperCase()}`
+      : "";
+
+    const isOptionCurrent = (optionVal: string) => {
+      if (optionVal === "CONTACTADO") {
+        return lead.estado === "CONTACTADO" && !isAssigned;
+      }
+      if (optionVal === "CONTACTADO_ASIGNADO") {
+        return lead.estado === "CONTACTADO" && isAssigned;
+      }
+      return lead.estado === optionVal;
+    };
+
     return (
-      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-block shadow-xs ${style}`}>
-        {text}
-      </span>
+      <div className="relative inline-block">
+        <button
+          onClick={() => setShowStatusDropdown(v => !v)}
+          className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide inline-flex items-center gap-1.5 border shadow-xs cursor-pointer hover:opacity-80 transition-opacity ${color}`}
+          title="Cambiar estado del embudo"
+        >
+          {label}{agentLabel}
+          <svg className="w-2.5 h-2.5 opacity-60" fill="none" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        {showStatusDropdown && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowStatusDropdown(false)} />
+            <div className="absolute left-0 top-full mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 min-w-[200px]">
+              <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest px-3 pt-1 pb-1.5">Mover a embudo</p>
+              {ESTADOS_OPCIONES.map(e => {
+                const isCurrent = isOptionCurrent(e.value);
+                return (
+                  <button
+                    key={e.value}
+                    onClick={() => { handleUpdateLeadStatus(lead.id, e.value); setShowStatusDropdown(false); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-left transition-colors hover:bg-slate-50 ${
+                      isCurrent ? "opacity-50 cursor-default" : "cursor-pointer"
+                    }`}
+                    disabled={isCurrent}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${e.dot}`} />
+                    {e.label}
+                    {isCurrent && <span className="ml-auto text-[9px] text-slate-400 font-normal">actual</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     );
   };
 
@@ -561,10 +600,12 @@ export default function KanbanPage() {
     }
   };
 
-  const handleUpdateLeadStatus = async (leadId: string, newStatus: string) => {
+  const handleUpdateLeadStatus = async (leadId: string, newStatus: string, clearAgent: boolean = false) => {
     try {
-      let agentId: string | undefined = undefined;
-      if (newStatus === "CONTACTADO") {
+      let agentId: string | null | undefined = undefined;
+      const targetStatus = newStatus === "CONTACTADO_ASIGNADO" ? "CONTACTADO" : newStatus;
+
+      if (newStatus === "CONTACTADO_ASIGNADO") {
         const meRes = await fetch("/api/auth/me");
         if (meRes.ok) {
           const meData = await meRes.json();
@@ -572,26 +613,28 @@ export default function KanbanPage() {
             agentId = meData.user.userId;
           }
         }
+      } else if (clearAgent || newStatus === "CONTACTADO" || newStatus === "NUEVO") {
+        agentId = null;
       }
 
       const res = await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          estado: newStatus,
-          ...(agentId ? { idUsuarioAsignado: agentId } : {})
+          estado: targetStatus,
+          idUsuarioAsignado: agentId
         }),
       });
       if (res.ok) {
         // Refresh local state
-        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: newStatus, ...(agentId ? { idUsuarioAsignado: agentId } : {}) } : l));
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: targetStatus, idUsuarioAsignado: agentId || undefined } : l));
         
         if (selectedLead && selectedLead.id === leadId) {
-          setSelectedLead(prev => prev ? { ...prev, estado: newStatus, ...(agentId ? { idUsuarioAsignado: agentId } : {}) } : null);
+          setSelectedLead(prev => prev ? { ...prev, estado: targetStatus, idUsuarioAsignado: agentId || undefined } : null);
         }
 
         // If won, fire confetti
-        if (newStatus === "GANADO") {
+        if (targetStatus === "GANADO") {
           confetti({
             particleCount: 150,
             spread: 80,
@@ -632,7 +675,8 @@ export default function KanbanPage() {
 
     if (lead.estado === targetCol) return;
 
-    handleUpdateLeadStatus(leadId, targetCol);
+    // Al arrastrar a EN CONVERSACIÓN (CONTACTADO), limpiamos la asignación del agente
+    handleUpdateLeadStatus(leadId, targetCol, targetCol === "CONTACTADO");
     setDraggedLeadId(null);
   };
 
@@ -664,6 +708,7 @@ export default function KanbanPage() {
     setChatMessages([]);
     setReplyingToMessage(null);
     setEditingMessage(null);
+    setShowStatusDropdown(false);
     // Refresh board to fetch any updates from drawer actions
     fetchLeadsAndConversations();
   };
@@ -980,7 +1025,13 @@ export default function KanbanPage() {
 
           {/* Cards Container */}
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
-            {getLeadsByStatus("NUEVO").map((lead) => (
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : getLeadsByStatus("NUEVO").map((lead) => (
               <div 
                 key={lead.id}
                 draggable={false}
@@ -1024,7 +1075,13 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
-            {getLeadsByStatus("CONTACTADO").map((lead) => (
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : getLeadsByStatus("CONTACTADO").map((lead) => (
               <div 
                 key={lead.id}
                 draggable
@@ -1082,7 +1139,13 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
-            {getLeadsByStatus("COTIZADO").map((lead) => (
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : getLeadsByStatus("COTIZADO").map((lead) => (
               <div 
                 key={lead.id}
                 draggable
@@ -1129,7 +1192,13 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
-            {getLeadsByStatus("GANADO").map((lead) => (
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : getLeadsByStatus("GANADO").map((lead) => (
               <div 
                 key={lead.id}
                 draggable
@@ -1176,7 +1245,13 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar min-h-[150px]">
-            {getLeadsByStatus("ATENCION_HUMANA").map((lead) => (
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : getLeadsByStatus("ATENCION_HUMANA").map((lead) => (
               <div 
                 key={lead.id}
                 draggable
@@ -1285,7 +1360,7 @@ export default function KanbanPage() {
             <div className="flex-1 flex overflow-hidden min-h-0">
               
               {/* COLUMN 1 (Center): Real-Time Chat Column (Middle - Flexible width) */}
-              <div className="flex-1 flex flex-col h-full bg-[#f4f8fc]">
+              <div className="flex-1 min-w-0 flex flex-col h-full bg-[#f4f8fc]">
                 
                 {/* Message Stream area */}
                 <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-4">
@@ -1312,7 +1387,7 @@ export default function KanbanPage() {
                         <div 
                           id={`msg-embudo-${msg.id}`}
                           onDoubleClick={() => handleDoubleClickMessage(msg)}
-                          className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2`}
+                          className={`flex group relative ${isClient ? "justify-start" : "justify-end"} items-center gap-2 min-w-0 w-full`}
                         >
                         {/* Hover Action buttons (Reply / Edit) */}
                         <div className={`hidden group-hover:flex items-center space-x-1 bg-white/90 backdrop-blur-xs border border-slate-200 rounded-full px-2 py-0.5 shadow-sm text-slate-600 ${
@@ -1339,7 +1414,7 @@ export default function KanbanPage() {
                         </div>
 
                         {/* Bubble Container */}
-                        <div className={`max-w-[70%] rounded-2xl p-4 shadow-sm relative transition-all cursor-pointer ${
+                        <div className={`max-w-[70%] min-w-0 rounded-2xl p-4 shadow-sm relative transition-all cursor-pointer ${
                           isClient ? "order-1" : "order-2"
                         } ${
                           highlightedMsgId === msg.id ? "ring-2 ring-[#026692] scale-[1.01]" : ""
@@ -1355,7 +1430,7 @@ export default function KanbanPage() {
                           {msg.textoCitado && (
                             <div 
                               onClick={(e) => { e.stopPropagation(); scrollToMessage(msg.idMensajeRespondido); }}
-                              className={`mb-2.5 p-2 rounded-xl border-l-4 text-xs cursor-pointer transition-all hover:opacity-90 ${
+                              className={`mb-2.5 p-2 rounded-xl border-l-4 text-xs cursor-pointer transition-all hover:opacity-90 min-w-0 ${
                                 isClient 
                                   ? "bg-[#cbe3f3] border-[#026692] text-slate-800" 
                                   : isIA 
@@ -2300,6 +2375,25 @@ function TemplateModal({
             </form>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm space-y-3 animate-pulse">
+      <div className="flex justify-between items-start">
+        <div className="h-4 bg-slate-200 rounded-md w-28"></div>
+        <div className="h-3 bg-slate-200 rounded-md w-12"></div>
+      </div>
+      <div className="space-y-2">
+        <div className="h-3 bg-slate-100 rounded-md w-full"></div>
+        <div className="h-3 bg-slate-100 rounded-md w-5/6"></div>
+      </div>
+      <div className="flex justify-between items-center pt-1">
+        <div className="h-3.5 bg-slate-200 rounded-md w-14"></div>
+        <div className="h-3.5 bg-slate-200 rounded-md w-20"></div>
       </div>
     </div>
   );

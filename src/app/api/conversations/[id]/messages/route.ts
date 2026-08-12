@@ -360,8 +360,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               updates.cantidadHijos = Number(extractedData.cantidadHijos);
             }
             if (extractedData.diasSolicitados) updates.diasSolicitados = extractedData.diasSolicitados;
-            if (extractedData.horaInicioSolicitada) updates.horaInicioSolicitada = extractedData.horaInicioSolicitada;
-            if (extractedData.horaFinSolicitada) updates.horaFinSolicitada = extractedData.horaFinSolicitada;
+            // Guardar horario solo si el valor es un formato HH:MM válido o una duración como "8 horas"
+            // y no sobreescribir un valor ya válido con uno nuevo que sea null o malformado
+            const esHoraValida = (v: string | null | undefined) => 
+              v && (/^\d{1,2}:\d{2}$/.test(v) || /\d+\s*h(ora|r)/i.test(v));
+            if (extractedData.horaInicioSolicitada && esHoraValida(extractedData.horaInicioSolicitada)) {
+              if (!currentLead?.horaInicioSolicitada || !esHoraValida(currentLead.horaInicioSolicitada)) {
+                updates.horaInicioSolicitada = extractedData.horaInicioSolicitada;
+              }
+            }
+            if (extractedData.horaFinSolicitada && esHoraValida(extractedData.horaFinSolicitada)) {
+              if (!currentLead?.horaFinSolicitada || !esHoraValida(currentLead.horaFinSolicitada)) {
+                updates.horaFinSolicitada = extractedData.horaFinSolicitada;
+              }
+            }
             if (extractedData.fechaInicioDeseada) updates.fechaInicioDeseada = extractedData.fechaInicioDeseada;
             if (extractedData.linkUbicacion) updates.linkUbicacion = extractedData.linkUbicacion;
             if (extractedData.razonContratacion) updates.razonContratacion = extractedData.razonContratacion;
@@ -720,7 +732,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
                                 lowerAiResponse.includes("te paso con un asesor") || 
                                 lowerAiResponse.includes("te transfiero") || 
                                 lowerAiResponse.includes("un asesor tomará tu solicitud") ||
-                                (lowerAiResponse.includes("asesor") && (lowerAiResponse.includes("contacto") || lowerAiResponse.includes("comunic") || lowerAiResponse.includes("canaliz") || lowerAiResponse.includes("llamar"))) ||
+                                (lowerAiResponse.includes("asesor") && (lowerAiResponse.includes("contacto") || lowerAiResponse.includes("comunic") || lowerAiResponse.includes("canaliz") || lowerAiResponse.includes("llamar") || lowerAiResponse.includes("revis") || lowerAiResponse.includes("envi") || lowerAiResponse.includes("escrib") || lowerAiResponse.includes("atend") || lowerAiResponse.includes("tom"))) ||
                                 (lowerAiResponse.includes("reclutamiento") && (lowerAiResponse.includes("contacto") || lowerAiResponse.includes("comunic") || lowerAiResponse.includes("canaliz")));
 
           // Requisitos estrictos para "Listo para Cierre" (GANADO):
@@ -750,25 +762,38 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           
           let nuevoEstado = lead.estado;
 
-          // Prioridad 1: Si se cumplen los 3 requisitos estrictos de cierre -> GANADO ("Listos para el Cierre")
-          if (isClosingIntent) {
-            nuevoEstado = "GANADO";
-            console.log(`[INTENCIÓN DE CIERRE VÁLIDA] Lead ${conv.idLead} cumple los 3 requisitos -> GANADO (Listo para cierre).`);
-          }
-          // Prioridad 2: Si la INTENCIÓN PRINCIPAL es atención humana por dudas/soporte sin intención directa de pago/cierre -> ATENCION_HUMANA
-          else if (isHumanRequested) {
-            nuevoEstado = "ATENCION_HUMANA";
-            await db.updateConversation(conv.id, { iaActiva: false });
-            console.log(`[ATENCIÓN HUMANA DETECTADA] Lead ${conv.idLead} cambió a estado ATENCION_HUMANA e IA fue pausada.`);
-          }
-          // Prioridad 3: Cotización enviada -> COTIZADO
+          // 1. Priorizar la decisión contextual de la IA si está disponible en extractedData
+          if (extractedData?.estadoEmbudo && ["CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"].includes(extractedData.estadoEmbudo)) {
+            nuevoEstado = extractedData.estadoEmbudo;
+            console.log(`[DECISIÓN CONTEXTUAL IA] Lead ${conv.idLead} cambia a estado: ${nuevoEstado}`);
+            if (nuevoEstado === "ATENCION_HUMANA" || nuevoEstado === "GANADO") {
+              await db.updateConversation(conv.id, { iaActiva: false });
+              console.log(`[IA DESACTIVADA] Conversación pausada automáticamente al transferir a ${nuevoEstado}.`);
+            }
+          } 
+          // 2. Fallback a las reglas basadas en texto y criterios si la IA no sugirió un cambio claro
           else {
-            const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
-                                        lowerAiResponse.includes("cotización") || 
-                                        /\$\d+/.test(aiResponseText);
-            
-            if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO" && lead.estado !== "ATENCION_HUMANA") {
-              nuevoEstado = "COTIZADO";
+            // Prioridad 1: Si se cumplen los 3 requisitos estrictos de cierre -> GANADO ("Listos para el Cierre")
+            if (isClosingIntent) {
+              nuevoEstado = "GANADO";
+              await db.updateConversation(conv.id, { iaActiva: false });
+              console.log(`[INTENCIÓN DE CIERRE VÁLIDA] Lead ${conv.idLead} cumple los 3 requisitos -> GANADO (Listo para cierre). IA pausada.`);
+            }
+            // Prioridad 2: Si la INTENCIÓN PRINCIPAL es atención humana por dudas/soporte sin intención directa de pago/cierre -> ATENCION_HUMANA
+            else if (isHumanRequested) {
+              nuevoEstado = "ATENCION_HUMANA";
+              await db.updateConversation(conv.id, { iaActiva: false });
+              console.log(`[ATENCIÓN HUMANA DETECTADA] Lead ${conv.idLead} cambió a estado ATENCION_HUMANA e IA fue pausada.`);
+            }
+            // Prioridad 3: Cotización enviada -> COTIZADO
+            else {
+              const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
+                                          lowerAiResponse.includes("cotización") || 
+                                          /\$\d+/.test(aiResponseText);
+              
+              if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO" && lead.estado !== "ATENCION_HUMANA") {
+                nuevoEstado = "COTIZADO";
+              }
             }
           }
 
