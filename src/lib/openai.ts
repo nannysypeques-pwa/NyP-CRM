@@ -2076,7 +2076,7 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
   * "ATENCION_HUMANA": Si el cliente muestra frustración, molestia o quejas al hablar con la IA, o si el motivo por el cual escribe NO es para contratar un servicio ni para vacantes (por ejemplo: si ofrece servicios como proveedor externo, spam, alianzas de negocio, o cualquier tema ajeno a contratación de servicios y reclutamiento).
 - nuevosHijos: Un arreglo de objetos para cada uno de los peques que se mencionen o identifiquen en el mensaje, donde cada objeto tenga:
   * nombre: Nombre del peque (si el cliente no menciona el nombre del peque, debes generar un nombre genérico secuencial como "Peque 1", "Peque 2", etc.).
-  * textoEdad: Edad del niño de forma descriptiva (ej: "1 año", "3 años", "7 años").
+  * textoEdad: Edad del niño de forma descriptiva exacta, incluyendo meses si se especifican (ej: "1 año", "3 años", "2 años y 8 meses", "2 meses", "1 año y medio"). Tienes estrictamente prohibido redondear o simplificar a años enteros si el cliente menciona meses.
   * alergias: Alergias del peque. Solo extraer si se mencionan explícitamente.
   * condicionMedica: Condición médica o especificaciones adicionales. Solo extraer si se mencionan explícitamente.
   * estadoSalud: Estado de salud actual. Solo si se menciona explícitamente.

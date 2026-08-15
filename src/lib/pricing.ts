@@ -99,21 +99,25 @@ export function verificarYCorregirCotizacion(
   const tagRegex = /\[[\s\*]*COTIZACION:[^\]]+\]/gi;
   let textoLimpio = aiText.replace(tagRegex, "").trim();
 
+  const sanitizarTextoInvalido = (t: string): string => {
+    return t.replace(/\$\s*[\d,]+(?:\.\d+)?(?:\s*MXN)?/gi, "una tarifa personalizada");
+  };
+
   // 1. Verificación de parámetros requeridos
   if (!ciudad || ciudad === "Por definir" || ciudad.trim() === "") {
-    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: "Falta definir la ciudad" };
+    return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Falta definir la ciudad" };
   }
   if (!dias || dias <= 0) {
-    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: "Falta definir número de días válido (>= 1)" };
+    return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Falta definir número de días válido (>= 1)" };
   }
   if (!horas || horas < 3 || horas > 10) {
-    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: `Horas por día no válidas (${horas} hrs). Debe ser entre 3 y 10 horas` };
+    return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: `Horas por día no válidas (${horas} hrs). Debe ser entre 3 y 10 horas` };
   }
 
   // 2. Consulta de Tabulador Oficial (Matemática 100% estricta)
   const precioOficial = calculatePrecotizacion(ciudad, dias, horas);
   if (!precioOficial) {
-    return { esValida: false, precioOficial: null, textoCorregido: textoLimpio, razon: `No existe tarifa en tabulador para ${ciudad}, ${dias} días, ${horas} hrs` };
+    return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: `No existe tarifa en tabulador para ${ciudad}, ${dias} días, ${horas} hrs` };
   }
 
   // 3. Segunda Revisión y Sanitización del Texto:
