@@ -1802,10 +1802,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
     let reglaPrecotizacionDinamica = "";
     if (countAiQuotes >= 3) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta.`;
-    } else if (!tieneCiudad || !tieneRazon || !tieneEdad || !tieneDias || !tieneHorario) {
+    } else if (!tieneCiudad || !tieneEdad || !tieneDias || !tieneHorario) {
       const faltantesList = [];
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
-      if (!tieneRazon) faltantesList.push("Razón de Contratación");
       if (!tieneEdad) {
         if (numHijosEstimados > 1) {
           faltantesList.push("Edades de todos sus peques");
@@ -1816,7 +1815,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       if (!tieneDias) faltantesList.push("Días de servicio");
       if (!tieneHorario) faltantesList.push("Horario de servicio (puede ser tentativo o aproximado)");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, el motivo por el cual busca el servicio, las edades de sus peques, los días y el horario del servicio. REGLA ESPECIAL PARA HORARIO FALTANTE: Si el dato pendiente es el horario, solicítalo de forma cálida e indica al cliente que un horario tentativo o aproximado es suficiente para generar una precotización estimada. Por ejemplo: "Si aún no tiene el horario exacto, con un horario tentativo o aproximado puedo darle una precotización estimada 😊💛". Solicita amigablemente el dato faltante antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, las edades de sus peques, los días y el horario del servicio. REGLA ESPECIAL PARA HORARIO FALTANTE: Si el dato pendiente es el horario, solicítalo de forma cálida e indica al cliente que un horario tentativo o aproximado es suficiente para generar una precotización estimada. Por ejemplo: "Si aún no tiene el horario exacto, con un horario tentativo o aproximado puedo darle una precotización estimada 😊💛". Solicita amigablemente el dato faltante antes de avanzar.`;
     } else if (!cotizacionPermitida) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN (REGLAS DE EDAD/CANTIDAD DE HIJOS)**: ${motivoBloqueoCotizacion}
       * REGLA DE ORO: Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier estimación de precios, tarifas o cotizaciones en tu respuesta, y no debes incluir la etiqueta \`[COTIZACION:...]\`.
@@ -1835,7 +1834,9 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
              - Si el servicio es de lunes a sábado o más de 5 días: destaca la confiabilidad y estabilidad de la nanny asignada y cómo conocerá a fondo las rutinas del peque.
              - Siempre: menciona nuestro riguroso proceso de selección (solo 1 de cada 10 candidatas pasa), el respaldo psicopedagógico especializado, o la App Nannys y Peques según el contexto.
           2) Menciona UNA SOLA VEZ de forma cálida que le compartes su precotización estimada en formato de imagen a continuación, aclarando brevemente que es una tarifa estimada de referencia y que una asesora comercial le validará los detalles finales en un PDF formal.
-          3) Cierra formulando una pregunta abierta sobre nuestro valor (filtros de seguridad, estimulación del peque, app, etc.) para continuar la conversación.
+          3) PREGUNTA DE CIERRE (CRÍTICO):
+             - Si la razón de contratación es aún un dato faltante (aparece listada en "[DATOS FALTANTES]"), debes cerrar tu mensaje formulando obligatoriamente una pregunta muy cálida, amable y empática para pedir este dato al cliente (ej. si es por regreso al trabajo, para tener un respiro, etc.).
+             - Si ya posees la razón de contratación, cierra formulando una pregunta abierta sobre nuestro valor (filtros de seguridad, estimulación del peque, app, etc.) para continuar la conversación.
           4) Finaliza obligatoriamente tu respuesta con la etiqueta exacta: \`[COTIZACION:${calculatedPrice}]\`.
         * REGLA DE NO MOSTRAR PRECIO EN TEXTO PLANO: No escribas la cifra monetaria en el texto plano de tu mensaje; únicamente incluye la etiqueta \`[COTIZACION:${calculatedPrice}]\` al final para que el CRM genere la imagen automáticamente.`;
       } else {
