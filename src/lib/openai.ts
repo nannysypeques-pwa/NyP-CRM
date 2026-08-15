@@ -1,4 +1,5 @@
 import { db } from "./db";
+import prisma from "./prisma";
 import { calculatePrecotizacion } from "./pricing";
 
 export function parseNumDias(diasText: string): number {
@@ -658,6 +659,23 @@ REGLAS DE COMUNICACIÓN PARA PREGUNTAS SOBRE COCINAR O ASEO:
   - Responde con calidez, claridad y transparencia: "Nuestras nannies con gusto apoyan con la preparación de alimentos sencillos para su peque (como mamilas, fruta picada o snacks). Sin embargo, la preparación de platillos o comidas elaboradas no forma parte de sus funciones, ya que su prioridad y enfoque principal es la seguridad, atención y desarrollo de su peque 😊💛"
 * **Si preguntan si barre o trapea toda la casa**:
   - Responde con amabilidad: "Nuestra nanny apoya manteniendo limpia y ordenada el área que ocupa con el peque y lavando sus mamilas y platitos. Sin embargo, no realiza labores domésticas generales como barrer o trapear toda la casa, para dedicar su atención al cuidado del peque ✨"
+
+==================================================
+5m. MATERIALES, JUEGOS Y JUGUETES DE LA NANNY (REGLAS DE SERVICIO)
+==================================================
+
+Cuando el cliente pregunte sobre qué materiales, juguetes o juegos lleva la niñera para entretener a los peques, o si la niñera proporciona material didáctico/juegos de mesa:
+
+❌ LO QUE NO HACE EL SERVICIO ESTÁNDAR:
+- **NO llevan materiales propios**: Nuestras nannies NO llevan materiales de papelería, colores, pinturas, acuarelas ni juguetes didácticos o juegos de mesa de forma predeterminada al servicio (a menos que el cliente contrate un taller o material especial cobrado por aparte).
+
+✅ LO QUE SÍ HACE LA NANNY:
+- **Adaptación y creatividad**: La nanny busca crear juegos interactivos, dinámicas, historias, aventuras y actividades recreativas utilizando exclusivamente los juguetes y materiales que el cliente ya tenga disponibles en casa.
+- **Motivar la diversión**: Fomenta el entretenimiento activo, la imaginación y la diversión del peque adaptándose a su entorno doméstico.
+
+REGLAS DE COMUNICACIÓN OBLIGATORIAS:
+- Dile al cliente con amabilidad y transparencia que la nanny como tal no lleva materiales de juego o didácticos propios (ya que estos no están incluidos en la tarifa base y solo se llevan si se contratan por aparte).
+- Explícale que su prioridad es crear juegos, contar historias, proponer aventuras y realizar dinámicas divertidas utilizando los juguetes, materiales y elementos que ya se tengan en casa, motivando siempre el desarrollo y la diversión del peque de forma interactiva (ej: "Tenemos juegos, historias, aventuras, si tiene materiales para divertirse los usamos").
 
 ==================================================
 5h. POLÍTICA DE SEGURIDAD EN TRASLADOS Y SALIDAS DE LA ESCUELA (CRÍTICO)
@@ -1513,6 +1531,13 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
       notas: "Precotización estimada calculada automáticamente por el asistente de IA."
     });
     console.log(`[COTIZADOR IA] Guardada precotización de $${price} para Lead ${leadId}`);
+
+    // Programmatic update: Move lead to COTIZADO status
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: { estado: "COTIZADO" }
+    });
+    console.log(`[COTIZADOR IA] Estado de Lead ${leadId} actualizado a COTIZADO`);
   } catch (err) {
     console.error("Error al guardar cotización automática:", err);
   }
@@ -1801,7 +1826,7 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
 
     let reglaPrecotizacionDinamica = "";
     if (countAiQuotes >= 3) {
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN POR LÍMITE ALCANZADO (MÁXIMO 3)**: El cliente ya ha recibido ${countAiQuotes} precotizaciones estimadas por parte de la IA. Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier nueva precotización, estimación, precio o tarifa en tu respuesta (incluso si el cliente te lo solicita directamente o insiste). En su lugar, debes indicarle de manera sumamente atenta, empática y cálida que con mucho gusto un asesor de ventas le ayudará personalmente a calcular su siguiente cotización personalizada con todos los detalles. Ofrécete a seguir aclarando cualquier duda general sobre el servicio en lo que el asesor le contacta. ⚠️ CRÍTICO: Si el cliente ha realizado una pregunta en su último mensaje, debes responderla primero de forma clara y directa antes de cualquier explicación o derivación.`;
     } else if (!tieneCiudad || !tieneEdad || !tieneDias || !tieneHorario) {
       const faltantesList = [];
       if (!tieneCiudad) faltantesList.push("Ciudad de Cobertura");
@@ -1815,17 +1840,18 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       if (!tieneDias) faltantesList.push("Días de servicio");
       if (!tieneHorario) faltantesList.push("Horario de servicio (puede ser tentativo o aproximado)");
 
-      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, las edades de sus peques, los días y el horario del servicio. REGLA ESPECIAL PARA HORARIO FALTANTE: Si el dato pendiente es el horario, solicítalo de forma cálida e indica al cliente que un horario tentativo o aproximado es suficiente para generar una precotización estimada. Por ejemplo: "Si aún no tiene el horario exacto, con un horario tentativo o aproximado puedo darle una precotización estimada 😊💛". Solicita amigablemente el dato faltante antes de avanzar.`;
+      reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN**: Aún faltan datos clave esenciales en el CRM para cotizar: [${faltantesList.join(", ")}]. Tienes TERMINANTEMENTE PROHIBIDO proporcionar cualquier tarifa, costo, precio, precotización o estimación en tu respuesta (incluso si el cliente te la pide). Si el cliente insiste en pedir precios, explícale de forma muy cálida, empática y orientada a ventas que para poder verificar la cobertura en su ciudad, asegurar que el perfil seleccionado se adapte a sus necesidades y calcular el costo correcto según el número de peques y sus edades, es indispensable contar primero con la ciudad de cobertura, las edades de sus peques, los días y el horario del servicio. REGLA ESPECIAL PARA HORARIO FALTANTE: Si el dato pendiente es el horario, solicítalo de forma cálida e indica al cliente que un horario tentativo o aproximado es suficiente para generar una precotización estimada. Por ejemplo: "Si aún no tiene el horario exacto, con un horario tentativo o aproximado puedo darle una precotización estimada 😊💛". Solicita amigablemente el dato faltante antes de avanzar. ⚠️ CRÍTICO: Si el cliente ha realizado una pregunta en su último mensaje (ej: sobre actividades, juguetes, etc.), debes responderla primero de forma clara y directa en tu primer párrafo antes de solicitar el dato faltante.`;
     } else if (!cotizacionPermitida) {
       reglaPrecotizacionDinamica = `6. **PROHIBICIÓN ESTRICTA DE PRECOTIZACIÓN (REGLAS DE EDAD/CANTIDAD DE HIJOS)**: ${motivoBloqueoCotizacion}
       * REGLA DE ORO: Tienes ESTRICTAMENTE PROHIBIDO realizar cualquier estimación de precios, tarifas o cotizaciones en tu respuesta, y no debes incluir la etiqueta \`[COTIZACION:...]\`.
       * Explícale al cliente con mucha calidez, amabilidad y empatía que debido a las condiciones particulares de la edad o cantidad de sus pequeños, un asesor de ventas de Nannys y Peques preparará una cotización a la medida para él.
-      * Continúa de forma muy atenta la conversación y ofrécete a resolver cualquier duda general que tenga sobre el servicio, los filtros de seguridad, la app de reportes diarios, o el respaldo psicopedagógico.`;
+      * Continúa de forma muy atenta la conversación y ofrécete a resolver cualquier duda general que tenga sobre el servicio, los filtros de seguridad, la app de reportes diarios, o el respaldo psicopedagógico. ⚠️ CRÍTICO: Si el cliente ha realizado una pregunta en su último mensaje, debes responderla primero de forma clara y directa antes de cualquier explicación o derivación.`;
     } else {
       const calculatedPrice = calculatePrecotizacion(leadCity, numDias, horasDiarias);
       if (calculatedPrice) {
         reglaPrecotizacionDinamica = `6. **PRECOTIZACIÓN DEL SERVICIO CON LABOR DE VENTA PREVIA**: Ya cuentas con todos los datos clave y el sistema ha calculado la tarifa.
         * TARIFA DETERMINADA POR EL SISTEMA: **$${calculatedPrice.toLocaleString("es-MX")} MXN** (basada en ${numDias} día(s), ${horasDiarias} horas al día en ${leadCity}).
+        * ⚠️ CRÍTICO - RESPUESTA A PREGUNTAS DEL CLIENTE: Si el cliente te hizo una pregunta en su último mensaje (ej: sobre actividades, juguetes, etc.), debes responderla de manera clara y natural en tu primer párrafo, e integrar la respuesta de forma fluida con la labor de venta, antes de presentar el precio.
         * ⚠️ REGLA CRÍTICA ANTICONFUSIÓN (TIPO DE SERVICIO vs DÍAS): El precio es exactamente **$${calculatedPrice.toLocaleString("es-MX")}**. Tienes ESTRICTAMENTE PROHIBIDO inventar, calcular, interpolar o mencionar cualquier otro monto numérico.
         * ⛔ PROHIBICIÓN ABSOLUTA DE REPETICIÓN O MENSAJES DUPLICADOS (CRÍTICO): Redacta UN SOLO MENSAJE continuo y natural. Queda TERMINANTEMENTE PROHIBIDO repetir frases como "A continuación le comparto la imagen...", ni saludar dos veces, ni escribir párrafos redundantes que digan lo mismo.
         * ESTRUCTURA OBLIGATORIA DE TU RESPUESTA (EN UN SOLO TEXTO SIN DUPLICACIONES):
@@ -1923,7 +1949,8 @@ ${reglaPrecotizacionDinamica}
       1) **RECONOCIMIENTO CÁLIDO Y DE SEGUIMIENTO**: Salúdalo cordialmente por su nombre y reconoce que ya tenemos su expediente guardado: *"¡Hola [Nombre]! Qué gusto saludarle de nuevo 😊💛"*.
       2) **PROHIBICIÓN ABSOLUTA DE RE-PREGUNTAR DATOS YA CONOCIDOS**: Tienes **ESTRICTAMENTE PROHIBIDO** volver a preguntarle por su nombre, su ciudad, las edades de sus peques o datos que ya se encuentran registrados en la sección "[DATOS YA REGISTRADOS - PROHIBIDO PREGUNTAR ESTOS DATOS]".
       3) **REVISIÓN DE LA NUEVA NECESIDAD**: Identifica la razón por la que vuelve a escribir (ej. consultar una nueva fecha, cotizar otros días u horarios, resolver dudas del servicio o continuar con su proceso de contratación).
-      4) **CONTINUIDAD FLUIDA DEL PROCESO DE VENTA**: Continúa el proceso comercial desde donde se quedó, solicitando únicamente la información nueva o faltante necesaria y entregando la cotización oficial si corresponde.`;
+      4) **CONTINUIDAD FLUIDA DEL PROCESO DE VENTA**: Continúa el proceso comercial desde donde se quedó, solicitando únicamente la información nueva o faltante necesaria y entregando la cotización oficial si corresponde.
+19. **RESPUESTA OBLIGATORIA A PREGUNTAS DEL CLIENTE (CRÍTICO)**: Si el cliente formula una pregunta sobre el funcionamiento del servicio, actividades, políticas, filtros o nannies (por ejemplo, si llevan juguetes, qué hacen durante el día, etc.), tienes la obligación de responder a su pregunta de forma clara, directa y completa en el primer párrafo de tu mensaje. Después de haber respondido con calidez a su duda, puedes proceder en el siguiente párrafo a solicitar el siguiente dato de la lista de '[DATOS FALTANTES]'. Está terminantemente prohibido omitir responder a las preguntas del cliente para solo pedir información.`;
 
     // SEPARACIÓN PARA OPENAI PROMPT CACHING:
     // El primer mensaje contiene ÚNICAMENTE SYSTEM_PROMPT (100% estático).
@@ -1937,8 +1964,7 @@ ${leadContextPrompt}${horarioInstruction}`;
     const recentMessages = chatHistory.slice(-12);
 
     const formattedMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "system", content: dynamicContextPrompt },
+      { role: "system", content: `${SYSTEM_PROMPT}\n\n${dynamicContextPrompt}` },
       ...recentMessages.map((m) => ({
         role: m.direccion === "INBOUND" ? "user" : "assistant",
         content: m.contenido,
