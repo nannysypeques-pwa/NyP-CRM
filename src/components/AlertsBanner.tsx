@@ -12,6 +12,12 @@ interface Incidente {
   creadoEn: string;
 }
 
+const isQuotaError = (msg: string) => {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return lower.includes("quota") || lower.includes("insufficient") || lower.includes("billing") || lower.includes("saldo") || lower.includes("limite");
+};
+
 export default function AlertsBanner() {
   const [incidentes, setIncidentes] = useState<Incidente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,17 +77,36 @@ export default function AlertsBanner() {
             ⚠️ Alerta del Sistema: Incidencia en las APIs comerciales
           </h4>
           <div className="mt-1 space-y-1">
-            {incidentes.map((inc) => (
-              <div key={inc.id} className="text-xs text-red-100 flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                <span className="font-bold bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wider uppercase border border-white/5">
-                  {inc.servicio}
-                </span>
-                <span className="font-medium">{inc.mensaje}</span>
-                <span className="text-[10px] text-white/60">
-                  ({new Date(inc.creadoEn).toLocaleTimeString("es-MX", { hour: '2-digit', minute: '2-digit' })})
-                </span>
-              </div>
-            ))}
+            {incidentes.map((inc) => {
+              const quotaErr = inc.servicio === "OPENAI" && isQuotaError(inc.mensaje);
+              return (
+                <div key={inc.id} className="text-xs text-red-100 flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                  <span className="font-bold bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wider uppercase border border-white/5">
+                    {inc.servicio}
+                  </span>
+                  <span className="font-medium">
+                    {quotaErr ? (
+                      <span>
+                        ⚠️ <strong>¡CRÍTICO!</strong> El saldo de la cuenta de OpenAI se ha agotado o ha excedido su límite. La IA de WhatsApp está pausada.{" "}
+                        <a 
+                          href="https://platform.openai.com/settings/organization/billing/overview" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="underline hover:text-white font-extrabold ml-1 bg-white/15 px-2 py-0.5 rounded shadow-sm transition-all"
+                        >
+                          Realizar recarga aquí ↗
+                        </a>
+                      </span>
+                    ) : (
+                      inc.mensaje
+                    )}
+                  </span>
+                  <span className="text-[10px] text-white/60">
+                    ({new Date(inc.creadoEn).toLocaleTimeString("es-MX", { hour: '2-digit', minute: '2-digit' })})
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

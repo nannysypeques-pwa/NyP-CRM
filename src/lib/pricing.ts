@@ -117,10 +117,12 @@ export function verificarYCorregirCotizacion(
   }
 
   // 3. Segunda Revisión y Sanitización del Texto:
-  // Si la IA propuso un precio o si el texto del mensaje incluye una cifra diferente a la oficial,
-  // se reemplaza de forma determinista cualquier monto del texto por la cifra exacta del tabulador.
-  if (aiPriceProposed && aiPriceProposed !== precioOficial) {
-    console.warn(`[SEGUNDA REVISIÓN DE PRECIOS] ⚠️ Mismatch detectado. IA propuso: $${aiPriceProposed}, Tabulador oficial: $${precioOficial}. Corrigiendo texto.`);
+  // Si la IA propuso un precio diferente, o si el texto del mensaje incluye cualquier cifra en formato de moneda,
+  // se reemplaza de forma determinista cualquier monto del texto por la cifra exacta del tabulador oficial.
+  const hasProposedMismatch = aiPriceProposed && aiPriceProposed !== precioOficial;
+  const hasCurrencyInText = /\$\s*[\d,]+/i.test(textoLimpio);
+  if (hasProposedMismatch || hasCurrencyInText) {
+    console.warn(`[SEGUNDA REVISIÓN DE PRECIOS] ⚠️ Mismatch o cifra detectada. IA propuso: $${aiPriceProposed}, Tabulador oficial: $${precioOficial}. Sanitizando texto.`);
     textoLimpio = textoLimpio.replace(/\$\s*[\d,]+(?:\.\d+)?(?:\s*MXN)?/gi, `$${precioOficial.toLocaleString()} MXN`);
   }
 

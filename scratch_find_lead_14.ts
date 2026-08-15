@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  const phonePart = "2225886915";
+  const phonePart = "9806";
   console.log(`Searching for lead with phone containing ${phonePart}...`);
   const leads = await prisma.lead.findMany({
     where: {
@@ -25,8 +25,8 @@ async function main() {
   });
 
   console.log("Found leads count:", leads.length);
-  if (leads.length > 0) {
-    const lead = leads[0];
+  for (const lead of leads) {
+    console.log("-----------------------------------------");
     console.log("LEAD DATA:");
     console.log(JSON.stringify({
       id: lead.id,
@@ -53,8 +53,6 @@ async function main() {
         console.log(`[${m.creadoEn.toISOString()}] ${m.direccion} (${m.tipoRemitente}): ${m.contenido}`);
       });
     }
-  } else {
-    console.log("No lead found.");
   }
 }
 

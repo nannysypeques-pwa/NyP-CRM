@@ -22,6 +22,7 @@ async function handleRemarketingExecution() {
       include: {
         hijos: true,
         cotizaciones: true,
+        notas: true,
         conversacion: {
           include: {
             mensajes: {
@@ -53,17 +54,10 @@ async function handleRemarketingExecution() {
       const lastClientMsg = mensajes.find(m => m.direccion === "INBOUND");
       const tClienteRef = lastClientMsg ? new Date(lastClientMsg.creadoEn) : new Date(lead.creadoEn);
 
-      // Filtrar TODOS los mensajes de remarketing enviados a esta conversación en toda su historia
-      const totalRemarketingMsgsSent = mensajes.filter(m => 
-        m.direccion === "OUTBOUND" && 
-        m.tipoRemitente === "IA" &&
-        (
-          m.contenido.includes("[REMARKETING") ||
-          m.contenido.includes("✨") || 
-          m.contenido.includes("🌸") || 
-          m.contenido.includes("🧸") || 
-          m.contenido.includes("💛")
-        )
+      // Filtrar todas las notas de auditoría interna de remarketing enviadas a este lead
+      const totalRemarketingMsgsSent = lead.notas.filter(n => 
+        n.nombreAgente === "Asistente IA Sofía" && 
+        n.contenido.includes("[REMARKETING")
       );
 
       // La etapa a evaluar avanza progresivamente (1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7) sin reiniciar jamás aunque el cliente responda
@@ -74,6 +68,10 @@ async function handleRemarketingExecution() {
       }
 
       const hoursSinceClient = (now.getTime() - tClienteRef.getTime()) / (1000 * 60 * 60);
+
+      // Si han pasado 24 horas o más desde el último mensaje del cliente, ya no podemos enviarle mensajes por el bloqueo de sesión de WhatsApp
+      if (hoursSinceClient >= 24) continue;
+
       const lastRemarketingMsg = totalRemarketingMsgsSent[0];
       const hoursSinceLastRemarketing = lastRemarketingMsg 
         ? (now.getTime() - new Date(lastRemarketingMsg.creadoEn).getTime()) / (1000 * 60 * 60)
@@ -83,50 +81,50 @@ async function handleRemarketingExecution() {
 
       switch (stageToEvaluate) {
         case 1:
-          // 1er mensaje: a las 2 horas de que no responda
-          if (hoursSinceClient >= 2 && hoursSinceLastRemarketing >= 1.5) {
+          // fase 1 - después de 1 hora del último mensaje
+          if (hoursSinceClient >= 1) {
             isEligible = true;
           }
           break;
 
         case 2:
-          // 2do mensaje: a las siguientes 4 horas (6 horas del último mensaje del cliente)
-          if (hoursSinceClient >= 6 && hoursSinceLastRemarketing >= 3.5) {
+          // fase 2 - después de 3 horas del último mensaje
+          if (hoursSinceClient >= 3 && hoursSinceLastRemarketing >= 1.5) {
             isEligible = true;
           }
           break;
 
         case 3:
-          // 3er mensaje: al día siguiente a las 9am (mínimo 14h tras cliente)
-          if (hoursSinceClient >= 14 && hoursSinceLastRemarketing >= 8 && currentHour >= 9) {
+          // fase 3 - después de 8 horas del último mensaje
+          if (hoursSinceClient >= 8 && hoursSinceLastRemarketing >= 4.5) {
             isEligible = true;
           }
           break;
 
         case 4:
-          // 4to mensaje: a las 1pm del mismo día del 3er mensaje (mínimo 3.5h tras etapa 3)
-          if (hoursSinceClient >= 18 && hoursSinceLastRemarketing >= 3.5 && currentHour >= 13) {
+          // fase 4 - después de 12 horas del último mensaje
+          if (hoursSinceClient >= 12 && hoursSinceLastRemarketing >= 3.5) {
             isEligible = true;
           }
           break;
 
         case 5:
-          // 5to mensaje: al siguiente día a las 9am (mínimo 36h tras cliente)
-          if (hoursSinceClient >= 36 && hoursSinceLastRemarketing >= 16 && currentHour >= 9) {
+          // fase 5 - después de 16 horas del último mensaje
+          if (hoursSinceClient >= 16 && hoursSinceLastRemarketing >= 3.5) {
             isEligible = true;
           }
           break;
 
         case 6:
-          // 6to mensaje: a la 1pm (mismo día del 5to mensaje)
-          if (hoursSinceClient >= 40 && hoursSinceLastRemarketing >= 3.5 && currentHour >= 13) {
+          // fase 6 - después de 20 horas del último mensaje
+          if (hoursSinceClient >= 20 && hoursSinceLastRemarketing >= 3.5) {
             isEligible = true;
           }
           break;
 
         case 7:
-          // 7mo mensaje: 7 días después del 6to mensaje
-          if (hoursSinceLastRemarketing >= (7 * 24 - 2)) {
+          // fase 7 - después de 23 horas del último mensaje
+          if (hoursSinceClient >= 23 && hoursSinceLastRemarketing >= 2.5) {
             isEligible = true;
           }
           break;

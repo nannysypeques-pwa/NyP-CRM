@@ -547,9 +547,9 @@ export default function DashboardClient() {
       )}
 
       {/* SKELETON ANIMATION LOADING OR REAL STATS CARDS GRID */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
-          {[1, 2, 3, 4].map((i) => (
+       {loading ? (
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${user?.rol === "GERENTE" ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-6 animate-pulse`}>
+          {[1, 2, 3, 4, ...(user?.rol === "GERENTE" ? [5] : [])].map((i) => (
             <div key={i} className="bg-white p-6 rounded-3xl border border-[#e2edf6] shadow-sm space-y-4">
               <div className="h-4 bg-slate-200 rounded-md w-1/2"></div>
               <div className="h-8 bg-slate-300 rounded-lg w-1/3"></div>
@@ -558,7 +558,7 @@ export default function DashboardClient() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${user?.rol === "GERENTE" ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-6`}>
           
           {/* CARD 1: TOTAL LEADS */}
           <div className="bg-white p-6 rounded-3xl border border-[#e2edf6] shadow-sm flex items-center justify-between hover:shadow-md transition-all duration-300 group">
@@ -623,6 +623,27 @@ export default function DashboardClient() {
               <TrendingUp className="w-7 h-7" />
             </div>
           </div>
+
+          {/* CARD 5: OPENAI API BALANCE (ONLY FOR GERENTE) */}
+          {user?.rol === "GERENTE" && (
+            <div className="bg-white p-6 rounded-3xl border border-sky-100 shadow-sm flex items-center justify-between hover:shadow-md transition-all duration-300 group bg-gradient-to-br from-white to-sky-50/20">
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider block">Saldo API ChatGPT</span>
+                <span className="text-xs font-bold text-slate-700 block leading-tight">Consulta manual</span>
+                <a 
+                  href="https://platform.openai.com/settings/organization/billing/overview"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-extrabold text-[#026692] hover:text-[#014d6f] bg-sky-100/50 hover:bg-sky-100 px-3 py-1 rounded-lg inline-flex items-center gap-1 mt-2.5 transition-all w-fit"
+                >
+                  Ver Facturación ↗
+                </a>
+              </div>
+              <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center text-[#026692] border border-sky-100 group-hover:scale-105 transition-transform flex-shrink-0 ml-3">
+                <Bot className="w-7 h-7" />
+              </div>
+            </div>
+          )}
 
         </div>
       )}
