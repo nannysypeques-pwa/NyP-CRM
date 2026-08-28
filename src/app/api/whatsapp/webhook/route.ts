@@ -219,7 +219,10 @@ export async function POST(req: NextRequest) {
     if (conv.idLead) {
       const currentLead = await db.getLeadById(conv.idLead);
       if (currentLead) {
-        if (currentLead.contactado || currentLead.estado === "CONTACTADO" || currentLead.estado === "PERDIDO" || !conv.iaActiva || currentLead.idUsuarioAsignado) {
+        if (currentLead.estado === "ATENCION_HUMANA") {
+          // Si está en ATENCION_HUMANA, no reactivamos la IA automáticamente para dejar que el humano atienda.
+          // Tampoco modificamos el estado del lead.
+        } else if (currentLead.contactado || currentLead.estado === "CONTACTADO" || currentLead.estado === "PERDIDO" || !conv.iaActiva || currentLead.idUsuarioAsignado) {
           if (currentLead.estado === "GANADO") {
             // Si ya está en GANADO (Listo para el Cierre), no alteramos su estado ni agente asignado.
             // Solo reactivamos la IA si estaba inactiva.
@@ -632,7 +635,8 @@ export async function POST(req: NextRequest) {
                 lead.ciudad,
                 numDias,
                 horasDiarias,
-                proposedPrice
+                proposedPrice,
+                lead
               );
 
               if (!verificacion.esValida || !verificacion.precioOficial) {
@@ -853,6 +857,9 @@ export async function POST(req: NextRequest) {
             // Si el cliente ya está en estado GANADO (Listo para el Cierre), no permitimos degradarlo a estados anteriores por automatización
             if (lead.estado === "GANADO" && nuevoEstado !== "ATENCION_HUMANA") {
               nuevoEstado = "GANADO";
+            }
+            if (lead.estado === "ATENCION_HUMANA" && nuevoEstado !== "GANADO") {
+              nuevoEstado = "ATENCION_HUMANA";
             }
 
             await db.updateLead(conv.idLead, {

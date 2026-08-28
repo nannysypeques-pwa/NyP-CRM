@@ -609,7 +609,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               lead.ciudad,
               numDias,
               horasDiarias,
-              proposedPrice
+              proposedPrice,
+              lead
             );
 
             if (!verificacion.esValida || !verificacion.precioOficial) {

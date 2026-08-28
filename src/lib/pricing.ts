@@ -85,6 +85,17 @@ export interface VerificationResult {
   razon?: string;
 }
 
+function parseTextoEdad(textoEdad: string): number | null {
+  if (!textoEdad) return null;
+  const numMatch = textoEdad.match(/\d+/);
+  if (!numMatch) return null;
+  const num = parseInt(numMatch[0], 10);
+  if (textoEdad.toLowerCase().includes("mes")) {
+    return num / 12;
+  }
+  return num;
+}
+
 /**
  * Segunda Revisión Estricta de Cotizaciones (Motor de Verificación Doble)
  * Garantiza que la IA NUNCA pueda enviar un precio inventado al cliente ni en texto ni en imagen.
@@ -94,7 +105,8 @@ export function verificarYCorregirCotizacion(
   ciudad: string,
   dias: number,
   horas: number,
-  aiPriceProposed?: number
+  aiPriceProposed?: number,
+  lead?: any
 ): VerificationResult {
   const tagRegex = /\[[\s\*]*COTIZACION:[^\]]+\]/gi;
   let textoLimpio = aiText.replace(tagRegex, "").trim();
@@ -103,7 +115,36 @@ export function verificarYCorregirCotizacion(
     return t.replace(/\$\s*[\d,]+(?:\.\d+)?(?:\s*MXN)?/gi, "una tarifa personalizada");
   };
 
-  // 1. Verificación de parámetros requeridos
+  // 1. Verificación de reglas de bloqueo comercial (si se provee el lead)
+  if (lead) {
+    const numHijos = lead.cantidadHijos || (lead.hijos ? lead.hijos.length : 1);
+    if (numHijos >= 3) {
+      return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Bloqueo por 3 o más niños" };
+    }
+    if (numHijos === 2) {
+      if (lead.hijos && lead.hijos.length >= 2) {
+        const ages = lead.hijos.map((h: any) => parseTextoEdad(h.textoEdad)).filter((a: any): a is number => a !== null);
+        if (ages.length >= 2) {
+          const [age1, age2] = ages;
+          const minAge = Math.min(age1, age2);
+          const ageDiff = Math.abs(age1 - age2);
+          if (minAge < 3) {
+            return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Bloqueo por niño menor de 3 años en servicio doble" };
+          }
+          if (ageDiff > 2) {
+            return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Bloqueo por diferencia de edad mayor a 2 años en servicio doble" };
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Verificación de servicio de 24 horas
+  if (horas === 24) {
+    return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Bloqueo por servicio de 24 horas" };
+  }
+
+  // 3. Verificación de parámetros requeridos
   if (!ciudad || ciudad === "Por definir" || ciudad.trim() === "") {
     return { esValida: false, precioOficial: null, textoCorregido: sanitizarTextoInvalido(textoLimpio), razon: "Falta definir la ciudad" };
   }
