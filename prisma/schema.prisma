@@ -62,10 +62,12 @@ model Lead {
   creadoEn               DateTime       @default(now())
   actualizadoEn          DateTime       @updatedAt
   deleted                Boolean        @default(false)
+  contactado             Boolean        @default(false)
 
   @@index([ciudad])
   @@index([estado])
   @@index([deleted])
+  @@index([contactado])
   @@index([idUsuarioAsignado])
   @@index([ultimoContactoEn])
 }

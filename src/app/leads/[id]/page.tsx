@@ -83,7 +83,8 @@ interface Lead {
   fechaInicioDeseada?: string;
   nivelUrgencia: string;
   estado: string;
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   ultimoContactoEn: string;
   resumenIA?: string;
   datosFaltantes?: string[];

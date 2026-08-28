@@ -32,7 +32,8 @@ interface Lead {
   zona?: string;
   origen: string;
   estado: string;
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   creadoEn: string;
   resumenIA?: string;
   cotizaciones?: any[];

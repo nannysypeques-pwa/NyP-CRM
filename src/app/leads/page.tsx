@@ -33,7 +33,8 @@ interface Lead {
   edadHijo?: number;
   nivelUrgencia: string;
   estado: string;
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   ultimoContactoEn: string;
   creadoEn: string;
   motivoPerdida?: string;
@@ -124,7 +125,7 @@ export default function LeadsPage() {
     loadAllData();
   }, []);
 
-  const getAgentName = (id?: string) => {
+  const getAgentName = (id?: string | null) => {
     if (!id) return "Sin asignar";
     const found = users.find(u => u.id === id);
     if (found) return found.nombre;

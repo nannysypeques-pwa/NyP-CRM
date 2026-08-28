@@ -212,10 +212,41 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Get or create conversation in db (fetched once at the top)
+    const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
+
+    // Si un lead en estado CONTACTADO, PERDIDO, está marcado como contactado o con agente asignado se vuelve a comunicar, reactivar la IA y regresarlo a la columna correspondiente en el embudo
+    if (conv.idLead) {
+      const currentLead = await db.getLeadById(conv.idLead);
+      if (currentLead) {
+        if (currentLead.contactado || currentLead.estado === "CONTACTADO" || currentLead.estado === "PERDIDO" || !conv.iaActiva || currentLead.idUsuarioAsignado) {
+          if (currentLead.estado === "GANADO") {
+            // Si ya está en GANADO (Listo para el Cierre), no alteramos su estado ni agente asignado.
+            // Solo reactivamos la IA si estaba inactiva.
+            if (!conv.iaActiva) {
+              await db.updateConversation(conv.id, { iaActiva: true });
+              conv.iaActiva = true;
+            }
+          } else {
+            const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
+            const targetStatus = currentLead.estado === "PERDIDO" ? (hasCity ? "CONTACTADO" : "NUEVO") : currentLead.estado;
+            console.log(`[RE-ACTIVACIÓN KANBAN] Lead ${conv.idLead} (Estado: ${currentLead.estado}, Contactado: ${currentLead.contactado}) volvió a escribir. Re-activando IA y regresando a '${targetStatus}' en el Embudo.`);
+            
+            await db.updateConversation(conv.id, { iaActiva: true });
+            conv.iaActiva = true;
+
+            await db.updateLead(conv.idLead, { 
+              estado: targetStatus,
+              idUsuarioAsignado: null,
+              contactado: false
+            });
+          }
+        }
+      }
+    }
+
     // Process non-text messages by logging them and responding if IA is active
     if (message.type !== "text") {
-      const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
-      
       let label = `[Archivo / Multimedia (${message.type})]`;
       if (message.type === "image") label = "[Imagen / Foto]";
       if (message.type === "audio" || message.type === "voice") label = "[Nota de voz / Audio]";
@@ -252,29 +283,6 @@ export async function POST(req: NextRequest) {
 
     if (!content) {
       return NextResponse.json({ status: "empty_content" });
-    }
-
-    // Get or create conversation in db
-    const conv = await db.getOrCreateConversationByPhone(rawPhone, clientName);
-
-    // Si un lead en estado CONTACTADO, PERDIDO o con agente asignado se vuelve a comunicar, reactivar la IA y regresarlo a la columna "EN CONVERSACIÓN" en el embudo
-    if (conv.idLead) {
-      const currentLead = await db.getLeadById(conv.idLead);
-      if (currentLead) {
-        if (currentLead.estado === "CONTACTADO" || currentLead.estado === "PERDIDO" || !conv.iaActiva || currentLead.idUsuarioAsignado) {
-          const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
-          const targetStatus = currentLead.estado === "GANADO" ? "GANADO" : (hasCity ? "CONTACTADO" : "NUEVO");
-          console.log(`[RE-ACTIVACIÓN KANBAN] Lead ${conv.idLead} (Estado: ${currentLead.estado}) volvió a escribir. Re-activando IA y regresando a 'EN CONVERSACIÓN' en el Embudo.`);
-          
-          await db.updateConversation(conv.id, { iaActiva: true });
-          conv.iaActiva = true;
-
-          await db.updateLead(conv.idLead, { 
-            estado: targetStatus,
-            idUsuarioAsignado: undefined
-          });
-        }
-      }
     }
 
     // Auto-detect location (city & zone), service of interest, and age from text and update lead deterministically
@@ -358,7 +366,7 @@ export async function POST(req: NextRequest) {
     if (conv.idLead) {
       try {
         const chatHistoryForExtraction = await db.getMessagesByConversationId(conv.id);
-        const recentHistoryText = chatHistoryForExtraction.slice(-4).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
+        const recentHistoryText = chatHistoryForExtraction.slice(-8).map(m => `${m.direccion === "INBOUND" ? "Cliente" : "Asistente"}: ${m.contenido}`).join("\n");
         
         extractedData = await extractLeadInfo(content, recentHistoryText);
         if (extractedData) {
@@ -368,7 +376,11 @@ export async function POST(req: NextRequest) {
           if (extractedData.nombreCompleto && extractedData.nombreCompleto !== "Gerardo Pineda") {
             updates.nombreCompleto = extractedData.nombreCompleto;
           }
-          if (extractedData.ciudad) updates.ciudad = extractedData.ciudad;
+          // Solo actualizar ciudad si el lead aún no tiene una ciudad válida registrada
+          // Evita que una colonia mencionada después sobreescriba la ciudad dicha al inicio
+          const ciudadesValidas = ["Puebla", "CDMX", "Atlixco", "Querétaro", "Xalapa"];
+          const ciudadActualValida = currentLead?.ciudad && ciudadesValidas.includes(currentLead.ciudad);
+          if (extractedData.ciudad && !ciudadActualValida) updates.ciudad = extractedData.ciudad;
           if (extractedData.zona) updates.zona = extractedData.zona;
           if (extractedData.interesServicio) updates.interesServicio = extractedData.interesServicio;
           if (extractedData.edadHijo !== undefined && extractedData.edadHijo !== null) {
@@ -378,6 +390,11 @@ export async function POST(req: NextRequest) {
             updates.cantidadHijos = Number(extractedData.cantidadHijos);
           }
           if (extractedData.diasSolicitados) updates.diasSolicitados = extractedData.diasSolicitados;
+          if (extractedData.esHorarioVariable) {
+            updates.diasSolicitados = "Horario variable";
+            updates.horaInicioSolicitada = "Variable";
+            updates.horaFinSolicitada = "Variable";
+          }
           // Guardar horario solo si el valor es un formato HH:MM válido o una duración como "8 horas"
           // y no sobreescribir un valor ya válido con uno nuevo que sea null o malformado
           const esHoraValida = (v: string | null | undefined) => 
@@ -536,8 +553,15 @@ export async function POST(req: NextRequest) {
         if (conv.idLead) {
           const tagRegex = /\[[\s\*]*COTIZACION:[\s\*]*(\d+(?:\.\d+)?|CALCULAR)[\s\*]*\]/i;
           const match = aiResponseText.match(tagRegex);
-          if (match) {
-            const proposedPrice = match[1] !== "CALCULAR" ? parseFloat(match[1]) : undefined;
+          const hasCurrency = /\$\s*[\d,]+/i.test(aiResponseText);
+          if (match || hasCurrency) {
+            let proposedPrice = match ? (match[1] !== "CALCULAR" ? parseFloat(match[1]) : undefined) : undefined;
+            if (!proposedPrice && hasCurrency) {
+              const currencyMatch = aiResponseText.match(/\$\s*([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)/);
+              if (currencyMatch) {
+                proposedPrice = parseFloat(currencyMatch[1].replace(/,/g, ""));
+              }
+            }
             const rawLead = await db.getLeadById(conv.idLead);
             if (rawLead) {
               let lead: any = { ...rawLead };
@@ -585,8 +609,15 @@ export async function POST(req: NextRequest) {
                 try {
                   const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
                   const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
-                  const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-                  if (mins > 0) horasDiarias = Math.ceil(mins / 60);
+                  let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+                  // Manejar cruce de medianoche (ej. 16:00 a 02:00 = 10 horas)
+                  if (mins < 0) mins += 24 * 60;
+                  // Servicio de 24 horas: misma hora inicio y fin ("de X hasta X del siguiente día")
+                  if (mins === 0 || mins === 24 * 60) {
+                    horasDiarias = 24;
+                  } else if (mins > 0) {
+                    horasDiarias = Math.ceil(mins / 60);
+                  }
                 } catch (e) {}
               }
 
@@ -787,39 +818,41 @@ export async function POST(req: NextRequest) {
             
             let nuevoEstado = lead.estado;
 
-            // 1. Priorizar la decisión contextual de la IA si está disponible en extractedData
-            if (extractedData?.estadoEmbudo && ["CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"].includes(extractedData.estadoEmbudo)) {
-              nuevoEstado = extractedData.estadoEmbudo;
+            // 1. Priorizar Handoff/Atención Humana si se detecta traspaso (ya sea por texto de la IA o por el extractor)
+            if (isHumanRequested) {
+              nuevoEstado = "ATENCION_HUMANA";
+              await db.updateConversation(conv.id, { iaActiva: false });
+              console.log(`[ATENCIÓN HUMANA DETECTADA] Lead ${conv.idLead} cambió a estado ATENCION_HUMANA e IA fue pausada.`);
+            }
+            // 2. Priorizar intención de cierre automática -> GANADO ("Listos para el Cierre")
+            else if (isClosingIntent) {
+              nuevoEstado = "GANADO";
+              console.log(`[INTENCIÓN DE CIERRE VÁLIDA] Lead ${conv.idLead} cumple los 3 requisitos -> GANADO (Listo para cierre).`);
+            }
+            // 3. Fallback a la decisión contextual de la IA si está disponible en extractedData
+            else if (extractedData?.estadoEmbudo && ["CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"].includes(extractedData.estadoEmbudo)) {
+              const esDegradacion = (lead.estado === "COTIZADO" || quoteCreated) && (extractedData.estadoEmbudo === "CONTACTADO" || extractedData.estadoEmbudo === "NUEVO");
+              nuevoEstado = esDegradacion ? "COTIZADO" : extractedData.estadoEmbudo;
               console.log(`[DECISIÓN CONTEXTUAL IA] Lead ${conv.idLead} cambia a estado: ${nuevoEstado}`);
-              if (nuevoEstado === "ATENCION_HUMANA" || nuevoEstado === "GANADO") {
+              if (nuevoEstado === "ATENCION_HUMANA") {
                 await db.updateConversation(conv.id, { iaActiva: false });
                 console.log(`[IA DESACTIVADA] Conversación pausada automáticamente al transferir a ${nuevoEstado}.`);
               }
             } 
-            // 2. Fallback a las reglas basadas en texto y criterios si la IA no sugirió un cambio claro
+            // 4. Fallback a detección de cotización estándar
             else {
-              // Prioridad 1: Si se cumplen los 3 requisitos estrictos de cierre -> GANADO ("Listos para el Cierre")
-              if (isClosingIntent) {
-                nuevoEstado = "GANADO";
-                await db.updateConversation(conv.id, { iaActiva: false });
-                console.log(`[INTENCIÓN DE CIERRE VÁLIDA] Lead ${conv.idLead} cumple los 3 requisitos -> GANADO (Listo para cierre). IA pausada.`);
+              const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
+                                          lowerAiResponse.includes("cotización") || 
+                                          /\$\d+/.test(aiResponseText);
+              
+              if ((tieneCotizacionText || quoteCreated) && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO" && lead.estado !== "ATENCION_HUMANA") {
+                nuevoEstado = "COTIZADO";
               }
-              // Prioridad 2: Si la INTENCIÓN PRINCIPAL es atención humana por dudas/soporte sin intención directa de pago/cierre -> ATENCION_HUMANA
-              else if (isHumanRequested) {
-                nuevoEstado = "ATENCION_HUMANA";
-                await db.updateConversation(conv.id, { iaActiva: false });
-                console.log(`[ATENCIÓN HUMANA DETECTADA] Lead ${conv.idLead} cambió a estado ATENCION_HUMANA e IA fue pausada.`);
-              }
-              // Prioridad 3: Cotización enviada -> COTIZADO
-              else {
-                const tieneCotizacionText = lowerAiResponse.includes("precotización") || 
-                                            lowerAiResponse.includes("cotización") || 
-                                            /\$\d+/.test(aiResponseText);
-                
-                if (tieneCotizacionText && lead.estado !== "COTIZADO" && lead.estado !== "GANADO" && lead.estado !== "PERDIDO" && lead.estado !== "ATENCION_HUMANA") {
-                  nuevoEstado = "COTIZADO";
-                }
-              }
+            }
+
+            // Si el cliente ya está en estado GANADO (Listo para el Cierre), no permitimos degradarlo a estados anteriores por automatización
+            if (lead.estado === "GANADO" && nuevoEstado !== "ATENCION_HUMANA") {
+              nuevoEstado = "GANADO";
             }
 
             await db.updateLead(conv.idLead, {

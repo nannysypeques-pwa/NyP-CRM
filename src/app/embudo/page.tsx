@@ -105,7 +105,8 @@ interface Lead {
   fechaInicioDeseada?: string;
   nivelUrgencia: string;
   estado: string;
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   ultimoContactoEn: string;
   resumenIA?: string;
   datosFaltantes?: string[];
@@ -622,15 +623,16 @@ export default function KanbanPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           estado: targetStatus,
-          idUsuarioAsignado: agentId
+          idUsuarioAsignado: agentId,
+          contactado: false
         }),
       });
       if (res.ok) {
         // Refresh local state
-        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: targetStatus, idUsuarioAsignado: agentId || undefined } : l));
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estado: targetStatus, idUsuarioAsignado: agentId || undefined, contactado: false } : l));
         
         if (selectedLead && selectedLead.id === leadId) {
-          setSelectedLead(prev => prev ? { ...prev, estado: targetStatus, idUsuarioAsignado: agentId || undefined } : null);
+          setSelectedLead(prev => prev ? { ...prev, estado: targetStatus, idUsuarioAsignado: agentId || undefined, contactado: false } : null);
         }
 
         // If won, fire confetti
@@ -644,6 +646,37 @@ export default function KanbanPage() {
       }
     } catch (err) {
       console.error("Error updating status:", err);
+    }
+  };
+
+  const handleMarkContacted = async (leadId: string) => {
+    try {
+      let agentId: string | undefined = undefined;
+      const meRes = await fetch("/api/auth/me");
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        if (meData.user?.userId) {
+          agentId = meData.user.userId;
+        }
+      }
+
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          contactado: true,
+          ...(agentId ? { idUsuarioAsignado: agentId } : {})
+        }),
+      });
+      if (res.ok) {
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, contactado: true, idUsuarioAsignado: agentId || null } : l));
+        
+        if (selectedLead && selectedLead.id === leadId) {
+          setSelectedLead(prev => prev ? { ...prev, contactado: true, idUsuarioAsignado: agentId || null } : null);
+        }
+      }
+    } catch (err) {
+      console.error("Error marking lead as contacted:", err);
     }
   };
 
@@ -903,6 +936,11 @@ export default function KanbanPage() {
 
       // 1. Únicamente los leads marcados como PERDIDO se ocultan del Embudo
       if (l.estado === "PERDIDO") {
+        return false;
+      }
+
+      // 1.5. Los leads marcados como contactados se ocultan del Embudo
+      if (l.contactado) {
         return false;
       }
 
@@ -1890,15 +1928,15 @@ export default function KanbanPage() {
                         </div>
                       )}
 
-                      {selectedLead.estado !== "CONTACTADO" && (
+                      !selectedLead.contactado && (
                         <button 
                           type="button"
-                          onClick={() => handleUpdateLeadStatus(selectedLead.id, "CONTACTADO")}
+                          onClick={() => handleMarkContacted(selectedLead.id)}
                           className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] border border-[#cbdfe9] py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
                         >
                           <UserCheck className="w-4 h-4" /> Contactado
                         </button>
-                      )}
+                      )
                     </div>
                   </div>
 

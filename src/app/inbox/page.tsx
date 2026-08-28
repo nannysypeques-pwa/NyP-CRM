@@ -150,7 +150,8 @@ interface Lead {
   edadHijo?: number;
   nivelUrgencia: string;
   estado: string;
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   resumenIA?: string;
   datosFaltantes?: string[];
   notas?: { id: string; contenido: string; nombreAgente: string; creadoEn: string }[];
@@ -992,7 +993,7 @@ function InboxContent() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          estado: "CONTACTADO",
+          contactado: true,
           ...(agentId ? { idUsuarioAsignado: agentId } : {})
         }),
       });
@@ -1636,7 +1637,7 @@ function InboxContent() {
                 </div>
               )}
 
-              {activeLead.estado !== "CONTACTADO" && (
+              {!activeLead.contactado && (
                 <button
                   onClick={handleMarkContacted}
                   className="w-full bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] border border-[#cbdfe9] py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 mt-2 cursor-pointer"

@@ -1500,14 +1500,23 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
     try {
       const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
       const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
-      const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+      let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+      // Manejar cruce de medianoche (ej. 16:00 a 02:00 = 10 horas)
+      if (mins < 0) mins += 24 * 60;
+      // Si mins === 0 o === 1440, el cliente pidió el servicio de una hora a la misma hora del día siguiente (24h)
+      // El tabulador no cubre 24h, no se guarda cotización automática
+      if (mins === 0 || mins === 24 * 60) {
+        console.log(`[COTIZADOR IA] Servicio de 24h detectado (horaInicio === horaFin). Se omite precotización automática para Lead ${leadId}.`);
+        return;
+      }
       if (mins > 0) {
         horasPorDia = Math.ceil(mins / 60);
       }
     } catch (e) { }
   }
 
-  if (horasPorDia === 0 && lead.horaInicioSolicitada) {
+  // Fallback: solo usar si horaInicioSolicitada es una duración textual como "8 horas", no un HH:mm
+  if (horasPorDia === 0 && lead.horaInicioSolicitada && /\d+\s*h(ora|r)/i.test(lead.horaInicioSolicitada)) {
     const numMatch = lead.horaInicioSolicitada.match(/\d+/);
     if (numMatch) {
       horasPorDia = parseInt(numMatch[0], 10);
@@ -1745,12 +1754,20 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
       try {
         const [h1, m1] = lead.horaInicioSolicitada.split(":").map(Number);
         const [h2, m2] = lead.horaFinSolicitada.split(":").map(Number);
-        const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-        if (mins > 0) {
+        let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+        // Manejar cruce de medianoche (ej. 16:00 a 02:00 = 10 horas)
+        if (mins < 0) mins += 24 * 60;
+        // Si horaInicio === horaFin y ambas son HH:mm válidas, es un servicio de 24 horas ("de X hasta X del día siguiente")
+        // En ese caso se deja horasDiarias = 0 para que se detecte más abajo y bloquee la cotización
+        if (mins > 0 && mins < 24 * 60) {
           const hrs = Math.round((mins / 60) * 10) / 10;
           const hrsRounded = Math.ceil(hrs);
           horasDiarias = hrsRounded;
           horasDiariasText = ` (equivalente a ${hrs} horas reales, las cuales para buscar en la tabla de precios se deben redondear a ${hrsRounded} horas por día)`;
+        } else if (mins === 0 || mins === 24 * 60) {
+          // Es exactamente 24 horas o las horas son idénticas
+          horasDiarias = 24;
+          horasDiariasText = ` (servicio de 24 horas: de ${lead.horaInicioSolicitada} hasta la misma hora del día siguiente)`;
         }
       } catch (e) {
         // Ignorar
@@ -1822,6 +1839,13 @@ export async function generateAIResponse(idConversacion: string, lastMessageCont
           }
         }
       }
+    }
+
+    // Detectar servicio de 24 horas (horaInicio === horaFin o horasDiarias === 24)
+    // El tabulador estándar solo cubre de 3 a 10 horas, por lo que 24 horas requiere cotización manual
+    if (horasDiarias === 24) {
+      cotizacionPermitida = false;
+      motivoBloqueoCotizacion = "Debido a que el servicio solicitado es de 24 horas (de una hora a la misma hora del día siguiente), nuestro tabulador estándar no cubre este rango. Un asesor de ventas le preparará una propuesta personalizada para este tipo de servicio.";
     }
 
     let reglaPrecotizacionDinamica = "";
@@ -1906,12 +1930,15 @@ ${reglaPrecotizacionDinamica}
 9. **SIGUE PREGUNTANDO SI EL CLIENTE TIENE DUDAS E INSISTE EN AYUDAR**: Antes de cualquier derivación, prioriza seguir resolviendo dudas e insistir en ayudar a aclarar información. Si el cliente no está listo para cerrar, mantén la conversación cálida, educando sobre el valor de nuestro servicio, brindando ejemplos de temas que puede consultar (ej. sobre seguridad, proceso de selección o condiciones del servicio).
 10. **BENEFICIOS DE NEURONANNY SEGÚN LA EDAD DEL PEQUE (CRÍTICO Y OBLIGATORIO)**: Si el cliente muestra interés en Neuronanny (servicio fijo) y ya conoces su edad (o si la menciona en el chat), debes OBLIGATORIAMENTE incluir un párrafo breve que explique detalladamente los beneficios y actividades específicas correspondientes a esa edad (del listado en la sección 5b, ej. si tiene 1 año, menciona que se trabajará motricidad gruesa para sus primeros pasos/equilibrio, motricidad fina con texturas/plastilina, y el desarrollo socioemocional mediante juego simbólico). No uses placeholders ni resúmenes vagos. Debe estructurarse exactamente como el "Ejemplo de respuesta ideal para Neuronanny".
 11. **CONSULTA DE SERVICIO SIN USAR NOMBRES COMERCIALES DE ANTEMANO (CRÍTICO)**: Si la conversación está iniciando o el cliente pregunta qué servicios ofrecemos de forma genérica, tienes TERMINANTEMENTE PROHIBIDO mencionar nombres comerciales o marcas (como Neuronanny, Miss Nanny, etc.) de antemano. En su lugar, debes responder de manera cálida y formular la siguiente pregunta para calificar y entender su necesidad: *"Contamos con diferentes opciones de cuidado infantil a domicilio según la necesidad de cada familia 😊💛 Para recomendarle la más adecuada, ¿el servicio lo busca de forma fija o eventual para alguna fecha en particular? ✨"*. Solo después de que el cliente defina su necesidad, debes presentar el servicio correspondiente explicando primero su beneficio práctico/emocional (tranquilidad, apoyo, seguridad) y luego mencionando su nombre comercial como se detalla en la sección 10.
-12. **NO ASUMIR "NANNY PARA FIESTAS" EN EVENTOS O BODAS (CRÍTICO Y OBLIGATORIO)**:
-   - **PROHIBICIÓN ESTRICTA**: Si el cliente menciona una boda, fiesta, evento, bautizo o graduación, tienes **TERMINANTEMENTE PROHIBIDO** asumir de forma automática que solicita el servicio grupal de *"Nanny para Fiestas"*.
-   - **DETECCIÓN DE SERVICIO EVENTUAL PARA SU PEQUE**: Si en la conversación el cliente menciona a su propio peque (ej. su edad, "¿recuerdas la edad de mi peque?"), el servicio es para cuidar exclusivamente a su peque durante el evento. En ese caso, se trata de un **Servicio Eventual** normal (apoyo de 1 día o unas horas para su peque) y NUNCA de un paquete grupal para fiestas.
-   - **PREGUNTA DE CLARIFICACIÓN OBLIGATORIA SI HAY DUDA**: Si la intención del cliente respecto al evento es confusa o no especifica explícitamente si el cuidado es solo para su peque o para un grupo de niños en la fiesta, **DEBES PREGUNTAR PRIMERO PARA ASEGURARTE**:
-     *"Para ofrecerle el servicio adecuado, ¿requiere el apoyo de una nanny exclusivamente para cuidar a su(s) peque(s) durante la boda/evento (servicio eventual), o busca contratar un paquete para fiestas con un grupo de niñeras para cuidar y entretener a los niños de la fiesta en general? 😊💛"*
-   - Solo si el cliente confirma explícitamente que busca cuidar a un grupo de varios niños en la fiesta, ofrece la información de *"Nanny para Fiestas"* aclarando que este servicio grupal lo cotiza en PDF un asesor comercial.
+12. **TERMINOLOGÍA DE EVENTOS Y CLARIFICACIÓN (CRÍTICO Y OBLIGATORIO)**:
+   - **Nanny para Fiestas**: Se refiere al **Servicio Eventual (Cuidado individual/familiar)**. Es cuando la familia requiere una nanny para cuidar exclusivamente a su(s) propio(s) peque(s) durante la fiesta o evento. Se calcula automáticamente con el tabulador eventual de la ciudad.
+   - **Servicio para Eventos**: Se refiere a **Nanny para Fiestas / Evento Grupal (Cuidado colectivo)**. Es cuando se requiere contratar un paquete para fiestas con un grupo de niñeras para cuidar y entretener a todos los niños invitados a la fiesta en general. No se cotiza en el chat y se deriva al asesor comercial para cotización en PDF.
+   - **PREGUNTA DE CLARIFICACIÓN OBLIGATORIA SI HAY DUDA**: Si el cliente solicita información de manera ambigua o pregunta por diferencias, aclara la terminología utilizando la siguiente plantilla o similar de forma natural:
+     *"En Nannys y Peques contamos con dos modalidades de apoyo para eventos:
+     1. **Nanny para Fiestas**: Que equivale a nuestro **Servicio Eventual** (cuidado individual/familiar), donde una nanny cuida exclusivamente a su(s) peque(s) durante el evento.
+     2. **Servicio para Eventos**: Que equivale a nuestro **Evento Grupal** (cuidado colectivo), donde contratamos un grupo de niñeras para cuidar y entretener a todos los niños de la fiesta en general.
+     Para ofrecerle el servicio adecuado, ¿cuál de las dos modalidades busca contratar? 😊💛"*
+   - Solo si el cliente confirma explícitamente que busca **Servicio para Eventos** (cuidado colectivo grupal), deriva la conversación al asesor comercial aclarando que este tipo de servicio lo cotizan de forma personalizada.
 13. **MÚLTIPLES DÍAS EVENTUALES: COTIZACIÓN SEPARADA POR CADA DÍA (CRÍTICO)**:
    - **PROHIBICIÓN DE COMBINAR DÍAS EN UNA SOLA TARIFA**: Si el cliente solicita servicio eventual en más de un día (ej. martes 4 de agosto Y domingo), tienes TERMINANTEMENTE PROHIBIDO combinar ambos días en una única tarifa global o decir "$X por semana para ambos días". Eso genera confusión.
    - **OBLIGACIÓN DE COTIZAR POR SEPARADO**: Cada día solicitado debe presentarse como una precotización individual independiente. Menciona explícitamente el desglose así:
@@ -2065,7 +2092,8 @@ FECHA Y HORA ACTUAL DE LA CONVERSACIÓN: Hoy es ${currentDateText} y la hora act
 
 Debes devolver obligatoriamente un único objeto JSON válido con los siguientes campos opcionales (solo inclúyelos si el cliente los proporcionó de forma clara y explícita, no supongas nada):
 - nombreCompleto: Nombre del cliente (tutor/padre/madre).
-- ciudad: Ciudad del servicio. Solo puede ser una de estas: "Puebla", "CDMX", "Atlixco", "Querétaro" o "Xalapa".
+- ciudad: Ciudad del servicio. Solo puede ser una de estas: "Puebla", "CDMX", "Atlixco", "Querétaro" o "Xalapa". 
+  CRÍTICO - CIUDAD EXPLÍCITA: Solo extrae la ciudad si el cliente la menciona explícita y directamente (ej: "en Puebla", "en CDMX", "vivo en Querétaro"). NUNCA inferiras ni deducirás la ciudad a partir del nombre de una colonia, fraccionamiento o zona (ej: "Bosques de San Sebastián", "Angelópolis", "Santa Fe"). Si el cliente solo menciona su colonia sin decir la ciudad, extrae la colonia en el campo "zona" y NO pongas nada en ciudad.
 - zona: Zona, colonia o fraccionamiento (ej: "Angelópolis", "Lomas de Angelópolis", "Sonata").
 - interesServicio: Tipo de servicio de interés. Debe ser exactamente uno de los siguientes: "Servicio Fijo", "Servicio Eventual", "Nanny Express", "Nanny Nocturna", "Miss Nanny" o "Nanny para Fiestas". 
   CRÍTICO - REGLA DE SERVICIO EXPRESS: Si el cliente busca el servicio para "hoy" (el día de hoy) o para que comience dentro de las próximas 12 horas, o indica que es una emergencia de último minuto, se considerará un servicio exprés. En ese caso, debes clasificarlo y registrarlo obligatoriamente como "Nanny Express" (nunca como "Servicio Eventual"). Si es para fechas posteriores, clasifícalo según sus características (ej: "Servicio Eventual" para eventuales de un día, "Servicio Fijo" para servicios fijos recurrentes de varios días a la semana).
@@ -2079,6 +2107,7 @@ Debes devolver obligatoriamente un único objeto JSON válido con los siguientes
   * Si el cliente proporciona una hora en formato AM/PM (ej: "8pm", "8pm a 11pm"), conviértela a formato 24h HH:mm (ej: "20:00", "23:00").
   * Si el cliente no da horas de inicio/fin pero indica una duración (ej: "4 horas", "8 hrs al día"), guarda esa descripción en horaInicioSolicitada (ej: "8 horas") y deja horaFinSolicitada como null.
   * HORARIO TENTATIVO — MUY IMPORTANTE: Si el cliente dice que aún no tiene el horario EXACTO pero proporciona uno APROXIMADO (ej: "de 8pm a 11pm aprox", "más o menos de 9 a 5", "generalmente de 10am a 2pm", "como a las 8"), debes extraer ese horario aproximado en formato HH:mm de todas formas. NO omitas el campo porque el cliente use "aprox", "más o menos", "generalmente" o frases similares. Un horario tentativo es más que suficiente para generar una precotización estimada.
+  * SERVICIO DE 24 HORAS: Si el cliente dice que la salida es a la misma hora del día siguiente (ej: "entrada 4 de la tarde, salida 4 de la tarde del siguiente día", "de las 8am a las 8am del día siguiente", "24 horas"), debes guardar horaInicioSolicitada y horaFinSolicitada con la MISMA hora (ej: horaInicio "16:00" y horaFin "16:00"). El sistema detectará automáticamente que es un servicio de 24 horas.
   * Solo omite este campo del JSON si el cliente no proporciona ningún horario, duración ni hora aproximada de ningún tipo.
 - horaFinSolicitada: Hora de fin del servicio en formato de 24 horas HH:mm (ej: "17:00"). Aplican las mismas reglas de conversión AM/PM y horario tentativo: si el cliente da un rango aproximado (ej: "de 8pm a 11pm aprox"), extrae la hora fin ("23:00"). Omite solo si no se proporciona ningún horario fin (ni tentativo).
   CRÍTICO CONVERSIÓN 12H A 24H: Convierte con exacta precisión matemática am/pm a 24 horas (ej: 9am = "09:00", 5pm = "17:00"). De 9am a 5pm es de "09:00" a "17:00" (8 horas diarias). No confundas 5pm con 16:00.

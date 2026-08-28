@@ -237,7 +237,8 @@ export interface Lead {
   fechaInicioDeseada?: string;
   nivelUrgencia: 'BAJA' | 'MEDIA' | 'ALTA';
   estado: 'NUEVO' | 'CONTACTADO' | 'COTIZADO' | 'GANADO' | 'PERDIDO' | 'ATENCION_HUMANA';
-  idUsuarioAsignado?: string;
+  contactado?: boolean;
+  idUsuarioAsignado?: string | null;
   ultimoContactoEn: string;
   siguienteSeguimientoEn?: string;
   motivoPerdida?: string;
