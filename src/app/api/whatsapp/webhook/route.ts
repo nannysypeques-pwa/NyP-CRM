@@ -232,14 +232,26 @@ export async function POST(req: NextRequest) {
             }
           } else {
             const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
-            const targetStatus = currentLead.estado === "PERDIDO" ? (hasCity ? "CONTACTADO" : "NUEVO") : currentLead.estado;
-            console.log(`[RE-ACTIVACIÓN KANBAN] Lead ${conv.idLead} (Estado: ${currentLead.estado}, Contactado: ${currentLead.contactado}) volvió a escribir. Re-activando IA y regresando a '${targetStatus}' en el Embudo.`);
+            let targetStatus: any = currentLead.estado;
+            let motivoPerdidaUpdate: string | undefined = currentLead.motivoPerdida || undefined;
+            if (currentLead.estado === "PERDIDO") {
+              if (currentLead.motivoPerdida?.startsWith("[AUTO_PERDIDO_INACTIVIDAD]")) {
+                const prevStatus = currentLead.motivoPerdida.replace("[AUTO_PERDIDO_INACTIVIDAD]", "").trim();
+                const validStatuses = ["NUEVO", "CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"];
+                targetStatus = validStatuses.includes(prevStatus) ? prevStatus : (hasCity ? "CONTACTADO" : "NUEVO");
+                motivoPerdidaUpdate = undefined;
+              } else {
+                targetStatus = hasCity ? "CONTACTADO" : "NUEVO";
+              }
+            }
+            console.log(`[RE-ACTIVACIÓN KANBAN] Lead ${conv.idLead} (Estado: ${currentLead.estado}) volvió a escribir. Re-activando IA y regresando a '${targetStatus}' en el Embudo.`);
             
             await db.updateConversation(conv.id, { iaActiva: true });
             conv.iaActiva = true;
 
             await db.updateLead(conv.idLead, { 
               estado: targetStatus,
+              motivoPerdida: motivoPerdidaUpdate,
               idUsuarioAsignado: null,
               contactado: false
             });

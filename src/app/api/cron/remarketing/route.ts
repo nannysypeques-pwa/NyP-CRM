@@ -11,9 +11,42 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handleRemarketingExecution();
 }
-
 async function handleRemarketingExecution() {
   try {
+    // 0. LIMPIEZA AUTOMÁTICA DE LEADS INACTIVOS (48 HORAS)
+    const activeStatuses = ["NUEVO", "CONTACTADO", "COTIZADO"];
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    const inactiveLeads = await prisma.lead.findMany({
+      where: {
+        estado: { in: activeStatuses },
+        ultimoContactoEn: { lt: fortyEightHoursAgo },
+        deleted: false
+      }
+    });
+
+    console.log(`[CRON LIMPIEZA] Buscando leads inactivos. Encontrados: ${inactiveLeads.length}`);
+    for (const lead of inactiveLeads) {
+      const prevStatus = lead.estado;
+      console.log(`[CRON LIMPIEZA] Lead ${lead.id} (${lead.nombreCompleto}) inactivo desde ${lead.ultimoContactoEn.toISOString()}. Marcando como PERDIDO.`);
+
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: {
+          estado: "PERDIDO",
+          motivoPerdida: `[AUTO_PERDIDO_INACTIVIDAD] ${prevStatus}`
+        }
+      });
+
+      await prisma.notaLead.create({
+        data: {
+          idLead: lead.id,
+          contenido: `[LIMPIEZA AUTOMÁTICA] Ficha marcada como PERDIDA debido a 48 horas de inactividad (último contacto: ${lead.ultimoContactoEn.toISOString()}). Estado previo: ${prevStatus}.`,
+          nombreAgente: "Asistente IA Sofía"
+        }
+      });
+    }
+
     // 1. Obtener todos los leads con estado "COTIZADO" que tienen conversación con IA activa
     const cotizadoLeads = await prisma.lead.findMany({
       where: {

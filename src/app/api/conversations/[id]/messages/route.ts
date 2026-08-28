@@ -222,6 +222,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const conv = await db.getConversationById(params.id);
 
+    // RESTAURAR ESTADO DE AUTO-PERDIDO SI EL AGENTE ENVÍA UN MENSAJE
+    if (direccion === "OUTBOUND" && tipoRemitente === "AGENT" && conv?.idLead) {
+      try {
+        const lead = await db.getLeadById(conv.idLead);
+        if (lead && lead.estado === "PERDIDO" && lead.motivoPerdida?.startsWith("[AUTO_PERDIDO_INACTIVIDAD]")) {
+          const prevStatus = lead.motivoPerdida.replace("[AUTO_PERDIDO_INACTIVIDAD]", "").trim();
+          const validStatuses = ["NUEVO", "CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"];
+          const statusToRestore: any = validStatuses.includes(prevStatus) ? prevStatus : "CONTACTADO";
+          
+          console.log(`[RESTAURAR ESTADO AUTO-PERDIDO - CRM AGENTE] Lead ${conv.idLead} recuperó estado '${statusToRestore}' por mensaje saliente del agente.`);
+          await db.updateLead(conv.idLead, {
+            estado: statusToRestore,
+            motivoPerdida: undefined
+          });
+        }
+      } catch (err) {
+        console.error("Error restoring auto-lost status on agent reply:", err);
+      }
+    }
+
     // Si el agente responde desde el CRM, enviamos la respuesta de forma real por WhatsApp
     if (direccion === "OUTBOUND" && tipoRemitente === "AGENT" && conv) {
       let sentWamid: string | null = null;
@@ -283,12 +303,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             }
           } else {
             const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
-            const targetStatus = currentLead.estado === "PERDIDO" ? (hasCity ? "CONTACTADO" : "NUEVO") : currentLead.estado;
-            console.log(`[RE-ACTIVACIÓN KANBAN - CRM] Lead ${conv.idLead} (Estado: ${currentLead.estado}, Contactado: ${currentLead.contactado}) volvió a escribir. Re-activando IA y regresando a '${targetStatus}' en el Embudo.`);
+            let targetStatus: any = currentLead.estado;
+            let motivoPerdidaUpdate: string | undefined = currentLead.motivoPerdida || undefined;
+            if (currentLead.estado === "PERDIDO") {
+              if (currentLead.motivoPerdida?.startsWith("[AUTO_PERDIDO_INACTIVIDAD]")) {
+                const prevStatus = currentLead.motivoPerdida.replace("[AUTO_PERDIDO_INACTIVIDAD]", "").trim();
+                const validStatuses = ["NUEVO", "CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"];
+                targetStatus = validStatuses.includes(prevStatus) ? prevStatus : (hasCity ? "CONTACTADO" : "NUEVO");
+                motivoPerdidaUpdate = undefined;
+              } else {
+                targetStatus = hasCity ? "CONTACTADO" : "NUEVO";
+              }
+            }
+            console.log(`[RE-ACTIVACIÓN KANBAN - CRM] Lead ${conv.idLead} (Estado: ${currentLead.estado}) volvió a escribir. Re-activando IA y regresando a '${targetStatus}' en el Embudo.`);
             
             await db.updateConversation(conv.id, { iaActiva: true });
             await db.updateLead(conv.idLead, { 
               estado: targetStatus,
+              motivoPerdida: motivoPerdidaUpdate,
               idUsuarioAsignado: null,
               contactado: false
             });
