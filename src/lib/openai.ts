@@ -1491,10 +1491,6 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
   const price = parseFloat(priceStr);
   if (isNaN(price) || price <= 0) return;
 
-  const existingQuotes = lead.cotizaciones || [];
-  const hasSameQuote = existingQuotes.some((q: any) => !q.deleted && Math.abs(q.total - price) < 0.1);
-  if (hasSameQuote) return;
-
   let horasPorDia = 0;
   if (lead.horaInicioSolicitada && lead.horaFinSolicitada) {
     try {
@@ -1522,6 +1518,20 @@ export async function savePrecotizacionIfFound(leadId: string, aiResponse: strin
       horasPorDia = parseInt(numMatch[0], 10);
     }
   }
+
+  const existingQuotes = lead.cotizaciones || [];
+  const hasSameQuote = existingQuotes.some((q: any) => 
+    !q.deleted && 
+    Math.abs(q.total - price) < 0.1 &&
+    q.tipoServicio === (lead.interesServicio || "Por definir") &&
+    q.ciudad === (lead.ciudad || "Por definir") &&
+    q.dias === (lead.diasSolicitados || "Por definir") &&
+    q.horaInicio === (lead.horaInicioSolicitada || "Por definir") &&
+    q.horaFin === (lead.horaFinSolicitada || "Por definir") &&
+    q.horasPorDia === (horasPorDia || 0) &&
+    q.cantidadHijos === (lead.cantidadHijos || 1)
+  );
+  if (hasSameQuote) return;
 
   try {
     await db.addCotizacion(leadId, {
