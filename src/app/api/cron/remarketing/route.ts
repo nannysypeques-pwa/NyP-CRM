@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 async function handleRemarketingExecution() {
   try {
     // 0. LIMPIEZA AUTOMÁTICA DE LEADS INACTIVOS (48 HORAS)
-    const activeStatuses = ["NUEVO", "CONTACTADO", "COTIZADO"];
+    const activeStatuses = ["NUEVO", "CONTACTADO"];
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
     const inactiveLeads = await prisma.lead.findMany({
