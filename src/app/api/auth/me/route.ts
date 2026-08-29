@@ -15,6 +15,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ user: null });
     }
 
+    // Touch user in the database to update their 'actualizadoEn' timestamp (last active tracking)
+    try {
+      await prisma.usuario.update({
+        where: { id: sessionUser.userId },
+        data: { estado: "ACTIVE" } // No-op update that triggers Prisma's @updatedAt
+      });
+    } catch (e) {
+      console.error("Error updating user last active:", e);
+    }
+
     return NextResponse.json({ user: sessionUser });
   } catch (error) {
     console.error("GET /api/auth/me error:", error);

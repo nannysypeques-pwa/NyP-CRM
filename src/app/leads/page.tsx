@@ -68,6 +68,17 @@ const FUNNEL_STATUSES = [
   { id: "PERDIDOS", label: "perdidos" },
 ];
 
+const STATUS_CARDS = [
+  { id: "TODOS", label: "Todos", colorClass: "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700", activeClass: "border-slate-500 bg-slate-200/80 shadow-md text-slate-900 font-bold", countColor: "text-slate-800", labelColor: "text-slate-500" },
+  { id: "PENDIENTES", label: "Pendientes", colorClass: "border-sky-100 bg-sky-50/30 hover:bg-sky-50/60 text-sky-700", activeClass: "border-sky-500 bg-sky-100/70 shadow-md text-sky-950 font-bold", countColor: "text-sky-800", labelColor: "text-sky-600/80" },
+  { id: "EN_CONVERSACION", label: "En conversación", colorClass: "border-amber-100 bg-amber-50/20 hover:bg-amber-50/40 text-amber-700", activeClass: "border-amber-500 bg-amber-100/60 shadow-md text-amber-950 font-bold", countColor: "text-amber-800", labelColor: "text-amber-600/80" },
+  { id: "CONTACTADOS", label: "Contactados", colorClass: "border-purple-100 bg-purple-50/20 hover:bg-purple-50/40 text-purple-700", activeClass: "border-purple-500 bg-purple-100/60 shadow-md text-purple-950 font-bold", countColor: "text-purple-800", labelColor: "text-purple-600/80" },
+  { id: "EN_COTIZACION", label: "En cotización", colorClass: "border-blue-100 bg-blue-50/20 hover:bg-blue-50/40 text-blue-700", activeClass: "border-blue-500 bg-blue-100/60 shadow-md text-blue-950 font-bold", countColor: "text-blue-800", labelColor: "text-blue-600/80" },
+  { id: "ATENCION_HUMANA", label: "Atención humana", colorClass: "border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/40 text-indigo-700", activeClass: "border-indigo-500 bg-indigo-100/60 shadow-md text-indigo-950 font-bold", countColor: "text-indigo-800", labelColor: "text-indigo-600/80" },
+  { id: "LISTOS_PARA_EL_CIERRE", label: "Listos para cierre", colorClass: "border-emerald-100 bg-emerald-50/20 hover:bg-emerald-50/40 text-emerald-700", activeClass: "border-emerald-500 bg-emerald-100/60 shadow-md text-emerald-950 font-bold", countColor: "text-[#064e3b]", labelColor: "text-emerald-700/80" },
+  { id: "PERDIDOS", label: "Perdidos", colorClass: "border-rose-100 bg-rose-50/20 hover:bg-rose-50/40 text-rose-700", activeClass: "border-rose-500 bg-rose-100/60 shadow-md text-rose-950 font-bold", countColor: "text-rose-800", labelColor: "text-rose-600/80" },
+];
+
 export default function LeadsPage() {
   const cachedLeads = clientCache.get<Lead[]>("leads");
   const cachedUsers = clientCache.get<User[]>("users_list");
@@ -158,6 +169,40 @@ export default function LeadsPage() {
     setSearchTerm("");
   };
 
+  // Helper for city-sensitive status counts
+  const getCityFilteredLeads = () => {
+    return leads.filter((lead) => {
+      const normalizedCity = lead.ciudad ? lead.ciudad.trim().toUpperCase() : "";
+      if (cityFilter === "TODAS") {
+        return true;
+      } else if (cityFilter === "OTRAS") {
+        const mainCities = ["PUEBLA", "XALAPA", "QUERÉTARO", "QUERETARO", "CDMX", "CIUDAD DE MÉXICO", "CIUDAD DE MEXICO"];
+        return !mainCities.includes(normalizedCity);
+      } else if (cityFilter.toUpperCase() === "CDMX") {
+        return normalizedCity === "CDMX" || normalizedCity === "CIUDAD DE MÉXICO" || normalizedCity === "CIUDAD DE MEXICO";
+      } else if (cityFilter.toUpperCase() === "QUERÉTARO") {
+        return normalizedCity === "QUERÉTARO" || normalizedCity === "QUERETARO";
+      } else {
+        return normalizedCity === cityFilter.toUpperCase();
+      }
+    });
+  };
+
+  const getStatusCount = (statusId: string) => {
+    const cityFiltered = getCityFilteredLeads();
+    return cityFiltered.filter((lead) => {
+      if (statusId === "TODOS") return true;
+      if (statusId === "PENDIENTES") return lead.estado === "NUEVO";
+      if (statusId === "EN_CONVERSACION") return lead.estado === "CONTACTADO" && (!lead.idUsuarioAsignado || lead.idUsuarioAsignado === "");
+      if (statusId === "EN_COTIZACION") return lead.estado === "COTIZADO";
+      if (statusId === "LISTOS_PARA_EL_CIERRE") return lead.estado === "GANADO";
+      if (statusId === "ATENCION_HUMANA") return lead.estado === "ATENCION_HUMANA";
+      if (statusId === "CONTACTADOS") return lead.estado === "CONTACTADO" && !!lead.idUsuarioAsignado && lead.idUsuarioAsignado !== "";
+      if (statusId === "PERDIDOS") return lead.estado === "PERDIDO";
+      return false;
+    }).length;
+  };
+
   // Filter logic
   const filteredLeads = leads.filter((lead) => {
     const matchesSearch = 
@@ -212,21 +257,21 @@ export default function LeadsPage() {
   const getStatusBadge = (lead: Lead) => {
     switch (lead.estado) {
       case "NUEVO":
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-sky-50 text-[#026692]">pendientes</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-sky-50 text-[#026692] whitespace-nowrap">pendientes</span>;
       case "COTIZADO":
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-blue-50 text-blue-600">en cotización</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-blue-50 text-blue-600 whitespace-nowrap">en cotización</span>;
       case "GANADO":
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-600">listos para el cierre</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-50 text-emerald-600 whitespace-nowrap">listos para el cierre</span>;
       case "ATENCION_HUMANA":
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-indigo-50 text-indigo-600">atención humana</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-indigo-50 text-indigo-600 whitespace-nowrap">atención humana</span>;
       case "PERDIDO":
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-rose-50 text-rose-600">perdidos</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-rose-50 text-rose-600 whitespace-nowrap">perdidos</span>;
       case "CONTACTADO":
       default:
         if (lead.idUsuarioAsignado && lead.idUsuarioAsignado !== "") {
-          return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-purple-50 text-purple-600">contactados</span>;
+          return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-purple-50 text-purple-600 whitespace-nowrap">contactados</span>;
         }
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-50 text-amber-600">en conversación</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-amber-50 text-amber-600 whitespace-nowrap">en conversación</span>;
     }
   };
 
@@ -301,6 +346,30 @@ export default function LeadsPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* STATUS METRIC CARDS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4">
+        {STATUS_CARDS.map((card) => {
+          const count = getStatusCount(card.id);
+          const isSelected = statusFilter === card.id;
+          return (
+            <button
+              key={card.id}
+              onClick={() => setStatusFilter(card.id)}
+              className={`p-4 rounded-3xl border text-left transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between h-24 focus:outline-none cursor-pointer ${
+                isSelected ? card.activeClass : card.colorClass
+              }`}
+            >
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider block truncate ${card.labelColor}`}>
+                {card.label}
+              </span>
+              <span className={`text-2xl font-extrabold mt-1 block ${card.countColor}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ULTRA-PREMIUM FILTERS BAR */}
@@ -406,72 +475,64 @@ export default function LeadsPage() {
             <p className="text-xs text-slate-400">Prueba modificando la búsqueda o los filtros superiores.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto select-none">
+            <table className="w-full text-left border-collapse table-auto">
               <thead>
                 <tr className="border-b border-[#e2edf6] bg-[#f8fbfe] text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
-                  <th className="px-6 py-4">Nombre del Lead</th>
-                  <th className="px-6 py-4">WhatsApp / Teléfono</th>
-                  <th className="px-6 py-4">Ciudad / Zona</th>
-                  <th className="px-6 py-4">Servicio de interés</th>
-                  <th className="px-6 py-4">Estado en Embudo</th>
-                  <th className="px-6 py-4">Agente Responsable</th>
-                  <th className="px-6 py-4">Fecha Creación</th>
-                  <th className="px-6 py-4 text-right">Acciones</th>
+                  <th className="px-3 py-4 md:px-4">Nombre</th>
+                  <th className="px-3 py-4 md:px-4 whitespace-nowrap">Teléfono</th>
+                  <th className="px-3 py-4 md:px-4">Ciudad / Zona</th>
+                  <th className="px-3 py-4 md:px-4">Estado</th>
+                  <th className="px-3 py-4 md:px-4">Agente</th>
+                  <th className="px-3 py-4 md:px-4">Fecha</th>
+                  <th className="px-3 py-4 md:px-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f7fc] text-xs">
                 {filteredLeads.map((lead) => (
                   <tr key={lead.id} className="hover:bg-[#f8fbfe] transition-all group font-medium text-slate-700">
                     {/* Name */}
-                    <td className="px-6 py-4 font-extrabold text-slate-800">
+                    <td className="px-3 py-3 md:px-4 font-extrabold text-slate-800">
                       <Link href={`/inbox?leadId=${lead.id}`} className="hover:text-[#026692] flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#026692]"></span>
-                        <span>{lead.nombreCompleto}</span>
+                        <span className="w-2 h-2 rounded-full bg-[#026692] flex-shrink-0"></span>
+                        <span className="truncate max-w-[130px] block" title={lead.nombreCompleto}>{lead.nombreCompleto}</span>
                       </Link>
                     </td>
-
+ 
                     {/* WhatsApp formatted */}
-                    <td className="px-6 py-4 text-[#026692] font-bold">
+                    <td className="px-3 py-3 md:px-4 text-[#026692] font-bold whitespace-nowrap">
                       <div className="flex items-center space-x-1.5">
                         <span>📞</span>
                         <span>{formatPhoneNumber(lead.telefono)}</span>
                       </div>
                     </td>
-
+ 
                     {/* City & Zone */}
-                    <td className="px-6 py-4 text-slate-600 font-semibold">
-                      <span>{lead.ciudad}</span>
-                      <span className="text-[10px] text-slate-400 block font-normal">{lead.zona || "Por definir"}</span>
+                    <td className="px-3 py-3 md:px-4 text-slate-600 font-semibold">
+                      <span className="block truncate max-w-[100px]" title={lead.ciudad}>{lead.ciudad}</span>
+                      <span className="text-[10px] text-slate-400 block font-normal truncate max-w-[100px]" title={lead.zona || "Por definir"}>{lead.zona || "Por definir"}</span>
                     </td>
-
-                    {/* Service */}
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-xl text-[9px] font-extrabold bg-[#e1eff8] text-[#026692] uppercase">
-                        {lead.interesServicio || "Por definir"}
-                      </span>
-                    </td>
-
+ 
                     {/* Status badge with exact names */}
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 md:px-4">
                       {getStatusBadge(lead)}
                     </td>
-
+ 
                     {/* Responsible Agent */}
-                    <td className="px-6 py-4 font-bold text-slate-700">
+                    <td className="px-3 py-3 md:px-4 font-bold text-slate-700">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                        <span>{getAgentName(lead.idUsuarioAsignado)}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0"></span>
+                        <span className="truncate max-w-[100px] block" title={getAgentName(lead.idUsuarioAsignado)}>{getAgentName(lead.idUsuarioAsignado)}</span>
                       </div>
                     </td>
-
+ 
                     {/* Date */}
-                    <td className="px-6 py-4 text-slate-400 text-[11px]">
+                    <td className="px-3 py-3 md:px-4 text-slate-400 text-[11px] whitespace-nowrap">
                       {new Date(lead.creadoEn).toLocaleDateString([], { month: "short", day: "numeric" })}
                     </td>
-
+ 
                     {/* Actions */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-3 py-3 md:px-4 text-right whitespace-nowrap">
                       <Link 
                         href={`/inbox?leadId=${lead.id}`}
                         className="bg-[#f4f8fc] hover:bg-[#e8f4fd] text-[#026692] px-3 py-1.5 rounded-xl transition-all text-xs font-bold inline-flex items-center gap-1"

@@ -234,12 +234,14 @@ export async function POST(req: NextRequest) {
             const hasCity = currentLead.ciudad && currentLead.ciudad !== "Por definir" && currentLead.ciudad !== "";
             let targetStatus: any = currentLead.estado;
             let motivoPerdidaUpdate: string | undefined = currentLead.motivoPerdida || undefined;
+            let shouldLogRestoration = false;
             if (currentLead.estado === "PERDIDO") {
               if (currentLead.motivoPerdida?.startsWith("[AUTO_PERDIDO_INACTIVIDAD]")) {
                 const prevStatus = currentLead.motivoPerdida.replace("[AUTO_PERDIDO_INACTIVIDAD]", "").trim();
                 const validStatuses = ["NUEVO", "CONTACTADO", "COTIZADO", "GANADO", "ATENCION_HUMANA"];
                 targetStatus = validStatuses.includes(prevStatus) ? prevStatus : (hasCity ? "CONTACTADO" : "NUEVO");
                 motivoPerdidaUpdate = undefined;
+                shouldLogRestoration = true;
               } else {
                 targetStatus = hasCity ? "CONTACTADO" : "NUEVO";
               }
@@ -255,6 +257,16 @@ export async function POST(req: NextRequest) {
               idUsuarioAsignado: null,
               contactado: false
             });
+
+            if (shouldLogRestoration) {
+              await prisma.notaLead.create({
+                data: {
+                  idLead: conv.idLead,
+                  contenido: `[RESTAURACIÓN AUTOMÁTICA] Ficha reactivada al estado original '${targetStatus}' tras nuevo mensaje del cliente.`,
+                  nombreAgente: "Asistente IA Sofía"
+                }
+              });
+            }
           }
         }
       }

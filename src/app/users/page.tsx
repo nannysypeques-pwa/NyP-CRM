@@ -17,7 +17,8 @@ import {
   Loader2,
   Building,
   UserCheck,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw
 } from "lucide-react";
 
 interface User {
@@ -42,6 +43,14 @@ export default function UsersAdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRol, setFilterRol] = useState("TODOS");
 
+  // Tab state
+  const [activeSubTab, setActiveSubTab] = useState<"registro" | "actividad">("registro");
+  const [stats, setStats] = useState<any[]>([]);
+  const [statsFilter, setStatsFilter] = useState("TODOS");
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   // Modals state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -58,6 +67,43 @@ export default function UsersAdminPage() {
   const [formAvatar, setFormAvatar] = useState("");
   const [formEstado, setFormEstado] = useState("ACTIVE");
   const [submitLoading, setSubmitLoading] = useState(false);
+
+  const fetchStats = async () => {
+    try {
+      setStatsLoading(true);
+      let url = `/api/users/stats?filter=${statsFilter}`;
+      if (statsFilter === "PERSONALIZADO" && startDate && endDate) {
+        url += `&startDate=${startDate}&endDate=${endDate}`;
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error("Error fetching user stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === "actividad") {
+      fetchStats();
+    }
+  }, [activeSubTab, statsFilter, startDate, endDate]);
+
+  const formatLastActivity = (isoString: string | null) => {
+    if (!isoString) return "Sin actividad";
+    const date = new Date(isoString);
+    return date.toLocaleString("es-MX", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
+  };
 
   // Load users list
   const fetchUsers = async () => {
@@ -317,6 +363,30 @@ export default function UsersAdminPage() {
         </button>
       </div>
 
+      {/* Sub Tabs Navigation */}
+      <div className="flex border-b border-[#e2edf6] space-x-6 pb-px">
+        <button
+          onClick={() => setActiveSubTab("registro")}
+          className={`pb-3 text-sm font-extrabold transition-all border-b-2 focus:outline-none cursor-pointer ${
+            activeSubTab === "registro"
+              ? "border-[#026692] text-[#026692]"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Registro
+        </button>
+        <button
+          onClick={() => setActiveSubTab("actividad")}
+          className={`pb-3 text-sm font-extrabold transition-all border-b-2 focus:outline-none cursor-pointer ${
+            activeSubTab === "actividad"
+              ? "border-[#026692] text-[#026692]"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Actividad
+        </button>
+      </div>
+
       {/* Notifications */}
       {successMsg && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl flex items-center gap-2 shadow-sm text-sm animate-fadeIn">
@@ -334,179 +404,301 @@ export default function UsersAdminPage() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
-          <div className="p-3.5 bg-[#f0f7fc] text-[#026692] rounded-xl"><Users className="w-5 h-5" /></div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Total Colaboradores</span>
-            <p className="text-2xl font-black text-slate-800 leading-none mt-1">{totalCount}</p>
+      {activeSubTab === "registro" ? (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
+              <div className="p-3.5 bg-[#f0f7fc] text-[#026692] rounded-xl"><Users className="w-5 h-5" /></div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Total Colaboradores</span>
+                <p className="text-2xl font-black text-slate-800 leading-none mt-1">{totalCount}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
+              <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl"><Activity className="w-5 h-5" /></div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Usuarios Activos</span>
+                <p className="text-2xl font-black text-slate-800 leading-none mt-1">{activeCount}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
+              <div className="p-3.5 bg-purple-50 text-purple-600 rounded-xl"><UserCheck className="w-5 h-5" /></div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Coordinadoras</span>
+                <p className="text-2xl font-black text-slate-800 leading-none mt-1">{coordinateCount}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
+              <div className="p-3.5 bg-sky-50 text-[#026692] rounded-xl"><Building className="w-5 h-5" /></div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Vendedoras</span>
+                <p className="text-2xl font-black text-slate-800 leading-none mt-1">{sellerCount}</p>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
-          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl"><Activity className="w-5 h-5" /></div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Usuarios Activos</span>
-            <p className="text-2xl font-black text-slate-800 leading-none mt-1">{activeCount}</p>
+
+          {/* Filters & Actions bar */}
+          <div className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative w-full md:w-80">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search className="w-4 h-4" />
+              </span>
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre, email o ciudad..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-[#f4f8fc] border-0 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+              />
+            </div>
+
+            {/* Filters Select */}
+            <div className="flex items-center space-x-3 w-full md:w-auto">
+              <span className="text-xs font-bold text-slate-400 flex-shrink-0">Filtrar Rol:</span>
+              <select 
+                value={filterRol}
+                onChange={(e) => setFilterRol(e.target.value)}
+                className="bg-[#f4f8fc] border-0 text-slate-700 text-xs font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all cursor-pointer w-full md:w-44"
+              >
+                <option value="TODOS">Todos los roles</option>
+                <option value="GERENTE">Gerente</option>
+                <option value="COORDINADORA">Coordinadora</option>
+                <option value="VENDEDORA">Vendedora</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
-          <div className="p-3.5 bg-purple-50 text-purple-600 rounded-xl"><UserCheck className="w-5 h-5" /></div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Coordinadoras</span>
-            <p className="text-2xl font-black text-slate-800 leading-none mt-1">{coordinateCount}</p>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex items-center space-x-4">
-          <div className="p-3.5 bg-sky-50 text-[#026692] rounded-xl"><Building className="w-5 h-5" /></div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Vendedoras</span>
-            <p className="text-2xl font-black text-slate-800 leading-none mt-1">{sellerCount}</p>
-          </div>
-        </div>
-      </div>
 
-      {/* Filters & Actions bar */}
-      <div className="bg-white p-4 rounded-2xl border border-[#e2edf6] shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Search Input */}
-        <div className="relative w-full md:w-80">
-          <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-4 h-4" />
-          </span>
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre, email o ciudad..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#f4f8fc] border-0 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
-          />
-        </div>
-
-        {/* Filters Select */}
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <span className="text-xs font-bold text-slate-400 flex-shrink-0">Filtrar Rol:</span>
-          <select 
-            value={filterRol}
-            onChange={(e) => setFilterRol(e.target.value)}
-            className="bg-[#f4f8fc] border-0 text-slate-700 text-xs font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all cursor-pointer w-full md:w-44"
-          >
-            <option value="TODOS">Todos los roles</option>
-            <option value="GERENTE">Gerente</option>
-            <option value="COORDINADORA">Coordinadora</option>
-            <option value="VENDEDORA">Vendedora</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Main Table area */}
-      <div className="bg-white rounded-2xl border border-[#e2edf6] shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <Loader2 className="w-10 h-10 text-[#026692] animate-spin" />
-            <p className="text-sm font-semibold text-slate-400">Consultando Supabase...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 italic text-sm">
-            No se encontraron colaboradores que coincidan con la búsqueda.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#fcfdfd] border-b border-[#e2edf6] text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <th className="py-4 px-6">Colaborador</th>
-                  <th className="py-4 px-6">Rol asignado</th>
-                  <th className="py-4 px-6">Cobertura Ciudad</th>
-                  <th className="py-4 px-6">Estatus</th>
-                  <th className="py-4 px-6 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f0f7fc]">
-                {filteredUsers.map((user) => {
-                  const initialName = user.nombre ? user.nombre.split(" ").filter(Boolean).map(n => n[0]).join("").slice(0, 2).toUpperCase() : "U";
-                  return (
-                    <tr key={user.id} className="hover:bg-[#fcfdfd] transition-all text-xs font-medium text-slate-700">
-                      {/* User card info */}
-                      <td className="py-4 px-6 flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-full bg-[#026692]/10 text-[#026692] flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-[#026692]/20">
-                          {initialName}
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-slate-800 text-sm leading-tight">{user.nombre}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{user.email}</p>
-                        </div>
-                      </td>
-
-                      {/* Role */}
-                      <td className="py-4 px-6">
-                        <span className={`px-2.5 py-1 rounded-xl text-[9px] font-extrabold uppercase inline-flex items-center gap-1 ${
-                          user.rol === "GERENTE" ? "bg-sky-50 text-[#026692]" :
-                          user.rol === "COORDINADORA" ? "bg-purple-50 text-purple-600" :
-                          "bg-emerald-50 text-emerald-600"
-                        }`}>
-                          <Shield className="w-3 h-3" /> {user.rol}
-                        </span>
-                      </td>
-
-                      {/* City */}
-                      <td className="py-4 px-6">
-                        {user.rol === "GERENTE" || !user.ciudad || user.ciudad === "Todas" ? (
-                          <span className="text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1">
-                            🌎 Toda la República
-                          </span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1 items-center">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            {user.ciudad.split(",").map(c => c.trim()).map((city, idx) => (
-                              <span key={idx} className="px-2 py-0.5 rounded-md bg-[#026692]/10 text-[#026692] font-extrabold text-[10px] uppercase border border-[#026692]/20">
-                                {city}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-4 px-6">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                          user.estado === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {user.estado === "ACTIVE" ? "Activo" : "Inactivo"}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-4 px-6 text-right space-x-1">
-                        <button 
-                          onClick={() => openPass(user)}
-                          title="Restablecer Contraseña"
-                          className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all inline-block"
-                        >
-                          <Key className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => openEdit(user)}
-                          title="Editar Colaborador"
-                          className="p-2 text-slate-400 hover:text-[#026692] hover:bg-[#f0f7fc] rounded-xl transition-all inline-block"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteUser(user.id, user.nombre)}
-                          title="Eliminar permanentemente"
-                          className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all inline-block"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
+          {/* Main Table area */}
+          <div className="bg-white rounded-2xl border border-[#e2edf6] shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                <Loader2 className="w-10 h-10 text-[#026692] animate-spin" />
+                <p className="text-sm font-semibold text-slate-400">Consultando Supabase...</p>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 italic text-sm">
+                No se encontraron colaboradores que coincidan con la búsqueda.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#fcfdfd] border-b border-[#e2edf6] text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th className="py-4 px-6">Colaborador</th>
+                      <th className="py-4 px-6">Rol asignado</th>
+                      <th className="py-4 px-6">Cobertura Ciudad</th>
+                      <th className="py-4 px-6">Estatus</th>
+                      <th className="py-4 px-6 text-right">Acciones</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f7fc]">
+                    {filteredUsers.map((user) => {
+                      const initialName = user.nombre ? user.nombre.split(" ").filter(Boolean).map(n => n[0]).join("").slice(0, 2).toUpperCase() : "U";
+                      return (
+                        <tr key={user.id} className="hover:bg-[#fcfdfd] transition-all text-xs font-medium text-slate-700">
+                          {/* User card info */}
+                          <td className="py-4 px-6 flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-full bg-[#026692]/10 text-[#026692] flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-[#026692]/20">
+                              {initialName}
+                            </div>
+                            <div>
+                              <p className="font-extrabold text-slate-800 text-sm leading-tight">{user.nombre}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{user.email}</p>
+                            </div>
+                          </td>
+
+                          {/* Role */}
+                          <td className="py-4 px-6">
+                            <span className={`px-2.5 py-1 rounded-xl text-[9px] font-extrabold uppercase inline-flex items-center gap-1 ${
+                              user.rol === "GERENTE" ? "bg-sky-50 text-[#026692]" :
+                              user.rol === "COORDINADORA" ? "bg-purple-50 text-purple-600" :
+                              "bg-emerald-50 text-emerald-600"
+                            }`}>
+                              <Shield className="w-3 h-3" /> {user.rol}
+                            </span>
+                          </td>
+
+                          {/* City */}
+                          <td className="py-4 px-6">
+                            {user.rol === "GERENTE" || !user.ciudad || user.ciudad === "Todas" ? (
+                              <span className="text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1">
+                                🌎 Toda la República
+                              </span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1 items-center">
+                                <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                {user.ciudad.split(",").map(c => c.trim()).map((city, idx) => (
+                                  <span key={idx} className="px-2 py-0.5 rounded-md bg-[#026692]/10 text-[#026692] font-extrabold text-[10px] uppercase border border-[#026692]/20">
+                                    {city}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-4 px-6">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              user.estado === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+                            }`}>
+                              {user.estado === "ACTIVE" ? "Activo" : "Inactivo"}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-4 px-6 text-right space-x-1">
+                            <button 
+                              onClick={() => openPass(user)}
+                              title="Restablecer Contraseña"
+                              className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all inline-block"
+                            >
+                              <Key className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => openEdit(user)}
+                              title="Editar Colaborador"
+                              className="p-2 text-slate-400 hover:text-[#026692] hover:bg-[#f0f7fc] rounded-xl transition-all inline-block"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteUser(user.id, user.nombre)}
+                              title="Eliminar permanentemente"
+                              className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all inline-block"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <div className="space-y-6">
+          {/* Actividad Filters Bar */}
+          <div className="bg-white p-5 rounded-2xl border border-[#e2edf6] shadow-sm flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full md:w-auto">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block pl-1">Periodo de Actividad</label>
+                <select
+                  value={statsFilter}
+                  onChange={(e) => setStatsFilter(e.target.value)}
+                  className="bg-[#f4f8fc] border border-[#cbdfe9] text-slate-700 text-xs font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all cursor-pointer w-full sm:w-48"
+                >
+                  <option value="TODOS">Todos los tiempos</option>
+                  <option value="HOY">Hoy</option>
+                  <option value="AYER">Ayer</option>
+                  <option value="ESTA_SEMANA">Esta semana</option>
+                  <option value="LA_SEMANA_PASADA">La semana pasada</option>
+                  <option value="ESTE_MES">Este mes</option>
+                  <option value="PERSONALIZADO">Rango personalizado</option>
+                </select>
+              </div>
+
+              {statsFilter === "PERSONALIZADO" && (
+                <div className="flex items-center gap-2 animate-fadeIn animate-duration-200">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block pl-1">Desde</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-[#f4f8fc] border border-[#cbdfe9] text-slate-700 text-xs font-bold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block pl-1">Hasta</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="bg-[#f4f8fc] border border-[#cbdfe9] text-slate-700 text-xs font-bold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#026692] transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={fetchStats}
+              className="bg-[#f0f7fc] hover:bg-[#e1eff8] text-[#026692] px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Actualizar Datos
+            </button>
+          </div>
+
+          {/* Stats Table area */}
+          <div className="bg-white rounded-2xl border border-[#e2edf6] shadow-sm overflow-hidden">
+            {statsLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                <Loader2 className="w-10 h-10 text-[#026692] animate-spin" />
+                <p className="text-sm font-semibold text-slate-400">Calculando indicadores...</p>
+              </div>
+            ) : stats.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 italic text-sm">
+                No hay datos de colaboradores disponibles.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#fcfdfd] border-b border-[#e2edf6] text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th className="py-4 px-6">Colaborador</th>
+                      <th className="py-4 px-6 text-center">Leads Contactados</th>
+                      <th className="py-4 px-6 text-center">Leads Perdidos</th>
+                      <th className="py-4 px-6 text-right">Última Actividad</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f7fc]">
+                    {stats.map((s) => {
+                      const initialName = s.nombre ? s.nombre.split(" ").filter(Boolean).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "U";
+                      return (
+                        <tr key={s.userId} className="hover:bg-[#fcfdfd] transition-all text-xs font-medium text-slate-700">
+                          <td className="py-4 px-6 flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-full bg-[#026692]/10 text-[#026692] flex items-center justify-center font-bold text-xs flex-shrink-0 uppercase border border-[#026692]/20">
+                              {initialName}
+                            </div>
+                            <div>
+                              <p className="font-extrabold text-slate-800 text-sm leading-tight">{s.nombre}</p>
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase inline-block mt-1 ${
+                                s.rol === "GERENTE" ? "bg-sky-50 text-[#026692]" :
+                                s.rol === "COORDINADORA" ? "bg-purple-50 text-purple-600" :
+                                "bg-emerald-50 text-emerald-600"
+                              }`}>
+                                {s.rol}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            <span className="px-3 py-1.5 rounded-full text-xs font-extrabold bg-[#e8f5e9] text-[#1b5e20] border border-[#a5d6a7]/30">
+                              {s.contactedCount}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            <span className="px-3 py-1.5 rounded-full text-xs font-extrabold bg-[#ffebee] text-[#c62828] border border-[#ef9a9a]/30">
+                              {s.lostCount}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right font-bold text-slate-600">
+                            {formatLastActivity(s.lastActivity)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* CREATE USER MODAL */}
       {createModalOpen && (
